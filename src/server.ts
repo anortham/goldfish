@@ -252,6 +252,7 @@ export async function handleCheckpoint(args: any) {
   });
 
   const now = new Date();
+  const timeUTC = now.toISOString().substring(11, 16); // HH:MM in UTC
   return {
     content: [
       {
@@ -259,7 +260,7 @@ export async function handleCheckpoint(args: any) {
         text: `✅ **Checkpoint saved**
 
 📝 **Progress:** ${description}
-⏰ **Time:** ${now.toLocaleTimeString()}
+⏰ **Time:** ${timeUTC} UTC
 ${tags && tags.length > 0 ? `🏷️ **Tags:** ${tags.join(', ')}` : ''}
 
 Your progress is now safely captured and will survive session restarts! 🐠
@@ -392,8 +393,8 @@ Your plan is saved to: ~/.goldfish/${workspace}/plans/${plan.id}.md`
             text: `📋 **${plan.title}**
 
 **Status:** ${plan.status}
-**Created:** ${new Date(plan.created).toLocaleString()}
-**Updated:** ${new Date(plan.updated).toLocaleString()}
+**Created:** ${plan.created}
+**Updated:** ${plan.updated}
 
 ---
 
@@ -427,8 +428,9 @@ ${plan.content}`
       const lines = [`📋 **Plans (${filtered.length}):**`, ''];
       for (const plan of filtered) {
         const statusEmoji = plan.status === 'completed' ? '✅' : plan.status === 'active' ? '🔄' : '📦';
+        const updatedDate = plan.updated.split('T')[0]; // Extract YYYY-MM-DD from ISO timestamp
         lines.push(`${statusEmoji} **${plan.title}** (${plan.id})`);
-        lines.push(`   Status: ${plan.status} | Updated: ${new Date(plan.updated).toLocaleDateString()}`);
+        lines.push(`   Status: ${plan.status} | Updated: ${updatedDate}`);
         lines.push('');
       }
 

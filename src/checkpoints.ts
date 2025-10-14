@@ -10,6 +10,7 @@ import { readFile, writeFile, readdir, rename } from 'fs/promises';
 import type { Checkpoint, CheckpointInput } from './types';
 import { getWorkspacePath, ensureWorkspaceDir, getCurrentWorkspace } from './workspace';
 import { getGitContext } from './git';
+import { withLock } from './lock';
 
 /**
  * Format a checkpoint as markdown
@@ -146,26 +147,29 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<void> {
   const checkpointsDir = join(getWorkspacePath(workspace), 'checkpoints');
   const filePath = join(checkpointsDir, `${date}.md`);
 
-  // Read existing content (if file exists)
-  let existingContent = '';
-  try {
-    existingContent = await readFile(filePath, 'utf-8');
-  } catch (error: any) {
-    if (error.code !== 'ENOENT') {
-      throw error;
+  // Use file lock to prevent race conditions on concurrent writes
+  await withLock(filePath, async () => {
+    // Read existing content (if file exists)
+    let existingContent = '';
+    try {
+      existingContent = await readFile(filePath, 'utf-8');
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+      // File doesn't exist, create with header
+      existingContent = `# Checkpoints for ${date}\n\n`;
     }
-    // File doesn't exist, create with header
-    existingContent = `# Checkpoints for ${date}\n\n`;
-  }
 
-  // Append formatted checkpoint
-  const formattedCheckpoint = formatCheckpoint(checkpoint);
-  const newContent = existingContent + formattedCheckpoint;
+    // Append formatted checkpoint
+    const formattedCheckpoint = formatCheckpoint(checkpoint);
+    const newContent = existingContent + formattedCheckpoint;
 
-  // Atomic write (write to temp file, then rename)
-  const tempPath = `${filePath}.tmp.${Date.now()}`;
-  await writeFile(tempPath, newContent, 'utf-8');
-  await rename(tempPath, filePath);
+    // Atomic write (write to temp file, then rename)
+    const tempPath = `${filePath}.tmp.${Date.now()}`;
+    await writeFile(tempPath, newContent, 'utf-8');
+    await rename(tempPath, filePath);
+  });
 }
 
 /**

@@ -72,7 +72,7 @@ export interface GitContext {
 }
 
 export interface PlanAction {
-  action: 'save' | 'get' | 'list' | 'activate' | 'switch' | 'update' | 'complete';
+  action: 'save' | 'get' | 'list' | 'activate' | 'update' | 'complete';
   id?: string;
   title?: string;
   content?: string;

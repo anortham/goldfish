@@ -12,6 +12,7 @@ import { readFile, writeFile, readdir, unlink, rename } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Plan, PlanInput, PlanUpdate } from './types';
 import { getWorkspacePath, ensureWorkspaceDir, getCurrentWorkspace } from './workspace';
+import { withLock } from './lock';
 
 /**
  * Format a plan as markdown with YAML frontmatter
@@ -88,14 +89,6 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
   const now = new Date().toISOString();
   const id = input.id || generatePlanId(input.title);
 
-  // Check if plan already exists
-  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
-  const exists = await Bun.file(planPath).exists();
-
-  if (exists) {
-    throw new Error(`Plan with ID '${id}' already exists`);
-  }
-
   const plan: Plan = {
     id,
     title: input.title,
@@ -106,11 +99,19 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
     tags: input.tags || []
   };
 
-  // Write plan file (atomic)
+  // Write plan file atomically (fail if exists - prevents TOCTOU race)
+  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
   const content = formatPlanFile(plan);
-  const tempPath = `${planPath}.tmp.${Date.now()}`;
-  await writeFile(tempPath, content, 'utf-8');
-  await rename(tempPath, planPath);
+
+  try {
+    // Use 'wx' flag for exclusive create (fails if file exists)
+    await writeFile(planPath, content, { flag: 'wx', encoding: 'utf-8' });
+  } catch (error: any) {
+    if (error.code === 'EEXIST') {
+      throw new Error(`Plan with ID '${id}' already exists`);
+    }
+    throw error;
+  }
 
   // Auto-activate if requested (default: false)
   if (input.activate) {
@@ -214,24 +215,28 @@ export async function updatePlan(
   id: string,
   updates: PlanUpdate
 ): Promise<void> {
-  const plan = await getPlan(workspace, id);
-  if (!plan) {
-    throw new Error(`Plan '${id}' does not exist`);
-  }
-
-  // Apply updates
-  const updatedPlan: Plan = {
-    ...plan,
-    ...updates,
-    updated: new Date().toISOString()
-  };
-
-  // Write updated plan (atomic)
   const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
-  const content = formatPlanFile(updatedPlan);
-  const tempPath = `${planPath}.tmp.${Date.now()}`;
-  await writeFile(tempPath, content, 'utf-8');
-  await rename(tempPath, planPath);
+
+  // Use file lock to prevent race conditions on concurrent updates
+  await withLock(planPath, async () => {
+    const plan = await getPlan(workspace, id);
+    if (!plan) {
+      throw new Error(`Plan '${id}' does not exist`);
+    }
+
+    // Apply updates
+    const updatedPlan: Plan = {
+      ...plan,
+      ...updates,
+      updated: new Date().toISOString()
+    };
+
+    // Write updated plan (atomic)
+    const content = formatPlanFile(updatedPlan);
+    const tempPath = `${planPath}.tmp.${Date.now()}`;
+    await writeFile(tempPath, content, 'utf-8');
+    await rename(tempPath, planPath);
+  });
 }
 
 /**

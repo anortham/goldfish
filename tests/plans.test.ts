@@ -255,6 +255,9 @@ describe('Plan retrieval', () => {
   });
 
   it('sorts plans by updated date (newest first)', async () => {
+    // Small delay to ensure timestamp difference
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     // Update plan-1 to make it newer
     await updatePlan(TEST_WORKSPACE, 'plan-1', {
       content: 'Updated content'

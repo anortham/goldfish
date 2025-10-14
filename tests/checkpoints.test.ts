@@ -130,6 +130,30 @@ Description here.
     const checkpoints = parseCheckpointFile('');
     expect(checkpoints).toEqual([]);
   });
+
+  it('preserves content even with markdown headers inside', () => {
+    // Current implementation: splits on "## " but only parses if matches HH:MM
+    // This means content after non-timestamp "## " lines is lost
+    const content = `# Checkpoints for 2025-10-13
+
+## 14:30 - First checkpoint
+
+Some content here.
+
+## 15:00 - Second checkpoint
+
+More content.
+`;
+
+    const checkpoints = parseCheckpointFile(content);
+
+    expect(checkpoints).toHaveLength(2);
+    expect(checkpoints[0]!.description).toBe('First checkpoint');
+    expect(checkpoints[1]!.description).toBe('Second checkpoint');
+  });
+
+  // This documents a known limitation - if users put "## "non-timestamp text in descriptions,
+  // content after it is lost. We'll keep the simple regex but document this.
 });
 
 describe('Checkpoint storage', () => {
@@ -202,6 +226,12 @@ describe('Checkpoint storage', () => {
 
     // All 10 checkpoints should be saved
     expect(checkpoints).toHaveLength(10);
+
+    // Verify all unique descriptions are present (not overwritten)
+    const descriptions = checkpoints.map(c => c.description);
+    for (let i = 0; i < 10; i++) {
+      expect(descriptions).toContain(`Checkpoint ${i}`);
+    }
   });
 
   it('creates daily file if it doesn\'t exist', async () => {

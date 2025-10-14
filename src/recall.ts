@@ -139,12 +139,20 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
 
   // Cross-workspace recall (workspace === 'all')
   const workspaceNames = await listWorkspaces();
+
+  // Fetch from all workspaces in parallel for better performance
+  const workspaceResults = await Promise.all(
+    workspaceNames.map(async (ws) => {
+      const { checkpoints } = await recallFromWorkspace(ws, options);
+      return { ws, checkpoints };
+    })
+  );
+
+  // Build combined results
   const allCheckpoints: Checkpoint[] = [];
   const workspaceSummaries: WorkspaceSummary[] = [];
 
-  for (const ws of workspaceNames) {
-    const { checkpoints } = await recallFromWorkspace(ws, options);
-
+  for (const { ws, checkpoints } of workspaceResults) {
     if (checkpoints.length > 0) {
       allCheckpoints.push(...checkpoints);
 

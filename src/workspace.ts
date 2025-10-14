@@ -43,6 +43,11 @@ export function normalizeWorkspace(pathOrName: string): string {
   // Trim dashes from start and end
   name = name.replace(/^-+|-+$/g, '');
 
+  // If empty after sanitization, use default name
+  if (name.length === 0) {
+    return 'default';
+  }
+
   return name;
 }
 

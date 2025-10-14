@@ -52,6 +52,20 @@ describe('Workspace normalization', () => {
     expect(normalizeWorkspace('-test-project-'))
       .toBe('test-project');
   });
+
+  it('handles all special characters by using default name', () => {
+    // These would become empty after sanitization
+    expect(normalizeWorkspace('!@#$%^&*()'))
+      .toBe('default');
+    expect(normalizeWorkspace('...'))
+      .toBe('default');
+    expect(normalizeWorkspace('___'))
+      .toBe('default');
+    expect(normalizeWorkspace('---'))
+      .toBe('default');
+    expect(normalizeWorkspace(''))
+      .toBe('default');
+  });
 });
 
 describe('Current workspace detection', () => {
