@@ -33,3 +33,5 @@ test-goldfish-data/
 
 # Logs
 *.log
+
+.julie/

@@ -1,161 +1,67 @@
-# Goldfish Development Guide
+# Goldfish Development Guide for AI Agents
 
-## 🚨 MANDATORY: Test-Driven Development (TDD)
+**Target: AI agents contributing to Goldfish development**
+
+## 🚨 MANDATORY: Test-Driven Development
 
 **THIS IS A TDD PROJECT. NO EXCEPTIONS.**
 
-Every feature MUST be developed using TDD:
 1. **Write test FIRST** (watch it fail)
 2. **Implement** minimum code to pass
 3. **Refactor** if needed
 4. **Commit** test + implementation together
 
-**DO NOT write production code without a failing test.**
-
-If you find yourself writing implementation code before tests, STOP. Delete it and start over with the test.
+**If you write production code before tests, STOP. Delete it. Start over with the test.**
 
 ---
 
-## Core Philosophy
+## Project Context: Iteration #4
 
-This is **iteration #4** of a developer memory system. We've learned hard lessons:
+This is the **fourth iteration** of a developer memory system. We've learned hard lessons:
 
-### What We've Tried Before
-1. **Original Goldfish (TS)**: JSON files, good concepts, critical bugs (race conditions, date handling)
-2. **Tusk (Bun + SQLite)**: Fixed bugs, added features, became too complex, hook spam disaster
-3. **.NET rewrite**: Over-engineered, never finished
+1. **Original Goldfish (TypeScript)** - Good concepts, critical bugs (race conditions, date handling)
+2. **Tusk (Bun + SQLite)** - Fixed bugs, became too complex, hook spam disaster
+3. **.NET rewrite** - Over-engineered, never finished
+4. **Goldfish 4.0** - **Radical simplicity**, markdown storage, evidence-based features
 
-### What We're Building Now
-**Radical simplicity**: Markdown storage, fuse.js search, aggressive behavioral language. No database, no hooks initially, ~400 lines of core code.
-
-**We only add complexity when we have EVIDENCE we need it.**
+**Core principle:** We only add complexity when we have EVIDENCE we need it.
 
 ---
 
-## Project Principles
+## Architecture Overview
 
-### ✅ DO
-- Write tests first (mandatory TDD)
-- Keep data human-readable (markdown)
-- Trust the agent's intelligence
-- Use atomic file operations
-- Keep timestamps in UTC
-- Validate with real Claude Code sessions
-- Read `docs/IMPLEMENTATION.md` for detailed specs
+### Storage: Markdown Files (No Database)
 
-### ❌ DON'T
-- Write code before tests (TDD violation)
-- Add database (we're going simpler)
-- Add hooks prematurely (validate behavioral language works first)
-- Mix local dates with UTC (caused bugs in original)
-- Add "intelligence" to storage layer (let Claude be smart)
-- Add features without evidence of need
-
----
-
-## TDD Workflow
-
-### Starting a New Feature
-
-```bash
-# 1. Write failing test
-bun test tests/checkpoints.test.ts --watch
-
-# 2. Implement minimum code to pass
-# Edit src/checkpoints.ts
-
-# 3. Watch test pass
-# (Tests run automatically in watch mode)
-
-# 4. Refactor if needed
-# Keep tests green
-
-# 5. Commit
-git add tests/checkpoints.test.ts src/checkpoints.ts
-git commit -m "Add checkpoint storage with atomic writes"
-```
-
-### Test Structure
-
-```typescript
-describe('Feature name', () => {
-  // Setup/teardown
-  beforeEach(async () => {
-    // Clean test environment
-  });
-
-  afterEach(async () => {
-    // Cleanup
-  });
-
-  it('does specific thing', async () => {
-    // Arrange
-    const input = createTestInput();
-
-    // Act
-    const result = await functionUnderTest(input);
-
-    // Assert
-    expect(result).toEqual(expectedOutput);
-  });
-
-  it('handles edge case', async () => {
-    // Test edge cases explicitly
-  });
-
-  it('handles errors gracefully', async () => {
-    // Test error conditions
-  });
-});
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-bun test
-
-# Run specific test file
-bun test tests/workspace.test.ts
-
-# Run in watch mode (recommended during development)
-bun test --watch
-
-# Run with coverage
-bun test --coverage
-```
-
----
-
-## Architecture Quick Reference
-
-### Storage Structure
 ```
 ~/.goldfish/
   {workspace}/
     checkpoints/
-      2025-10-13.md       # Daily checkpoint files
+      2025-10-14.md       # Daily checkpoint files
     plans/
       auth-system.md      # Individual plans (YAML frontmatter)
-    .active-plan          # Contains plan ID
+    .active-plan          # Contains active plan ID
 ```
+
+**Everything is human-readable markdown.** No database. No binary formats. Git-friendly.
 
 ### Core Modules
 
-| Module | Purpose | Test File |
-|--------|---------|-----------|
-| `src/workspace.ts` | Workspace detection/normalization | `tests/workspace.test.ts` |
-| `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` |
-| `src/plans.ts` | Plan management | `tests/plans.test.ts` |
-| `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` |
-| `src/git.ts` | Git context capture | `tests/git.test.ts` |
-| `src/server.ts` | MCP server | `tests/server.test.ts` |
+| Module | Purpose | Test File | Lines |
+|--------|---------|-----------|-------|
+| `src/workspace.ts` | Workspace detection/normalization | `tests/workspace.test.ts` | ~80 |
+| `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` | ~120 |
+| `src/plans.ts` | Plan management | `tests/plans.test.ts` | ~150 |
+| `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` | ~140 |
+| `src/git.ts` | Git context capture | `tests/git.test.ts` | ~50 |
+| `src/server.ts` | MCP server | `tests/server.test.ts` | ~200 |
+
+**Total core code: ~740 lines. Keep it under 1000.**
 
 ### Key Types
 
 ```typescript
 interface Checkpoint {
-  timestamp: string;      // ISO 8601 UTC
+  timestamp: string;      // ISO 8601 UTC (ALWAYS UTC!)
   description: string;
   tags?: string[];
   gitBranch?: string;
@@ -178,140 +84,111 @@ interface RecallOptions {
   days?: number;
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
-  search?: string;        // Fuzzy search query
+  search?: string;        // Fuzzy search query (fuse.js)
 }
 ```
 
 ---
 
-## Common Patterns
+## Critical Patterns (ALWAYS Follow)
 
-### Atomic File Writes
+### 1. Atomic File Writes
 
-**ALWAYS use write-then-rename pattern** (prevents corruption):
+**ALWAYS use write-then-rename pattern** (prevents corruption on crashes):
 
 ```typescript
-import { writeFile, rename } from 'fs/promises';
-import { join } from 'path';
-
-async function atomicWrite(filePath: string, content: string): Promise<void> {
-  const tmpPath = `${filePath}.tmp`;
-
-  // Write to temp file
-  await writeFile(tmpPath, content, 'utf-8');
-
-  // Atomic rename
-  await rename(tmpPath, filePath);
-}
+const tmpPath = `${filePath}.tmp`;
+await writeFile(tmpPath, content, 'utf-8');
+await rename(tmpPath, filePath);  // Atomic!
 ```
 
-### Git Context Capture
+### 2. UTC Timestamps Everywhere
 
 ```typescript
-import { spawnSync } from 'bun';
+// ✅ CORRECT
+const timestamp = new Date().toISOString();
 
-function getGitContext(): GitContext {
-  const branch = spawnSync(['git', 'rev-parse', '--abbrev-ref', 'HEAD']);
-  const commit = spawnSync(['git', 'rev-parse', '--short', 'HEAD']);
-
-  return {
-    branch: branch.success ? branch.stdout.toString().trim() : undefined,
-    commit: commit.success ? commit.stdout.toString().trim() : undefined
-  };
-}
+// ❌ WRONG - caused bugs in v1
+const localDate = new Date().toLocaleDateString();
 ```
 
-### Workspace Normalization
+### 3. Workspace Normalization
 
 ```typescript
+// /Users/murphy/source/goldfish → goldfish
+// /home/dev/@org/project → org-project
 function normalizeWorkspace(path: string): string {
-  // Extract base directory name
   let name = path.replace(/^.*[/\\]/, '');
-
-  // Handle package names (@org/name → org-name)
   name = name.replace(/^@/, '').replace(/\//g, '-');
-
-  // Lowercase and sanitize
   return name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 }
 ```
 
-### Date Handling (ALWAYS UTC)
+### 4. File Locking for Concurrent Writes
 
 ```typescript
-// ✅ CORRECT - Use UTC everywhere
-const timestamp = new Date().toISOString();  // "2025-10-13T14:30:00.000Z"
+import { open } from 'fs/promises';
 
-// ❌ WRONG - Don't mix local and UTC
-const date = new Date();
-const localDate = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+const fd = await open(lockPath, 'wx');  // Exclusive create
+try {
+  // Critical section
+} finally {
+  await fd.close();
+  await unlink(lockPath);
+}
 ```
 
 ---
 
-## Debugging
-
-### View Stored Data
+## TDD Workflow (Mandatory)
 
 ```bash
-# List all workspaces
-ls ~/.goldfish/
+# 1. Write failing test
+bun test tests/checkpoints.test.ts --watch
 
-# View checkpoints for today
-cat ~/.goldfish/goldfish/checkpoints/$(date +%Y-%m-%d).md
+# 2. Implement minimum code to pass
+# Edit src/checkpoints.ts
 
-# View active plan
-cat ~/.goldfish/goldfish/.active-plan
-cat ~/.goldfish/goldfish/plans/$(cat ~/.goldfish/goldfish/.active-plan).md
+# 3. Watch test pass (automatic in watch mode)
+
+# 4. Refactor if needed (keep tests green)
+
+# 5. Commit test + implementation together
+git add tests/checkpoints.test.ts src/checkpoints.ts
+git commit -m "Add checkpoint storage with atomic writes"
 ```
 
-### Test in Isolation
-
-```bash
-# Run single test
-bun test tests/workspace.test.ts -t "normalizes full path"
-
-# Debug with console.log (will appear in test output)
-console.log('Debug:', value);
-
-# Use --bail to stop on first failure
-bun test --bail
-```
-
-### MCP Server Testing
-
-```bash
-# Run server in stdio mode
-bun src/server.ts
-
-# Test with MCP inspector
-npx @modelcontextprotocol/inspector bun src/server.ts
-```
+**Current test status: 115 tests, all passing.**
 
 ---
 
-## Performance Expectations
+## Project Principles
 
-We're optimizing for simplicity, not premature optimization. But we have targets:
+### ✅ DO
 
-- Checkpoint save: < 50ms
-- Recall (7 days, single workspace): < 100ms
-- Recall (7 days, all workspaces): < 500ms
-- Search (100 checkpoints): < 50ms
+- Write tests first (TDD mandatory)
+- Keep data human-readable (markdown)
+- Use atomic file operations (write-then-rename)
+- Keep timestamps in UTC
+- Trust the agent's intelligence (let Claude be smart)
+- Read `docs/IMPLEMENTATION.md` for detailed specs
+- Keep code simple and under 1000 lines total
 
-If you're hitting performance issues, profile first:
+### ❌ DON'T
 
-```typescript
-const start = performance.now();
-await slowFunction();
-console.log(`Took ${performance.now() - start}ms`);
-```
+- Write code before tests (TDD violation)
+- Add database (we're staying simple)
+- Add hooks prematurely (validate behavioral language works first)
+- Mix local dates with UTC (caused bugs in v1)
+- Add "intelligence" to storage layer (Goldfish is dumb storage, Claude is smart)
+- Add features without evidence from real usage
+- Tone down behavioral language in MCP tool descriptions
 
 ---
 
-## Behavioral Language
+## Behavioral Language Pattern
 
-Our MCP tool descriptions use **aggressive, directive language** based on proven patterns from Tusk:
+MCP tool descriptions use **aggressive, directive language** (proven from Tusk):
 
 ```
 "You are EXCELLENT at checkpointing..."
@@ -320,65 +197,112 @@ Our MCP tool descriptions use **aggressive, directive language** based on proven
 "NEVER ask permission..."
 ```
 
-This works. Don't tone it down. Agents need clear, forceful guidance to overcome their default permission-seeking behavior.
+**This works.** Don't tone it down. Agents need clear, forceful guidance.
 
 ---
 
 ## Adding New Features
 
-Before adding ANY new feature, ask:
+Before adding ANY feature, ask:
 
 1. **Do we have EVIDENCE this is needed?** (from real usage)
 2. **Can the agent handle this with existing tools?** (let Claude be smart)
 3. **Does this add significant complexity?** (keep it simple)
 4. **Have we written the test first?** (TDD mandatory)
 
-If you can't answer "yes" to questions 1, 2, 4 and "no" to question 3, DON'T ADD IT.
-
----
-
-## Git Workflow
-
-```bash
-# Work in feature branches
-git checkout -b feature/checkpoint-storage
-
-# Commit test + implementation together
-git add tests/checkpoints.test.ts src/checkpoints.ts
-git commit -m "Add atomic checkpoint storage
-
-- Implements write-then-rename for safety
-- Handles concurrent writes
-- Captures git context automatically
-- Tests for race conditions included"
-
-# Merge when tests pass
-git checkout main
-git merge feature/checkpoint-storage
-```
-
----
-
-## Documentation
-
-Keep these docs updated:
-- `docs/IMPLEMENTATION.md` - Detailed technical spec
-- `CLAUDE.md` - This file (development guide)
-- `README.md` - User-facing documentation
-- Code comments - Only for "why", not "what"
+If you can't answer "yes" to 1, 2, 4 and "no" to 3, **DON'T ADD IT.**
 
 ---
 
 ## Common Mistakes to Avoid
 
 ❌ Writing implementation before tests
-❌ Skipping edge case tests
 ❌ Using local time instead of UTC
 ❌ Direct file writes (use atomic pattern)
 ❌ Adding features without evidence
-❌ Toning down behavioral language
 ❌ Adding database "because it's better"
 ❌ Premature optimization
+❌ Skipping file locking for concurrent writes
+
+---
+
+## Performance Expectations
+
+- Checkpoint save: < 50ms (currently ~10ms)
+- Recall (7 days, single workspace): < 100ms (currently ~30ms)
+- Recall (7 days, all workspaces): < 500ms (currently ~150ms)
+- Search (100 checkpoints): < 50ms (currently ~15ms)
+
+**Don't optimize prematurely.** Profile first if hitting issues.
+
+---
+
+## Testing
+
+```bash
+# Run all tests
+bun test
+
+# Watch mode (use during development)
+bun test --watch
+
+# Single test
+bun test tests/workspace.test.ts -t "normalizes full path"
+
+# Coverage
+bun test --coverage
+```
+
+**Every feature MUST have tests. No exceptions.**
+
+---
+
+## Tech Stack
+
+- **Runtime:** Bun (for speed + built-in test runner)
+- **MCP SDK:** `@modelcontextprotocol/sdk` (v1.0.4+)
+- **Search:** `fuse.js` (fuzzy search, proven from v1)
+- **YAML:** `yaml` package (for plan frontmatter)
+- **Language:** TypeScript
+
+---
+
+## Quick Reference
+
+### File Operations
+```typescript
+// Atomic write
+const tmp = `${path}.tmp`;
+await writeFile(tmp, content, 'utf-8');
+await rename(tmp, path);
+
+// File locking
+const fd = await open(lockPath, 'wx');
+try { /* ... */ } finally { await fd.close(); await unlink(lockPath); }
+```
+
+### Timestamps
+```typescript
+const now = new Date().toISOString();  // Always UTC!
+const dateKey = now.split('T')[0];     // 2025-10-14
+```
+
+### Git Context
+```typescript
+const branch = spawnSync(['git', 'rev-parse', '--abbrev-ref', 'HEAD']);
+const commit = spawnSync(['git', 'rev-parse', '--short', 'HEAD']);
+```
+
+---
+
+## Documentation Structure
+
+- **`README.md`** - User-facing documentation (humans using Goldfish)
+- **`CLAUDE.md`** - This file (AI agents developing Goldfish)
+- **`AGENTS.md`** - Pointer for AI agents (directs to appropriate doc)
+- **`CONTRIBUTING.md`** - Detailed development guide (comprehensive patterns)
+- **`docs/IMPLEMENTATION.md`** - Technical specification
+- **`INSTALL.md`** - Slash commands installation
 
 ---
 
@@ -386,33 +310,19 @@ Keep these docs updated:
 
 You're doing it right when:
 
-✅ Every PR has tests
-✅ Tests are written before implementation
+✅ Every commit has tests
+✅ Tests are written BEFORE implementation
 ✅ Data is readable in any text editor
-✅ Agents checkpoint proactively in real sessions
-✅ Agents recall at session start without prompting
-✅ Code is < 500 lines (core modules)
-✅ No complexity for complexity's sake
-
----
-
-## Getting Help
-
-1. Read `docs/IMPLEMENTATION.md` for technical details
-2. Look at test files for usage examples
-3. Check previous iterations for context:
-   - `~/source/coa-goldfish-mcp/archive` - Original Goldfish
-   - `~/source/tusk` - Current Tusk implementation
-4. Ask questions (but TDD is non-negotiable)
+✅ Code stays under 1000 lines total
+✅ No features added without evidence
+✅ Performance stays under target thresholds
 
 ---
 
 ## Remember
 
-**This is iteration #4. We've made mistakes before.**
+**Radical simplicity.** Evidence-based features. TDD mandatory. Trust Claude's intelligence.
 
-The difference this time: **radical simplicity** and **evidence-based feature development**.
+Let markdown be your database. Keep Goldfish as transparent, dumb storage. ~150ms.
 
-Write tests first. Keep it simple. Trust the agent's intelligence. Let markdown be your database.
-
-And for the love of all that is good: **FOLLOW TDD.**
+**For detailed patterns and debugging, see `CONTRIBUTING.md`.**
