@@ -10,6 +10,7 @@ import {
   parsePlanFile,
   formatPlanFile
 } from '../src/plans';
+import { acquireLock } from '../src/lock';
 import type { Plan, PlanInput, PlanUpdate } from '../src/types';
 import { getWorkspacePath, ensureWorkspaceDir } from '../src/workspace';
 import { rm } from 'fs/promises';
@@ -142,6 +143,21 @@ describe('Plan storage', () => {
     expect(plan.title).toBe('Test Plan');
     expect(plan.content).toBe('Plan content');
     expect(plan.status).toBe('active');  // Default status
+  });
+
+  it('uses fallback ID when title sanitizes to empty', async () => {
+    const plan = await savePlan({
+      title: '!!!',
+      content: 'Content',
+      workspace: TEST_WORKSPACE
+    });
+
+    expect(plan.id).toBeTruthy();
+    expect(plan.id.startsWith('plan-')).toBe(true);
+    expect(plan.id).toMatch(/^[a-z0-9-]+$/);
+
+    const plans = await listPlans(TEST_WORKSPACE);
+    expect(plans.map(p => p.id)).toContain(plan.id);
   });
 
   it('saves plan with provided ID', async () => {
@@ -475,6 +491,28 @@ describe('Plan deletion', () => {
 
     const otherPlan = await getPlan(TEST_WORKSPACE, 'other-plan');
     expect(otherPlan).toBeTruthy();
+  });
+
+  it('waits for in-flight updates before deleting plan', async () => {
+    const planPath = join(
+      getWorkspacePath(TEST_WORKSPACE),
+      'plans',
+      'test-plan.md'
+    );
+
+    const release = await acquireLock(planPath);
+    const deletePromise = deletePlan(TEST_WORKSPACE, 'test-plan');
+
+    // Allow deletePlan to attempt deletion while lock is held
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const existsDuringLock = await Bun.file(planPath).exists();
+    expect(existsDuringLock).toBe(true);
+
+    await release();
+    await deletePromise;
+
+    const existsAfterDelete = await Bun.file(planPath).exists();
+    expect(existsAfterDelete).toBe(false);
   });
 
   it('throws when deleting non-existent plan', async () => {

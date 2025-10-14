@@ -33,9 +33,30 @@ export function getGitContext(): GitContext {
     const filesResult = spawnSync(['git', 'diff', '--name-only', 'HEAD'], {
       stdio: ['ignore', 'pipe', 'ignore']
     });
-    const files = filesResult.success
-      ? filesResult.stdout.toString().trim().split('\n').filter(Boolean)
-      : undefined;
+    const filesSet = new Set<string>();
+
+    if (filesResult.success) {
+      for (const file of filesResult.stdout.toString().trim().split('\n')) {
+        if (file) {
+          filesSet.add(file);
+        }
+      }
+    }
+
+    // Include untracked files as well
+    const untrackedResult = spawnSync(
+      ['git', 'ls-files', '--others', '--exclude-standard'],
+      { stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    if (untrackedResult.success) {
+      for (const file of untrackedResult.stdout.toString().trim().split('\n')) {
+        if (file) {
+          filesSet.add(file);
+        }
+      }
+    }
+
+    const files = filesSet.size > 0 ? Array.from(filesSet).sort() : undefined;
 
     return { branch, commit, files };
   } catch {

@@ -72,11 +72,18 @@ export function parsePlanFile(content: string): Plan {
  * Generate a plan ID from title (if not provided)
  */
 function generatePlanId(title: string): string {
-  return title
+  const base = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .substring(0, 50);
+
+  if (base.length > 0) {
+    return base;
+  }
+
+  const fallback = `plan-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return fallback.substring(0, 50);
 }
 
 /**
@@ -154,22 +161,25 @@ export async function listPlans(workspace: string): Promise<Plan[]> {
     throw error;
   }
 
-  const plans: Plan[] = [];
-  for (const file of files) {
-    if (!file.endsWith('.md')) continue;
-    if (file.startsWith('.')) continue;  // Skip .active-plan
+  const planFiles = files.filter(file => {
+    if (!file.endsWith('.md')) return false;
+    if (file.startsWith('.')) return false;  // Skip .active-plan
+    return true;
+  });
 
-    const id = file.replace('.md', '');
-    const plan = await getPlan(workspace, id);
-    if (plan) {
-      plans.push(plan);
-    }
-  }
+  const plans = await Promise.all(
+    planFiles.map(async (file) => {
+      const id = file.replace('.md', '');
+      return getPlan(workspace, id);
+    })
+  );
 
   // Sort by updated date (newest first)
-  return plans.sort((a, b) =>
-    new Date(b.updated).getTime() - new Date(a.updated).getTime()
-  );
+  return plans
+    .filter((plan): plan is Plan => plan !== null)
+    .sort((a, b) =>
+      new Date(b.updated).getTime() - new Date(a.updated).getTime()
+    );
 }
 
 /**
@@ -243,19 +253,29 @@ export async function updatePlan(
  * Delete a plan
  */
 export async function deletePlan(workspace: string, id: string): Promise<void> {
-  const plan = await getPlan(workspace, id);
-  if (!plan) {
-    throw new Error(`Plan '${id}' does not exist`);
+  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
+  const activePlanPath = join(getWorkspacePath(workspace), '.active-plan');
+
+  let shouldClearActive = false;
+  try {
+    const activePlanId = (await readFile(activePlanPath, 'utf-8')).trim();
+    shouldClearActive = activePlanId === id;
+  } catch (error: any) {
+    if (error.code && error.code !== 'ENOENT') {
+      throw error;
+    }
   }
 
-  // Delete plan file
-  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
-  await unlink(planPath);
+  await withLock(planPath, async () => {
+    const plan = await getPlan(workspace, id);
+    if (!plan) {
+      throw new Error(`Plan '${id}' does not exist`);
+    }
 
-  // Clear active plan if this was the active one
-  const activePlan = await getActivePlan(workspace);
-  if (activePlan?.id === id) {
-    const activePlanPath = join(getWorkspacePath(workspace), '.active-plan');
+    await unlink(planPath);
+  });
+
+  if (shouldClearActive) {
     try {
       await unlink(activePlanPath);
     } catch {
