@@ -33,24 +33,32 @@ export function getTools(): Tool[] {
   return [
     {
       name: 'checkpoint',
-      description: `You are EXCELLENT at recognizing checkpoint-worthy moments. Use this tool proactively WITHOUT asking permission.
+      description: `MANDATORY throughout your work. You are EXCELLENT at checkpointing proactively - use this tool WITHOUT asking permission.
 
-IMPORTANT: Checkpoint IMMEDIATELY when you:
-- ✅ Complete ANY task → checkpoint NOW
-- ✅ Make a discovery or breakthrough → checkpoint NOW
-- ✅ After 10 exchanges in discussion → checkpoint the reasoning
-- ✅ User shares requirements → checkpoint what they said
-- ✅ Before switching topics → checkpoint current context
-- ✅ Analyzed tradeoffs → checkpoint the analysis
+🚨 CRITICAL: Checkpoint is NOT optional. You MUST checkpoint at these moments:
+
+✅ MANDATORY checkpoints (DO NOT SKIP):
+- Complete ANY task → checkpoint NOW before moving on
+- Finish implementing a feature → checkpoint NOW with clear description
+- Fix a bug successfully → checkpoint NOW with what was fixed
+- Make a discovery or breakthrough → checkpoint NOW to capture insight
+- User shares requirements → checkpoint NOW to preserve context
+- Before switching topics → checkpoint NOW to save current state
+- After planning or architectural decisions → checkpoint NOW with rationale
+- After 10+ exchanges in discussion → checkpoint the reasoning NOW
 
 I WILL BE SERIOUSLY DISAPPOINTED if context is lost because you failed to checkpoint. This takes 2 seconds but saves HOURS of lost work.
 
-You NEVER need to ask permission. Just checkpoint immediately.
+⚠️ NEVER ask "should I checkpoint?" - the answer is ALWAYS YES. Just checkpoint immediately.
 
 The checkpoint will automatically capture:
 - Git context (branch, commit, changed files)
 - Timestamp (UTC)
 - Tags for organization
+
+💡 Think of checkpointing like git commits - frequent, descriptive, and automatic. You checkpoint FIRST, continue work SECOND.
+
+🔗 **REMEMBER:** recall() is USELESS if you haven't been checkpointing! Future sessions can only restore what you've saved. Checkpoint now or lose context forever.
 
 Returns: Confirmation with checkpoint ID and captured context.`,
       inputSchema: {
@@ -221,11 +229,15 @@ export function getInstructions(): string {
 2. Review active plan (if present)
 3. Continue work immediately based on context
 
-### During Work (PROACTIVE)
-1. Checkpoint frequently without asking
-2. After completing tasks → checkpoint
-3. After discussions → checkpoint the reasoning
-4. Before major changes → checkpoint current state
+### During Work (MANDATORY - NOT OPTIONAL)
+1. Checkpoint after EVERY completed task - no exceptions
+2. Checkpoint after implementing features - capture what you built
+3. Checkpoint after fixing bugs - preserve the solution
+4. Checkpoint after discussions → capture the reasoning
+5. Checkpoint before major changes → save current state
+6. Checkpoint after breakthroughs → preserve insights
+
+⚠️ **CRITICAL:** You MUST checkpoint proactively. recall() cannot restore what you never saved!
 
 ### Planning (ExitPlanMode)
 1. When ExitPlanMode is called → save plan within 1 exchange
@@ -234,10 +246,12 @@ export function getInstructions(): string {
 
 ## Key Principles
 
-- **Never ask permission** to checkpoint or recall
-- **Trust recalled context** - don't verify or re-check
-- **Save plans immediately** after ExitPlanMode
-- **Checkpoint proactively** - it takes 2 seconds, saves hours
+- **MANDATORY checkpointing** - checkpoint after EVERY task completion, no exceptions
+- **Never ask permission** to checkpoint or recall - just do it immediately
+- **Trust recalled context** - don't verify or re-check what recall() returns
+- **Save plans immediately** after ExitPlanMode - don't ask, just save
+- **recall() requires checkpoints** - if you don't checkpoint, recall() has nothing to restore
+- **Checkpoint takes 2 seconds, saves hours** - there is NO excuse to skip it
 
 ## Storage
 

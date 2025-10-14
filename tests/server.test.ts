@@ -272,8 +272,10 @@ describe('Tool descriptions', () => {
     const tools = getTools();
 
     const checkpointTool = tools.find(t => t.name === 'checkpoint');
-    expect(checkpointTool!.description).toContain('EXCELLENT');
-    expect(checkpointTool!.description).toContain('IMMEDIATELY');
+    expect(checkpointTool!.description).toContain('MANDATORY');
+    expect(checkpointTool!.description).toContain('MUST checkpoint');
+    expect(checkpointTool!.description).toContain('DO NOT SKIP');
+    expect(checkpointTool!.description).toContain('CRITICAL');
 
     const recallTool = tools.find(t => t.name === 'recall');
     expect(recallTool!.description).toContain('MANDATORY');
