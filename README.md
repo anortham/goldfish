@@ -16,11 +16,42 @@ This is iteration #4. We've tried databases, complex hooks, and sophisticated de
 # Install dependencies
 bun install
 
-# Run tests (TDD project - tests required!)
-bun test --watch
+# Run tests (106 tests - all passing!)
+bun test
 
 # Run MCP server
-bun run dev
+bun run src/server.ts
+```
+
+## Installation for Claude Code
+
+### Option 1: Local Development
+
+1. Clone this repository:
+```bash
+git clone git@github.com:anortham/goldfish.git
+cd goldfish
+bun install
+```
+
+2. Add to Claude Code settings (`~/.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "goldfish": {
+      "command": "bun",
+      "args": ["run", "/path/to/goldfish/src/server.ts"]
+    }
+  }
+}
+```
+
+3. Restart Claude Code
+
+### Option 2: Plugin (Coming Soon)
+
+```bash
+/plugin install goldfish
 ```
 
 ## Core Features

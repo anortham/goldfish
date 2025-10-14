@@ -1,0 +1,42 @@
+{
+  "name": "goldfish",
+  "displayName": "Goldfish Memory System",
+  "version": "4.0.0",
+  "description": "Transparent developer memory - markdown storage, no database, radically simple",
+  "author": "murphy",
+  "repository": "https://github.com/anortham/goldfish",
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "context",
+    "checkpoint",
+    "recall",
+    "planning",
+    "persistence"
+  ],
+  "mcpServers": {
+    "goldfish": {
+      "command": "bun",
+      "args": ["run", "${CLAUDE_PLUGIN_ROOT}/../../src/server.ts"],
+      "description": "Goldfish MCP server with checkpoint, recall, and plan tools"
+    }
+  },
+  "commands": [
+    {
+      "name": "checkpoint",
+      "description": "Save a checkpoint manually"
+    },
+    {
+      "name": "recall",
+      "description": "Recall recent work context"
+    },
+    {
+      "name": "standup",
+      "description": "Generate standup report across all workspaces"
+    },
+    {
+      "name": "plan-status",
+      "description": "Show active plan status"
+    }
+  ]
+}

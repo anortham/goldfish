@@ -521,7 +521,9 @@ Every commit should have tests. No feature without tests.
 
 ## Implementation Progress
 
-### ✅ Completed (TDD Green)
+### ✅ COMPLETE - Version 4.0.0 (TDD Green)
+
+**ALL MODULES IMPLEMENTED AND TESTED**
 
 1. **Project structure** - package.json, tsconfig.json, dependencies installed
 2. **Workspace utilities** - 15 tests passing
@@ -536,22 +538,30 @@ Every commit should have tests. No feature without tests.
    - Concurrent write safety
    - Parse/format checkpoints
    - Date range retrieval
-
-**Total: 31 tests passing | ~350 lines of code**
-
-### 🔄 In Progress
-
-5. **Plan storage** - Writing tests now
+5. **Plan storage** - 34 tests passing
    - YAML frontmatter with markdown body
    - Active plan tracking per workspace
    - CRUD operations
    - Plan lifecycle management
+6. **Recall with fuse.js** - 22 tests passing
+   - Fuzzy search across checkpoints
+   - Cross-workspace aggregation
+   - Date range filtering
+   - Active plan integration
+7. **MCP Server** - 19 tests passing
+   - 3 tools (checkpoint, recall, plan)
+   - Aggressive behavioral language
+   - Proper error handling
+   - Server instructions
+8. **Plugin package** - Complete
+   - marketplace.json manifest
+   - 4 slash commands (checkpoint, recall, standup, plan-status)
+   - No hooks (validating behavioral language first)
 
-### 📋 Next Steps
+**Total: 106 tests passing | ~600 lines of production code**
 
-6. Write recall tests → implement search/aggregation (fuse.js)
-7. Write server tests → implement MCP server (3 tools)
-8. Create plugin package (slash commands, no hooks initially)
+### 📋 Remaining Tasks
+
 9. Manual testing with Claude Code
-10. Migration script from Tusk
-11. Documentation polish
+10. Migration script from Tusk (optional)
+11. Performance validation
