@@ -46,7 +46,8 @@ export interface PlanUpdate {
 
 export interface RecallOptions {
   workspace?: string;     // 'current' | 'all' | specific path
-  days?: number;          // Look back N days
+  since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
+  days?: number;          // Look back N days (default: 2)
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
   search?: string;        // Fuzzy search query

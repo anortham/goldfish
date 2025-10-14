@@ -92,34 +92,47 @@ This tool provides:
 - Fuzzy search across descriptions and tags
 - Cross-workspace aggregation (for standup reports)
 
-Key parameters:
-- workspace: "current" (default), "all" (cross-workspace), or specific path
-- days: How far back to look (default: 2)
+Key parameters (all optional):
+- since: Human-friendly time span ("2h", "30m", "3d") or ISO timestamp (takes priority over days)
+- days: How far back to look in days (default: 2)
+- from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
 - search: Fuzzy search query (searches descriptions, tags, branches, files)
+- workspace: "current" (default), "all" (cross-workspace), or specific path
+
+Examples:
+- recall() → last 2 days (default)
+- recall({ since: "2h" }) → last 2 hours
+- recall({ since: "30m" }) → last 30 minutes
+- recall({ days: 7 }) → last 7 days
+- recall({ search: "auth" }) → search in last 2 days
 
 Returns: Active plan + chronological checkpoints + optional workspace summaries.`,
       inputSchema: {
         type: 'object',
         properties: {
-          workspace: {
+          since: {
             type: 'string',
-            description: 'Workspace scope: "current" (default), "all" (cross-workspace), or specific path'
+            description: 'Human-friendly time span or ISO timestamp. Examples: "2h" (last 2 hours), "30m" (last 30 minutes), "3d" (last 3 days), or "2025-10-14T15:30:00Z" (since specific time). Takes priority over days parameter.'
           },
           days: {
             type: 'number',
-            description: 'Number of days to look back (default: 2)'
+            description: 'Number of days to look back (default: 2). Ignored if since is provided.'
           },
           from: {
             type: 'string',
-            description: 'Start date (YYYY-MM-DD or ISO 8601)'
+            description: 'Start date/time (YYYY-MM-DD or ISO 8601). Use with to for explicit range.'
           },
           to: {
             type: 'string',
-            description: 'End date (YYYY-MM-DD or ISO 8601)'
+            description: 'End date/time (YYYY-MM-DD or ISO 8601). Use with from for explicit range.'
           },
           search: {
             type: 'string',
-            description: 'Fuzzy search query (searches descriptions, tags, branches, files)'
+            description: 'Fuzzy search query (searches descriptions, tags, branches, files). Optional - omit to see all checkpoints in range.'
+          },
+          workspace: {
+            type: 'string',
+            description: 'Workspace scope: "current" (default), "all" (cross-workspace), or specific path. Optional - defaults to current workspace.'
           }
         }
       }

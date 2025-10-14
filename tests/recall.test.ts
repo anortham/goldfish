@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { recall, searchCheckpoints } from '../src/recall';
+import { recall, searchCheckpoints, parseSince } from '../src/recall';
 import { saveCheckpoint } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
 import { getWorkspacePath, ensureWorkspaceDir } from '../src/workspace';
@@ -353,5 +353,221 @@ describe('Checkpoint search (fuse.js)', () => {
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.description).toContain('Refactored');
+  });
+});
+
+describe('parseSince - human-friendly time span parser', () => {
+  it('parses minutes (30m)', () => {
+    const now = new Date();
+    const result = parseSince('30m');
+
+    const expectedMs = now.getTime() - (30 * 60 * 1000);
+    const tolerance = 100; // 100ms tolerance for test execution time
+
+    expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
+  });
+
+  it('parses hours (2h)', () => {
+    const now = new Date();
+    const result = parseSince('2h');
+
+    const expectedMs = now.getTime() - (2 * 60 * 60 * 1000);
+    const tolerance = 100;
+
+    expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
+  });
+
+  it('parses days (3d)', () => {
+    const now = new Date();
+    const result = parseSince('3d');
+
+    const expectedMs = now.getTime() - (3 * 24 * 60 * 60 * 1000);
+    const tolerance = 100;
+
+    expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
+  });
+
+  it('parses ISO 8601 timestamps', () => {
+    const timestamp = '2025-10-14T15:30:00.000Z';
+    const result = parseSince(timestamp);
+
+    expect(result.toISOString()).toBe(timestamp);
+  });
+
+  it('parses YYYY-MM-DD dates', () => {
+    const date = '2025-10-14';
+    const result = parseSince(date);
+
+    expect(result.toISOString().split('T')[0]).toBe(date);
+  });
+
+  it('throws error for invalid format', () => {
+    expect(() => parseSince('invalid')).toThrow(/Invalid since format/);
+  });
+
+  it('throws error for invalid unit', () => {
+    expect(() => parseSince('5x')).toThrow(/Invalid since format/);
+  });
+
+  it('throws error for missing number', () => {
+    expect(() => parseSince('h')).toThrow(/Invalid since format/);
+  });
+
+  it('handles single digit values', () => {
+    const now = new Date();
+    const result = parseSince('1h');
+
+    const expectedMs = now.getTime() - (1 * 60 * 60 * 1000);
+    const tolerance = 100;
+
+    expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
+  });
+
+  it('handles large values', () => {
+    const now = new Date();
+    const result = parseSince('365d');
+
+    const expectedMs = now.getTime() - (365 * 24 * 60 * 60 * 1000);
+    const tolerance = 100;
+
+    expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
+  });
+});
+
+describe('recall with since parameter', () => {
+  beforeEach(async () => {
+    await ensureWorkspaceDir(TEST_WORKSPACE_A);
+  });
+
+  afterEach(async () => {
+    await rm(getWorkspacePath(TEST_WORKSPACE_A), { recursive: true, force: true });
+  });
+
+  it('recalls checkpoints from last 2 hours using "2h"', async () => {
+    // Create a checkpoint now
+    await saveCheckpoint({
+      description: 'Recent work',
+      workspace: TEST_WORKSPACE_A
+    });
+
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      since: '2h'
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+    expect(result.checkpoints[0]!.description).toBe('Recent work');
+  });
+
+  it('recalls checkpoints from last 30 minutes using "30m"', async () => {
+    await saveCheckpoint({
+      description: 'Very recent work',
+      workspace: TEST_WORKSPACE_A
+    });
+
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      since: '30m'
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+  });
+
+  it('recalls checkpoints from last 3 days using "3d"', async () => {
+    await saveCheckpoint({
+      description: 'Recent work',
+      workspace: TEST_WORKSPACE_A
+    });
+
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      since: '3d'
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+  });
+
+  it('recalls checkpoints from ISO timestamp', async () => {
+    await saveCheckpoint({
+      description: 'Test checkpoint',
+      workspace: TEST_WORKSPACE_A
+    });
+
+    // Use a timestamp from 1 hour ago
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      since: oneHourAgo
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+  });
+
+  it('since parameter takes priority over days parameter', async () => {
+    await saveCheckpoint({
+      description: 'Test',
+      workspace: TEST_WORKSPACE_A
+    });
+
+    // Both parameters provided - 'since' should win
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      since: '1h',
+      days: 7  // Should be ignored
+    });
+
+    // Verify it used 'since' (checkpoints exist)
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to days parameter when since not provided', async () => {
+    await saveCheckpoint({
+      description: 'Test',
+      workspace: TEST_WORKSPACE_A
+    });
+
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      days: 1
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+  });
+
+  it('uses default (2 days) when neither since nor days provided', async () => {
+    await saveCheckpoint({
+      description: 'Test',
+      workspace: TEST_WORKSPACE_A
+    });
+
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+  });
+
+  it('combines since with search parameter', async () => {
+    await saveCheckpoint({
+      description: 'Authentication work',
+      tags: ['auth'],
+      workspace: TEST_WORKSPACE_A
+    });
+
+    await saveCheckpoint({
+      description: 'Database work',
+      tags: ['database'],
+      workspace: TEST_WORKSPACE_A
+    });
+
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      since: '1h',
+      search: 'auth'
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+    expect(result.checkpoints[0]!.description).toContain('Authentication');
   });
 });

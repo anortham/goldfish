@@ -198,6 +198,9 @@ export async function getCheckpointsForDay(
 
 /**
  * Get all checkpoints across a date range (inclusive)
+ *
+ * @param fromDate - ISO 8601 timestamp or YYYY-MM-DD date
+ * @param toDate - ISO 8601 timestamp or YYYY-MM-DD date
  */
 export async function getCheckpointsForDateRange(
   workspace: string,
@@ -216,9 +219,25 @@ export async function getCheckpointsForDateRange(
     throw error;
   }
 
-  // Filter to date range and sort
-  const from = new Date(fromDate);
-  const to = new Date(toDate);
+  // Parse timestamps (handles both ISO timestamps and YYYY-MM-DD dates)
+  const fromTimestamp = new Date(fromDate).getTime();
+
+  // If toDate is a date-only string (no time component), treat it as end of day
+  let toTimestamp: number;
+  if (toDate.includes('T')) {
+    // Full timestamp - use as-is
+    toTimestamp = new Date(toDate).getTime();
+  } else {
+    // Date-only - use end of day (23:59:59.999)
+    toTimestamp = new Date(toDate + 'T23:59:59.999Z').getTime();
+  }
+
+  // Extract date portions to determine which files to read
+  const fromDateOnly = fromDate.split('T')[0]!;
+  const toDateOnly = toDate.split('T')[0]!;
+
+  const from = new Date(fromDateOnly);
+  const to = new Date(toDateOnly);
 
   const relevantFiles = files
     .filter(f => f.endsWith('.md'))
@@ -237,8 +256,14 @@ export async function getCheckpointsForDateRange(
     allCheckpoints.push(...checkpoints);
   }
 
+  // Filter by actual timestamp (not just file date)
+  const filtered = allCheckpoints.filter(checkpoint => {
+    const checkpointTime = new Date(checkpoint.timestamp).getTime();
+    return checkpointTime >= fromTimestamp && checkpointTime <= toTimestamp;
+  });
+
   // Sort by timestamp
-  return allCheckpoints.sort((a, b) =>
+  return filtered.sort((a, b) =>
     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 }

@@ -12,6 +12,43 @@ import { getActivePlan } from './plans';
 import { getCurrentWorkspace, listWorkspaces } from './workspace';
 
 /**
+ * Parse human-friendly time spans or ISO timestamps
+ *
+ * Formats:
+ * - "2h" → 2 hours ago
+ * - "30m" → 30 minutes ago
+ * - "3d" → 3 days ago
+ * - "2025-10-14T15:30:00Z" → ISO timestamp (passthrough)
+ * - "2025-10-14" → Date string (passthrough)
+ */
+export function parseSince(since: string): Date {
+  // ISO timestamp or date string (contains 'T' or '-')
+  if (since.includes('T') || since.includes('-')) {
+    const date = new Date(since);
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid since format: ${since}`);
+    }
+    return date;
+  }
+
+  // Human-friendly: "2h", "30m", "3d"
+  const match = since.match(/^(\d+)([mhd])$/);
+  if (!match) {
+    throw new Error(`Invalid since format: ${since} (expected: "2h", "30m", "3d", or ISO timestamp)`);
+  }
+
+  const [, amount, unit] = match;
+  const now = new Date();
+  const milliseconds = {
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000
+  }[unit]!;
+
+  return new Date(now.getTime() - parseInt(amount!) * milliseconds);
+}
+
+/**
  * Search checkpoints using fuzzy matching (fuse.js)
  */
 export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Checkpoint[] {
@@ -40,33 +77,49 @@ export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Che
 
 /**
  * Calculate date range from recall options
+ *
+ * Priority:
+ * 1. from + to (explicit range)
+ * 2. since (human-friendly or ISO)
+ * 3. from alone (from that point to now)
+ * 4. to alone (7 days before to that point)
+ * 5. days (last N days, default: 2)
  */
 function getDateRange(options: RecallOptions): { from: string; to: string } {
   const now = new Date();
 
-  // If explicit from/to provided, use those
+  // 1. Explicit from/to range
   if (options.from && options.to) {
     return { from: options.from, to: options.to };
   }
 
-  // If only 'from' provided, use until today
-  if (options.from) {
-    return { from: options.from, to: now.toISOString().split('T')[0]! };
+  // 2. 'since' parameter (takes priority over 'days')
+  if (options.since) {
+    const fromDate = parseSince(options.since);
+    return {
+      from: fromDate.toISOString(),
+      to: now.toISOString()
+    };
   }
 
-  // If only 'to' provided, use from 7 days before
+  // 3. Only 'from' provided (from that point to now)
+  if (options.from) {
+    return { from: options.from, to: now.toISOString() };
+  }
+
+  // 4. Only 'to' provided (7 days before to that point)
   if (options.to) {
     const weekAgo = new Date(now.getTime() - 7 * 86400000);
-    return { from: weekAgo.toISOString().split('T')[0]!, to: options.to };
+    return { from: weekAgo.toISOString(), to: options.to };
   }
 
-  // Default: use 'days' parameter (default: 2 days)
+  // 5. Default: use 'days' parameter (default: 2 days)
   const days = options.days || 2;
   const fromDate = new Date(now.getTime() - days * 86400000);
 
   return {
-    from: fromDate.toISOString().split('T')[0]!,
-    to: now.toISOString().split('T')[0]!
+    from: fromDate.toISOString(),
+    to: now.toISOString()
   };
 }
 
