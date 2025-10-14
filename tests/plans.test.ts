@@ -11,7 +11,7 @@ import {
   formatPlanFile
 } from '../src/plans';
 import { acquireLock } from '../src/lock';
-import type { Plan, PlanInput, PlanUpdate } from '../src/types';
+import type { Plan, PlanInput } from '../src/types';
 import { getWorkspacePath, ensureWorkspaceDir } from '../src/workspace';
 import { rm } from 'fs/promises';
 import { join } from 'path';

@@ -108,14 +108,16 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
       }
     }
 
-    checkpoints.push({
+    const checkpoint: Checkpoint = {
       timestamp,
-      description: description!,
-      tags,
-      gitBranch,
-      gitCommit,
-      files
-    });
+      description: description!
+    };
+    if (tags) checkpoint.tags = tags;
+    if (gitBranch) checkpoint.gitBranch = gitBranch;
+    if (gitCommit) checkpoint.gitCommit = gitCommit;
+    if (files) checkpoint.files = files;
+
+    checkpoints.push(checkpoint);
   }
 
   return checkpoints;
@@ -135,12 +137,12 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<void> {
 
   const checkpoint: Checkpoint = {
     timestamp,
-    description: input.description,
-    tags: input.tags,
-    gitBranch: gitContext.branch,
-    gitCommit: gitContext.commit,
-    files: gitContext.files
+    description: input.description
   };
+  if (input.tags) checkpoint.tags = input.tags;
+  if (gitContext.branch) checkpoint.gitBranch = gitContext.branch;
+  if (gitContext.commit) checkpoint.gitCommit = gitContext.commit;
+  if (gitContext.files) checkpoint.files = gitContext.files;
 
   // Determine file path (daily file)
   const date = timestamp.split('T')[0]!;

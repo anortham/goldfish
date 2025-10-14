@@ -261,7 +261,7 @@ describe('Tool descriptions', () => {
     // Each tool should have description and inputSchema
     for (const tool of tools) {
       expect(tool.description).toBeTruthy();
-      expect(tool.description.length).toBeGreaterThan(50);
+      expect(tool.description!.length).toBeGreaterThan(50);
       expect(tool.inputSchema).toBeDefined();
     }
   });

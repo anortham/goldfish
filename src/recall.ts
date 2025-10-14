@@ -43,9 +43,10 @@ export function parseSince(since: string): Date {
     m: 60 * 1000,
     h: 60 * 60 * 1000,
     d: 24 * 60 * 60 * 1000
-  }[unit]!;
+  };
 
-  return new Date(now.getTime() - parseInt(amount!) * milliseconds);
+  const unitValue = unit as 'm' | 'h' | 'd';
+  return new Date(now.getTime() - parseInt(amount!) * milliseconds[unitValue]);
 }
 
 /**
@@ -160,12 +161,14 @@ async function getWorkspaceSummary(
 
   const lastActivity = sortedCheckpoints[0]?.timestamp;
 
-  return {
+  const summary: WorkspaceSummary = {
     name: workspace,
     path: workspace,  // In this simple version, name = path
-    checkpointCount: checkpoints.length,
-    lastActivity
+    checkpointCount: checkpoints.length
   };
+  if (lastActivity) summary.lastActivity = lastActivity;
+
+  return summary;
 }
 
 /**
@@ -222,7 +225,6 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   // For cross-workspace, no single "active plan"
   return {
     checkpoints: allCheckpoints,
-    activePlan: null,
     workspaces: workspaceSummaries
   };
 }

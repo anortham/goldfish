@@ -6,7 +6,7 @@
  */
 
 import { join } from 'path';
-import { homedir, platform } from 'os';
+import { homedir } from 'os';
 import { mkdir, readdir } from 'fs/promises';
 
 const GOLDFISH_BASE = join(homedir(), '.goldfish');

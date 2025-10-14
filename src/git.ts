@@ -58,7 +58,11 @@ export function getGitContext(): GitContext {
 
     const files = filesSet.size > 0 ? Array.from(filesSet).sort() : undefined;
 
-    return { branch, commit, files };
+    const context: GitContext = {};
+    if (branch) context.branch = branch;
+    if (commit) context.commit = commit;
+    if (files) context.files = files;
+    return context;
   } catch {
     // Not in a git repository or git not available
     return {};

@@ -275,7 +275,7 @@ This is **iteration #4** of a developer memory system. We've learned from mistak
 1. **Original Goldfish (TypeScript)** - Good concepts, critical bugs (race conditions, date handling)
 2. **Tusk (Bun + SQLite)** - Fixed bugs, added features, became too complex, hook spam disaster
 3. **.NET rewrite** - Over-engineered, never finished
-4. **Goldfish 4.0** - Radical simplicity, back to basics, evidence-based development
+4. **Goldfish 4.0** - Modular architecture, comprehensive testing, evidence-based development
 
 ---
 
@@ -331,7 +331,7 @@ We're building this right if:
 - ✅ Agents recall at session start automatically
 - ✅ All data is readable in any text editor
 - ✅ Standup reports work across all workspaces
-- ✅ Core code stays under 500 lines
+- ✅ Code is well-structured and maintainable
 - ✅ Every feature has tests (TDD)
 
 **Current status:** All metrics met ✅

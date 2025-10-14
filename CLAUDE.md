@@ -48,14 +48,19 @@ This is the **fourth iteration** of a developer memory system. We've learned har
 
 | Module | Purpose | Test File | Lines |
 |--------|---------|-----------|-------|
-| `src/workspace.ts` | Workspace detection/normalization | `tests/workspace.test.ts` | ~80 |
-| `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` | ~120 |
-| `src/plans.ts` | Plan management | `tests/plans.test.ts` | ~150 |
-| `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` | ~140 |
-| `src/git.ts` | Git context capture | `tests/git.test.ts` | ~50 |
-| `src/server.ts` | MCP server | `tests/server.test.ts` | ~200 |
+| `src/workspace.ts` | Workspace detection/normalization | `tests/workspace.test.ts` | ~106 |
+| `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` | ~269 |
+| `src/plans.ts` | Plan management | `tests/plans.test.ts` | ~285 |
+| `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` | ~228 |
+| `src/git.ts` | Git context capture | `tests/git.test.ts` | ~80 |
+| `src/lock.ts` | File locking utilities | `tests/lock.test.ts` | ~88 |
+| `src/server.ts` | MCP server | `tests/server.test.ts` | ~82 |
+| `src/handlers/` | Tool handlers | various | ~200 |
+| `src/tools.ts` | Tool definitions | - | ~80 |
+| `src/instructions.ts` | Server instructions | - | ~40 |
+| `src/types.ts` | Type definitions | - | ~84 |
 
-**Total core code: ~740 lines. Keep it under 1000.**
+**Total core code: ~1,735 lines. Well-structured and maintainable despite size growth.**
 
 ### Key Types
 
@@ -172,7 +177,7 @@ git commit -m "Add checkpoint storage with atomic writes"
 - Keep timestamps in UTC
 - Trust the agent's intelligence (let Claude be smart)
 - Read `docs/IMPLEMENTATION.md` for detailed specs
-- Keep code simple and under 1000 lines total
+- Keep code well-structured and maintainable
 
 ### ❌ DON'T
 
@@ -313,7 +318,7 @@ You're doing it right when:
 ✅ Every commit has tests
 ✅ Tests are written BEFORE implementation
 ✅ Data is readable in any text editor
-✅ Code stays under 1000 lines total
+✅ Code stays well-structured and maintainable
 ✅ No features added without evidence
 ✅ Performance stays under target thresholds
 

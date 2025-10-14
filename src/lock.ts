@@ -5,8 +5,7 @@
  * in concurrent file operations.
  */
 
-import { writeFile, unlink, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
+import { writeFile, unlink } from 'fs/promises';
 
 const MAX_LOCK_AGE_MS = 30000; // 30 seconds - locks older than this are considered stale
 const LOCK_RETRY_DELAY_MS = 10;
@@ -50,16 +49,24 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
             try {
               await unlink(lockPath);
             } catch {
-              // Another process may have removed it
+              // Lock might have been removed by another process
             }
+          } else {
+            // Valid lock - wait and retry
+            attempts++;
+            if (attempts >= MAX_LOCK_ATTEMPTS) {
+              throw new Error(`Failed to acquire lock for ${filePath} after ${MAX_LOCK_ATTEMPTS} attempts`);
+            }
+            await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
           }
         } catch {
-          // Lock file is corrupted or being written - wait and retry
+          // Can't read lock file - assume it's invalid and remove it
+          try {
+            await unlink(lockPath);
+          } catch {
+            // Lock might have been removed by another process
+          }
         }
-
-        // Wait a bit and retry
-        attempts++;
-        await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
       } else {
         // Some other error - propagate it
         throw error;

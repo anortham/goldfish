@@ -105,14 +105,8 @@ describe('Workspace directory management', () => {
 
     const path = getWorkspacePath(testWorkspace);
     const checkpointsPath = join(path, 'checkpoints');
-    const plansPath = join(path, 'plans');
 
-    // Check that directories were created
-    const checkpointsExists = await Bun.file(checkpointsPath).exists();
-    const plansExists = await Bun.file(plansPath).exists();
-
-    // Note: Bun.file().exists() works for files, for directories we need different check
-    // Let's check if we can write a file there
+    // Check that directories were created by writing a test file
     const testFile = join(checkpointsPath, '.test');
     await Bun.write(testFile, 'test');
     const exists = await Bun.file(testFile).exists();
