@@ -106,20 +106,21 @@ ls -la ~/.goldfish/
 cat ~/.goldfish/{workspace}/checkpoints/$(date +%Y-%m-%d).md
 ```
 
-## Slash Commands (Optional)
+### Step 5: Install Slash Commands (Optional but Recommended)
 
-You can also use slash commands directly:
-
-- `/checkpoint [description]` - Manual checkpoint
-- `/recall [search]` - Recall with optional search
-- `/standup [days]` - Generate standup report
-- `/plan-status` - Show active plan
-
-To enable these, copy the plugin files:
+Install the convenience slash commands globally so they work in ALL projects:
 
 ```bash
-cp -r plugin/.claude ~/.claude/goldfish-commands
+cp /path/to/goldfish/.claude/commands/*.md ~/.claude/commands/
 ```
+
+This gives you:
+- `/checkpoint [description]` - Quick manual checkpoint
+- `/recall [search]` - Recall with optional search
+- `/standup [days]` - Generate standup report across all workspaces
+- `/plan-status` - Show active plan
+
+The commands will be available in all your projects immediately.
 
 ## Troubleshooting
 
