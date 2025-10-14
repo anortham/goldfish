@@ -1,0 +1,36 @@
+{
+  "name": "goldfish",
+  "version": "4.0.0",
+  "description": "Transparent developer memory system for AI agents - iteration #4, back to basics",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "build": "bun build src/server.ts --outdir dist --target node",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "ai-agent",
+    "developer-tools",
+    "claude-code"
+  ],
+  "author": "murphy",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "fuse.js": "^7.0.0",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
