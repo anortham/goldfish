@@ -82,23 +82,30 @@ This tool provides:
 - Cross-workspace aggregation (for standup reports)
 
 Key parameters (all optional):
+- limit: Max checkpoints to return (default: 10, prevents context bloat)
 - since: Human-friendly time span ("2h", "30m", "3d") or ISO timestamp (takes priority over days)
 - days: How far back to look in days (default: 2)
 - from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
 - search: Fuzzy search query (searches descriptions, tags, branches, files)
+- full: Return full descriptions + all metadata including files, git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 
 Examples:
-- recall() → last 2 days (default)
-- recall({ since: "2h" }) → last 2 hours
-- recall({ since: "30m" }) → last 30 minutes
-- recall({ days: 7 }) → last 7 days
-- recall({ search: "auth" }) → search in last 2 days
+- recall() → last 2 days, max 10 checkpoints (lean context)
+- recall({ limit: 5 }) → last 2 days, only 5 most recent
+- recall({ since: "2h" }) → last 2 hours, max 10 checkpoints
+- recall({ days: 7, limit: 20 }) → last 7 days, max 20 checkpoints
+- recall({ search: "auth", full: true }) → search with full details
+- recall({ limit: 0 }) → plan only, no checkpoints
 
 Returns: Active plan + chronological checkpoints + optional workspace summaries.`,
       inputSchema: {
         type: 'object',
         properties: {
+          limit: {
+            type: 'number',
+            description: 'Maximum number of checkpoints to return (default: 10). Use lower values for leaner context. Set to 0 to return plan only.'
+          },
           since: {
             type: 'string',
             description: 'Human-friendly time span or ISO timestamp. Examples: "2h" (last 2 hours), "30m" (last 30 minutes), "3d" (last 3 days), or "2025-10-14T15:30:00Z" (since specific time). Takes priority over days parameter.'
@@ -118,6 +125,10 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
           search: {
             type: 'string',
             description: 'Fuzzy search query (searches descriptions, tags, branches, files). Optional - omit to see all checkpoints in range.'
+          },
+          full: {
+            type: 'boolean',
+            description: 'Return full checkpoint details including files, git metadata (default: false for minimal token usage).'
           },
           workspace: {
             type: 'string',

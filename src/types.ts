@@ -53,7 +53,8 @@ export interface RecallOptions {
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
   search?: string;        // Fuzzy search query
-  full?: boolean;         // Return full descriptions (default: false, returns summaries)
+  limit?: number;         // Max checkpoints to return (default: 10)
+  full?: boolean;         // Return full descriptions + all metadata (default: false)
 }
 
 export interface RecallResult {

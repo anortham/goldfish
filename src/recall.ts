@@ -156,9 +156,29 @@ async function recallFromWorkspace(
     });
   }
 
-  // Strip internal metadata fields from response (summary and charCount are implementation details)
+  // Apply limit (default: 10, most recent first)
+  // Sort by timestamp descending (newest first), then limit
+  checkpoints = checkpoints.sort((a, b) =>
+    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  const limit = options.limit !== undefined ? options.limit : 10;
+  if (limit > 0) {
+    checkpoints = checkpoints.slice(0, limit);
+  } else if (limit === 0) {
+    checkpoints = [];  // Return empty array (plan only)
+  }
+
+  // Strip metadata fields based on full flag
   checkpoints = checkpoints.map(checkpoint => {
     const { summary, charCount, ...cleanCheckpoint } = checkpoint;
+
+    // Strip verbose metadata unless full: true
+    if (!options.full) {
+      const { files, gitBranch, gitCommit, ...minimal } = cleanCheckpoint;
+      return minimal;
+    }
+
     return cleanCheckpoint;
   });
 
@@ -218,9 +238,10 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   const workspaceNames = await listWorkspaces();
 
   // Fetch from all workspaces in parallel for better performance
+  // For cross-workspace, collect ALL checkpoints (we'll apply global limit at the end)
   const workspaceResults = await Promise.all(
     workspaceNames.map(async (ws) => {
-      const { checkpoints } = await recallFromWorkspace(ws, options);
+      const { checkpoints } = await recallFromWorkspace(ws, { ...options, limit: 99999 });
       return { ws, checkpoints };
     })
   );
@@ -243,9 +264,20 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
+  // Apply limit to combined results (cross-workspace needs global limit, not per-workspace)
+  const limit = options.limit !== undefined ? options.limit : 10;
+  let limitedCheckpoints: Checkpoint[];
+  if (limit > 0) {
+    limitedCheckpoints = allCheckpoints.slice(0, limit);
+  } else if (limit === 0) {
+    limitedCheckpoints = [];
+  } else {
+    limitedCheckpoints = allCheckpoints;
+  }
+
   // For cross-workspace, no single "active plan"
   return {
-    checkpoints: allCheckpoints,
+    checkpoints: limitedCheckpoints,
     workspaces: workspaceSummaries
   };
 }
