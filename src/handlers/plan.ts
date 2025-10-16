@@ -4,6 +4,7 @@
 
 import { savePlan, getPlan, listPlans, setActivePlan, updatePlan } from '../plans.js';
 import { getCurrentWorkspace } from '../workspace.js';
+import { getFishEmoji } from '../emoji.js';
 
 /**
  * Handle plan tool calls
@@ -30,13 +31,11 @@ export async function handlePlan(args: any) {
         content: [
           {
             type: 'text' as const,
-            text: `✅ **Plan saved successfully**
-
-📋 **${plan.title}**
-🆔 Plan ID: ${plan.id}
-${activate ? '⭐ **Active** - Will appear in recall()' : '💤 **Inactive** - Use plan({ action: "activate", id: "..." }) to activate'}
-
-Your plan is saved to: ~/.goldfish/${workspace}/plans/${plan.id}.md`
+            text: JSON.stringify({
+              summary: `${getFishEmoji()} Plan saved: ${title}`,
+              success: true,
+              plan
+            })
           }
         ]
       };
@@ -53,15 +52,10 @@ Your plan is saved to: ~/.goldfish/${workspace}/plans/${plan.id}.md`
         content: [
           {
             type: 'text' as const,
-            text: `📋 **${plan.title}**
-
-**Status:** ${plan.status}
-**Created:** ${plan.created}
-**Updated:** ${plan.updated}
-
----
-
-${plan.content}`
+            text: JSON.stringify({
+              summary: `${getFishEmoji()} Plan retrieved: ${plan.title}`,
+              plan
+            })
           }
         ]
       };
@@ -75,33 +69,21 @@ ${plan.content}`
         ? plans.filter(p => p.status === status)
         : plans;
 
-      if (filtered.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `📭 **No plans found**${status ? ` with status '${status}'` : ''}.
-
-💡 Use plan({ action: "save", title: "...", content: "..." }) to create one.`
-            }
-          ]
-        };
-      }
-
-      const lines = [`📋 **Plans (${filtered.length}):**`, ''];
-      for (const plan of filtered) {
-        const statusEmoji = plan.status === 'completed' ? '✅' : plan.status === 'active' ? '🔄' : '📦';
-        const updatedDate = plan.updated.split('T')[0]; // Extract YYYY-MM-DD from ISO timestamp
-        lines.push(`${statusEmoji} **${plan.title}** (${plan.id})`);
-        lines.push(`   Status: ${plan.status} | Updated: ${updatedDate}`);
-        lines.push('');
-      }
+      const count = filtered.length;
+      const fish = getFishEmoji();
+      const summary = count === 0
+        ? `${fish} No plans found`
+        : `${fish} Found ${count} plan${count === 1 ? '' : 's'}`;
 
       return {
         content: [
           {
             type: 'text' as const,
-            text: lines.join('\n')
+            text: JSON.stringify({
+              summary,
+              plans: filtered,
+              count: filtered.length
+            })
           }
         ]
       };
@@ -117,9 +99,12 @@ ${plan.content}`
         content: [
           {
             type: 'text' as const,
-            text: `⭐ **Plan activated**
-
-Plan '${id}' is now active and will appear in recall().`
+            text: JSON.stringify({
+              summary: `${getFishEmoji()} Plan activated: ${id}`,
+              success: true,
+              action: 'activate',
+              planId: id
+            })
           }
         ]
       };
@@ -136,9 +121,12 @@ Plan '${id}' is now active and will appear in recall().`
         content: [
           {
             type: 'text' as const,
-            text: `✅ **Plan updated**
-
-Plan '${id}' has been updated successfully.`
+            text: JSON.stringify({
+              summary: `${getFishEmoji()} Plan updated: ${id}`,
+              success: true,
+              action: 'update',
+              planId: id
+            })
           }
         ]
       };
@@ -154,9 +142,12 @@ Plan '${id}' has been updated successfully.`
         content: [
           {
             type: 'text' as const,
-            text: `🎉 **Plan completed**
-
-Congratulations on completing plan '${id}'!`
+            text: JSON.stringify({
+              summary: `${getFishEmoji()} Plan completed: ${id}`,
+              success: true,
+              action: 'complete',
+              planId: id
+            })
           }
         ]
       };

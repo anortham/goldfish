@@ -5,6 +5,8 @@
 export interface Checkpoint {
   timestamp: string;      // ISO 8601 UTC
   description: string;
+  summary?: string;       // Auto-generated concise summary (for long descriptions)
+  charCount?: number;     // Character count of description
   tags?: string[];
   gitBranch?: string;
   gitCommit?: string;
@@ -51,6 +53,7 @@ export interface RecallOptions {
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
   search?: string;        // Fuzzy search query
+  full?: boolean;         // Return full descriptions (default: false, returns summaries)
 }
 
 export interface RecallResult {

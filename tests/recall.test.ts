@@ -434,6 +434,100 @@ describe('parseSince - human-friendly time span parser', () => {
   });
 });
 
+describe('Summary vs Full descriptions', () => {
+  beforeEach(async () => {
+    // Create checkpoint with long description (will have summary)
+    await saveCheckpoint({
+      description: 'Successfully refactored the entire authentication system to use JWT tokens instead of session cookies. Updated all middleware, tests, and documentation. Added refresh token support and improved error handling for expired tokens.',
+      tags: ['refactor', 'auth'],
+      workspace: TEST_WORKSPACE_A
+    });
+
+    // Create checkpoint with short description (no summary)
+    await saveCheckpoint({
+      description: 'Fixed login bug',
+      tags: ['bug-fix'],
+      workspace: TEST_WORKSPACE_A
+    });
+  });
+
+  it('returns summaries by default for long descriptions', async () => {
+    const result = await recall({ workspace: TEST_WORKSPACE_A });
+
+    const longCheckpoint = result.checkpoints.find(c => c.tags?.includes('refactor'));
+    expect(longCheckpoint).toBeDefined();
+
+    // Should return summary (not full description - first sentence only)
+    expect(longCheckpoint!.description).not.toContain('middleware');  // From 2nd sentence
+    expect(longCheckpoint!.description).not.toContain('refresh token');  // From 3rd sentence
+    expect(longCheckpoint!.description).toContain('refactored');
+    expect(longCheckpoint!.description.length).toBeLessThanOrEqual(150);
+  });
+
+  it('returns full descriptions when full: true', async () => {
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      full: true
+    });
+
+    const longCheckpoint = result.checkpoints.find(c => c.tags?.includes('refactor'));
+    expect(longCheckpoint).toBeDefined();
+
+    // Should return full description with all sentences
+    expect(longCheckpoint!.description).toContain('middleware');  // From 2nd sentence
+    expect(longCheckpoint!.description).toContain('refresh token');  // From 3rd sentence
+    expect(longCheckpoint!.description.length).toBeGreaterThan(150);
+  });
+
+  it('short descriptions are returned as-is', async () => {
+    const result = await recall({ workspace: TEST_WORKSPACE_A });
+
+    const shortCheckpoint = result.checkpoints.find(c => c.tags?.includes('bug-fix'));
+    expect(shortCheckpoint).toBeDefined();
+    expect(shortCheckpoint!.description).toBe('Fixed login bug');
+  });
+
+  it('does not expose internal metadata fields in recall response', async () => {
+    const result = await recall({ workspace: TEST_WORKSPACE_A });
+
+    const longCheckpoint = result.checkpoints.find(c => c.tags?.includes('refactor'));
+    expect(longCheckpoint).toBeDefined();
+
+    // Internal metadata fields should be stripped from response
+    expect(longCheckpoint).not.toHaveProperty('summary');
+    expect(longCheckpoint).not.toHaveProperty('charCount');
+  });
+
+  it('search results always return full descriptions', async () => {
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      search: 'authentication'
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+
+    const authCheckpoint = result.checkpoints[0];
+    // Search results should always return full descriptions (so users see why it matched)
+    expect(authCheckpoint!.description).toContain('middleware');  // From 2nd sentence
+    expect(authCheckpoint!.description.length).toBeGreaterThan(150);
+  });
+
+  it('full: true parameter is redundant for search but still works', async () => {
+    const result = await recall({
+      workspace: TEST_WORKSPACE_A,
+      search: 'authentication',
+      full: true
+    });
+
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+
+    const authCheckpoint = result.checkpoints[0];
+    // Should return full description (same as without full: true for searches)
+    expect(authCheckpoint!.description).toContain('middleware');
+    expect(authCheckpoint!.description.length).toBeGreaterThan(150);
+  });
+});
+
 describe('recall with since parameter', () => {
   beforeEach(async () => {
     await ensureWorkspaceDir(TEST_WORKSPACE_A);

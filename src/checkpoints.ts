@@ -11,6 +11,7 @@ import type { Checkpoint, CheckpointInput } from './types';
 import { getWorkspacePath, ensureWorkspaceDir, getCurrentWorkspace } from './workspace';
 import { getGitContext } from './git';
 import { withLock } from './lock';
+import { generateSummary } from './summary';
 
 /**
  * Format a checkpoint as markdown
@@ -24,6 +25,19 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
   // Header with time
   lines.push(`## ${time} - ${checkpoint.description}`);
   lines.push('');
+
+  // Metadata comment (for long descriptions with summary)
+  if (checkpoint.summary || checkpoint.charCount) {
+    lines.push('<!--');
+    if (checkpoint.summary) {
+      lines.push(`summary: ${checkpoint.summary}`);
+    }
+    if (checkpoint.charCount) {
+      lines.push(`charCount: ${checkpoint.charCount}`);
+    }
+    lines.push('-->');
+    lines.push('');
+  }
 
   // Optional metadata fields
   if (checkpoint.tags && checkpoint.tags.length > 0) {
@@ -81,12 +95,42 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
     }
 
     // Parse metadata fields
+    let summary: string | undefined;
+    let charCount: number | undefined;
     let tags: string[] | undefined;
     let gitBranch: string | undefined;
     let gitCommit: string | undefined;
     let files: string[] | undefined;
 
+    // Track if we're inside an HTML comment
+    let inComment = false;
+
     for (const line of lines.slice(1)) {
+      // Check for HTML comment start/end
+      if (line.trim() === '<!--') {
+        inComment = true;
+        continue;
+      }
+      if (line.trim() === '-->') {
+        inComment = false;
+        continue;
+      }
+
+      // Inside comment - extract metadata
+      if (inComment) {
+        const summaryMatch = line.match(/^summary:\s*(.+)$/);
+        if (summaryMatch) {
+          summary = summaryMatch[1]!.trim();
+        }
+
+        const charCountMatch = line.match(/^charCount:\s*(\d+)$/);
+        if (charCountMatch) {
+          charCount = parseInt(charCountMatch[1]!, 10);
+        }
+        continue;
+      }
+
+      // Outside comment - parse regular metadata
       const tagMatch = line.match(/^- \*\*Tags\*\*: (.+)$/);
       if (tagMatch) {
         tags = tagMatch[1]!.split(', ').map(t => t.trim());
@@ -112,6 +156,8 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
       timestamp,
       description: description!
     };
+    if (summary) checkpoint.summary = summary;
+    if (charCount) checkpoint.charCount = charCount;
     if (tags) checkpoint.tags = tags;
     if (gitBranch) checkpoint.gitBranch = gitBranch;
     if (gitCommit) checkpoint.gitCommit = gitCommit;
@@ -127,7 +173,7 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
  * Save a checkpoint to the appropriate daily file
  * Uses atomic write-then-rename to prevent corruption
  */
-export async function saveCheckpoint(input: CheckpointInput): Promise<void> {
+export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint> {
   const workspace = input.workspace || getCurrentWorkspace();
   await ensureWorkspaceDir(workspace);
 
@@ -143,6 +189,13 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<void> {
   if (gitContext.branch) checkpoint.gitBranch = gitContext.branch;
   if (gitContext.commit) checkpoint.gitCommit = gitContext.commit;
   if (gitContext.files) checkpoint.files = gitContext.files;
+
+  // Auto-generate metadata for long descriptions
+  const summary = generateSummary(input.description);
+  if (summary) {
+    checkpoint.summary = summary;
+    checkpoint.charCount = input.description.length;
+  }
 
   // Determine file path (daily file)
   const date = timestamp.split('T')[0]!;
@@ -172,6 +225,8 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<void> {
     await writeFile(tempPath, newContent, 'utf-8');
     await rename(tempPath, filePath);
   });
+
+  return checkpoint;
 }
 
 /**

@@ -141,6 +141,27 @@ async function recallFromWorkspace(
     checkpoints = searchCheckpoints(options.search, checkpoints);
   }
 
+  // Apply summary filtering (default: return summaries, not full descriptions)
+  // BUT: Always return full descriptions for search results (so users see why it matched)
+  if (!options.full && !options.search) {
+    checkpoints = checkpoints.map(checkpoint => {
+      if (checkpoint.summary) {
+        // Return checkpoint with summary as description
+        return {
+          ...checkpoint,
+          description: checkpoint.summary
+        };
+      }
+      return checkpoint;
+    });
+  }
+
+  // Strip internal metadata fields from response (summary and charCount are implementation details)
+  checkpoints = checkpoints.map(checkpoint => {
+    const { summary, charCount, ...cleanCheckpoint } = checkpoint;
+    return cleanCheckpoint;
+  });
+
   // Get active plan
   const activePlan = await getActivePlan(workspace);
 

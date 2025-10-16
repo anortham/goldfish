@@ -31,8 +31,12 @@ describe('Tool handlers', () => {
 
       expect(result.content).toBeDefined();
       expect(result.content[0]!.type).toBe('text');
-      expect(result.content[0]!.text).toContain('Checkpoint saved');
-      expect(result.content[0]!.text).toContain('Test checkpoint');
+
+      // Response should be JSON
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.checkpoint.description).toBe('Test checkpoint');
+      expect(parsed.checkpoint.tags).toEqual(['test']);
     });
 
     it('includes git context in response', async () => {
@@ -43,9 +47,13 @@ describe('Tool handlers', () => {
         workspace: TEST_WORKSPACE
       });
 
-      const text = result.content[0]!.text;
-      // Git context may or may not be present, but structure should be there
-      expect(text).toContain('Checkpoint saved');
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.checkpoint.description).toBe('With git context');
+      // Git context may or may not be present
+      if (parsed.checkpoint.gitBranch) {
+        expect(typeof parsed.checkpoint.gitBranch).toBe('string');
+      }
     });
 
     it('handles missing description gracefully', async () => {
@@ -82,8 +90,15 @@ describe('Tool handlers', () => {
 
       expect(result.content).toBeDefined();
       expect(result.content[0]!.type).toBe('text');
-      expect(result.content[0]!.text).toContain('First checkpoint');
-      expect(result.content[0]!.text).toContain('Second checkpoint');
+
+      // Response should be JSON
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.checkpoints).toBeInstanceOf(Array);
+      expect(parsed.checkpoints.length).toBeGreaterThanOrEqual(2);
+
+      const descriptions = parsed.checkpoints.map((c: any) => c.description);
+      expect(descriptions).toContain('First checkpoint');
+      expect(descriptions).toContain('Second checkpoint');
     });
 
     it('includes active plan when present', async () => {
@@ -101,9 +116,10 @@ describe('Tool handlers', () => {
         workspace: TEST_WORKSPACE
       });
 
-      const text = result.content[0]!.text;
-      expect(text).toContain('ACTIVE PLAN');
-      expect(text).toContain('Test Plan');
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.activePlan).toBeDefined();
+      expect(parsed.activePlan.title).toBe('Test Plan');
+      expect(parsed.activePlan.content).toBe('Plan content');
     });
 
     it('formats cross-workspace results', async () => {
@@ -145,8 +161,11 @@ describe('Tool handlers', () => {
       });
 
       expect(result.content[0]!.type).toBe('text');
-      expect(result.content[0]!.text).toContain('Plan saved');
-      expect(result.content[0]!.text).toContain('Test Plan');
+
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.plan.title).toBe('Test Plan');
+      expect(parsed.plan.content).toBe('Plan content');
     });
 
     it('gets plan by ID', async () => {
@@ -165,9 +184,9 @@ describe('Tool handlers', () => {
         workspace: TEST_WORKSPACE
       });
 
-      const text = result.content[0]!.text;
-      expect(text).toContain('Test Plan');
-      expect(text).toContain('Content');
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.plan.title).toBe('Test Plan');
+      expect(parsed.plan.content).toBe('Content');
     });
 
     it('lists all plans', async () => {
@@ -192,9 +211,13 @@ describe('Tool handlers', () => {
         workspace: TEST_WORKSPACE
       });
 
-      const text = result.content[0]!.text;
-      expect(text).toContain('Plan 1');
-      expect(text).toContain('Plan 2');
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.plans).toBeInstanceOf(Array);
+      expect(parsed.count).toBeGreaterThanOrEqual(2);
+
+      const titles = parsed.plans.map((p: any) => p.title);
+      expect(titles).toContain('Plan 1');
+      expect(titles).toContain('Plan 2');
     });
 
     it('activates plan', async () => {
@@ -213,7 +236,9 @@ describe('Tool handlers', () => {
         workspace: TEST_WORKSPACE
       });
 
-      expect(result.content[0]!.text).toContain('activated');
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.action).toBe('activate');
     });
 
     it('updates plan', async () => {
@@ -233,7 +258,9 @@ describe('Tool handlers', () => {
         workspace: TEST_WORKSPACE
       });
 
-      expect(result.content[0]!.text).toContain('updated');
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.action).toBe('update');
     });
 
     it('handles invalid action gracefully', async () => {

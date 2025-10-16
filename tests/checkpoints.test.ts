@@ -325,3 +325,97 @@ Some work from yesterday.
     }
   });
 });
+
+describe('Checkpoint metadata', () => {
+  it('formats checkpoint with metadata for long descriptions', () => {
+    const longDescription = 'A'.repeat(200);
+    const checkpoint: Checkpoint = {
+      timestamp: '2025-10-13T14:30:00.000Z',
+      description: longDescription,
+      summary: 'Brief summary of the work',
+      charCount: 200,
+      tags: ['feature']
+    };
+
+    const formatted = formatCheckpoint(checkpoint);
+
+    // Should include metadata comment
+    expect(formatted).toContain('<!--');
+    expect(formatted).toContain('summary: Brief summary of the work');
+    expect(formatted).toContain('charCount: 200');
+    expect(formatted).toContain('-->');
+  });
+
+  it('formats checkpoint without metadata for short descriptions', () => {
+    const checkpoint: Checkpoint = {
+      timestamp: '2025-10-13T14:30:00.000Z',
+      description: 'Short description'
+    };
+
+    const formatted = formatCheckpoint(checkpoint);
+
+    // Should not include metadata comment
+    expect(formatted).not.toContain('<!--');
+    expect(formatted).not.toContain('summary:');
+  });
+
+  it('parses checkpoint with metadata from HTML comment', () => {
+    const content = `# Checkpoints for 2025-10-13
+
+## 14:30 - Long detailed description of authentication system refactoring
+
+<!--
+summary: Refactored authentication system
+charCount: 250
+-->
+
+- **Tags**: refactoring, auth
+`;
+
+    const checkpoints = parseCheckpointFile(content);
+
+    expect(checkpoints[0]!.summary).toBe('Refactored authentication system');
+    expect(checkpoints[0]!.charCount).toBe(250);
+  });
+
+  it('auto-generates metadata when saving long checkpoint', async () => {
+    const longDescription = 'Successfully refactored the entire authentication system to use JWT tokens instead of session cookies. Updated all middleware, tests, and documentation. Added refresh token support and improved error handling for expired tokens.';
+
+    const checkpoint = await saveCheckpoint({
+      description: longDescription,
+      workspace: TEST_WORKSPACE
+    });
+
+    // Should auto-generate summary and charCount
+    expect(checkpoint.summary).toBeDefined();
+    expect(checkpoint.summary!.length).toBeLessThanOrEqual(150);
+    expect(checkpoint.charCount).toBe(longDescription.length);
+  });
+
+  it('does not generate metadata for short checkpoint', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'Short description',
+      workspace: TEST_WORKSPACE
+    });
+
+    // Should not generate summary for short descriptions
+    expect(checkpoint.summary).toBeUndefined();
+    expect(checkpoint.charCount).toBeUndefined();
+  });
+
+  it('preserves metadata through save and load cycle', async () => {
+    const longDescription = 'A'.repeat(200);
+
+    await saveCheckpoint({
+      description: longDescription,
+      workspace: TEST_WORKSPACE
+    });
+
+    const today = new Date().toISOString().split('T')[0]!;
+    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
+
+    // Metadata should be preserved
+    expect(checkpoints[0]!.summary).toBeDefined();
+    expect(checkpoints[0]!.charCount).toBe(200);
+  });
+});

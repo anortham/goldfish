@@ -4,6 +4,7 @@
 
 import { saveCheckpoint } from '../checkpoints.js';
 import { getCurrentWorkspace } from '../workspace.js';
+import { getFishEmoji } from '../emoji.js';
 
 /**
  * Handle checkpoint tool calls
@@ -15,27 +16,33 @@ export async function handleCheckpoint(args: any) {
     throw new Error('Description is required');
   }
 
-  await saveCheckpoint({
+  const ws = workspace || getCurrentWorkspace();
+  const checkpoint = await saveCheckpoint({
     description,
     tags,
-    workspace: workspace || getCurrentWorkspace()
+    workspace: ws
   });
 
-  const now = new Date();
-  const timeUTC = now.toISOString().substring(11, 16); // HH:MM in UTC
+  // Return structured JSON for AI agent consumption with human-friendly summary
+  const response = {
+    summary: `${getFishEmoji()} Checkpoint saved: ${description}`,
+    success: true,
+    checkpoint: {
+      description: checkpoint.description,
+      timestamp: checkpoint.timestamp,
+      tags: checkpoint.tags || [],
+      workspace: ws,
+      ...(checkpoint.gitBranch && { gitBranch: checkpoint.gitBranch }),
+      ...(checkpoint.gitCommit && { gitCommit: checkpoint.gitCommit }),
+      ...(checkpoint.files && { files: checkpoint.files })
+    }
+  };
+
   return {
     content: [
       {
         type: 'text' as const,
-        text: `✅ **Checkpoint saved**
-
-📝 **Progress:** ${description}
-⏰ **Time:** ${timeUTC} UTC
-${tags && tags.length > 0 ? `🏷️ **Tags:** ${tags.join(', ')}` : ''}
-
-Your progress is now safely captured and will survive session restarts! 🐠
-
-💡 **Next:** Use recall() when starting your next session to restore this context.`
+        text: JSON.stringify(response)
       }
     ]
   };
