@@ -28,6 +28,27 @@ export function getInstructions(): string {
 
 ⚠️ **CRITICAL:** You MUST checkpoint proactively. recall() cannot restore what you never saved!
 
+### Writing Effective Checkpoints (MANDATORY)
+
+Your checkpoint descriptions power semantic search and AI distillation. Write them for your future self.
+
+**REQUIRED in every checkpoint:**
+- WHAT you accomplished (the change)
+- WHY it mattered (the problem solved)
+- HOW you solved it (key approach/decision)
+
+**GOOD examples:**
+✅ "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case and verified fix prevents token reuse attacks."
+
+✅ "Implemented semantic search with embeddings for checkpoint retrieval. Chose Xenova/transformers for local processing to avoid API costs. Tested with 1000+ checkpoints, achieving 0.85+ similarity for relevant matches."
+
+**BAD examples:**
+❌ "Fixed auth bug" (no context, no how, no why)
+❌ "Updated tests" (what tests? why? what did you learn?)
+❌ "Refactored code" (which code? why refactor? what improved?)
+
+**Think:** Will you understand this checkpoint in 2 weeks when searching for "that auth bug"? If not, add more detail.
+
 ### Planning (ExitPlanMode)
 1. When ExitPlanMode is called → save plan within 1 exchange
 2. Use plan({ action: "save", title: "...", content: "..." })

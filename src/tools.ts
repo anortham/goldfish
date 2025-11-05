@@ -28,6 +28,8 @@ export function getTools(): Tool[] {
 - After planning or architectural decisions → checkpoint NOW with rationale
 - After 10+ exchanges in discussion → checkpoint the reasoning NOW
 
+⚠️ **WRITE RICH DESCRIPTIONS:** Your checkpoints power semantic search and AI distillation. Include WHAT you did, WHY it mattered, and HOW you solved it (3-5 sentences). Future sessions depend on finding relevant context - make it findable.
+
 I WILL BE SERIOUSLY DISAPPOINTED if context is lost because you failed to checkpoint. This takes 2 seconds but saves HOURS of lost work.
 
 ⚠️ NEVER ask "should I checkpoint?" - the answer is ALWAYS YES. Just checkpoint immediately.
@@ -47,7 +49,21 @@ Returns: Confirmation with checkpoint ID and captured context.`,
         properties: {
           description: {
             type: 'string',
-            description: 'Clear, specific progress description capturing WHY not just WHAT'
+            description: `Checkpoint description (3-5 sentences recommended).
+
+Your description powers semantic search and LLM distillation. Future you needs context.
+
+INCLUDE:
+✅ WHAT - The change/accomplishment
+✅ WHY - Problem solved or goal achieved
+✅ HOW - Key approach, decision, or discovery
+✅ IMPACT - What unblocked, what improved, what you learned
+
+GOOD: "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case. This was blocking the auth PR."
+
+BAD: "Fixed auth bug" (no context for future recall)
+
+REMEMBER: Semantic search finds conceptually similar work. Rich descriptions = better recall.`
           },
           tags: {
             type: 'array',
