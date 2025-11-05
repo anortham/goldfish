@@ -10,7 +10,13 @@
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
     "build": "bun build src/server.ts --outdir dist --target node",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "setup": "bun run setup.ts",
+    "setup:force": "bun run setup.ts --force",
+    "setup:reset": "bun run setup.ts reset",
+    "setup:status": "bun run setup.ts status",
+    "migrate": "bun run scripts/migrate-embeddings.ts",
+    "migrate:all": "bun run scripts/migrate-embeddings.ts --all"
   },
   "keywords": [
     "mcp",
@@ -23,7 +29,10 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@xenova/transformers": "^2.17.0",
     "fuse.js": "^7.0.0",
+    "hnswlib-node": "^1.4.2",
+    "onnxruntime-node": "^1.16.0",
     "yaml": "^2.6.1"
   },
   "devDependencies": {

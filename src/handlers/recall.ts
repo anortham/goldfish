@@ -41,6 +41,18 @@ export async function handleRecall(args: any) {
     response.workspaces = result.workspaces;
   }
 
+  if (result.searchMethod) {
+    response.searchMethod = result.searchMethod;
+  }
+
+  if (result.searchResults) {
+    response.searchResults = result.searchResults;
+  }
+
+  if (result.distilled) {
+    response.distilled = result.distilled;
+  }
+
   return {
     content: [
       {

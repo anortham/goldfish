@@ -12,6 +12,7 @@ import { getWorkspacePath, ensureWorkspaceDir, getCurrentWorkspace } from './wor
 import { getGitContext } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
+import { getEmbeddingEngine } from './embeddings';
 
 /**
  * Format a checkpoint as markdown
@@ -225,6 +226,20 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
     await writeFile(tempPath, newContent, 'utf-8');
     await rename(tempPath, filePath);
   });
+
+  // Generate embedding in background (non-blocking)
+  // Skip if in test environment to avoid race conditions with temp workspaces
+  if (process.env.NODE_ENV !== 'test') {
+    setImmediate(async () => {
+      try {
+        const engine = await getEmbeddingEngine(workspace);
+        await engine.embedCheckpoint(checkpoint);
+      } catch (error) {
+        // Silently skip errors in background embedding generation
+        // (workspace might be deleted, etc.)
+      }
+    });
+  }
 
   return checkpoint;
 }

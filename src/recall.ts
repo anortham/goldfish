@@ -6,10 +6,12 @@
  */
 
 import Fuse from 'fuse.js';
-import type { Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from './types';
+import type { Checkpoint, RecallOptions, RecallResult, WorkspaceSummary, SearchResult } from './types';
 import { getCheckpointsForDateRange } from './checkpoints';
 import { getActivePlan } from './plans';
 import { getCurrentWorkspace, listWorkspaces } from './workspace';
+import { getEmbeddingEngine } from './embeddings';
+import { distillCheckpoints, calculateTokenReduction } from './distill';
 
 /**
  * Parse human-friendly time spans or ISO timestamps
@@ -130,15 +132,47 @@ function getDateRange(options: RecallOptions): { from: string; to: string } {
 async function recallFromWorkspace(
   workspace: string,
   options: RecallOptions
-): Promise<{ checkpoints: Checkpoint[]; activePlan: any }> {
+): Promise<{ checkpoints: Checkpoint[]; activePlan: any; searchMethod?: 'semantic' | 'fuzzy' | 'none'; searchResults?: SearchResult[] }> {
   const { from, to } = getDateRange(options);
 
   // Get checkpoints in date range
   let checkpoints = await getCheckpointsForDateRange(workspace, from, to);
 
+  let searchMethod: 'semantic' | 'fuzzy' | 'none' = 'none';
+  let searchResults: SearchResult[] | undefined;
+
   // Apply search filter if provided
   if (options.search) {
-    checkpoints = searchCheckpoints(options.search, checkpoints);
+    // Try semantic search if requested
+    if (options.semantic) {
+      try {
+        const engine = await getEmbeddingEngine(workspace);
+        const semanticResults = await engine.searchSemantic(
+          options.search,
+          checkpoints, // Pass available checkpoints
+          options.limit || 50,
+          options.minSimilarity || 0.0
+        );
+
+        if (semanticResults.length > 0) {
+          checkpoints = semanticResults.map(r => r.checkpoint);
+          searchMethod = 'semantic';
+          searchResults = semanticResults;
+        } else {
+          // Fall back to fuzzy search if no semantic results
+          checkpoints = searchCheckpoints(options.search, checkpoints);
+          searchMethod = 'fuzzy';
+        }
+      } catch (error) {
+        // Fall back to fuzzy search if semantic search fails
+        checkpoints = searchCheckpoints(options.search, checkpoints);
+        searchMethod = 'fuzzy';
+      }
+    } else {
+      // Use fuzzy search
+      checkpoints = searchCheckpoints(options.search, checkpoints);
+      searchMethod = 'fuzzy';
+    }
   }
 
   // Apply summary filtering (default: return summaries, not full descriptions)
@@ -185,7 +219,7 @@ async function recallFromWorkspace(
   // Get active plan
   const activePlan = await getActivePlan(workspace);
 
-  return { checkpoints, activePlan };
+  return { checkpoints, activePlan, searchMethod, searchResults };
 }
 
 /**
@@ -226,11 +260,38 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
       ? getCurrentWorkspace()
       : workspace;
 
-    const { checkpoints, activePlan } = await recallFromWorkspace(targetWorkspace, options);
+    const { checkpoints, activePlan, searchMethod, searchResults } = await recallFromWorkspace(targetWorkspace, options);
+
+    // Apply distillation if requested
+    if (options.distill && options.search && checkpoints.length > 0) {
+      const distillResult = await distillCheckpoints(
+        checkpoints,
+        options.search,
+        {
+          provider: options.distillProvider || 'auto',
+          maxTokens: options.distillMaxTokens || 500
+        }
+      );
+
+      return {
+        checkpoints,
+        activePlan,
+        searchMethod,
+        searchResults,
+        distilled: {
+          summary: distillResult.summary,
+          provider: distillResult.provider,
+          originalCount: checkpoints.length,
+          tokenReduction: calculateTokenReduction(checkpoints, distillResult)
+        }
+      };
+    }
 
     return {
       checkpoints,
-      activePlan
+      activePlan,
+      searchMethod,
+      searchResults
     };
   }
 
@@ -273,6 +334,29 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     limitedCheckpoints = [];
   } else {
     limitedCheckpoints = allCheckpoints;
+  }
+
+  // Apply distillation if requested (cross-workspace)
+  if (options.distill && options.search && limitedCheckpoints.length > 0) {
+    const distillResult = await distillCheckpoints(
+      limitedCheckpoints,
+      options.search,
+      {
+        provider: options.distillProvider || 'auto',
+        maxTokens: options.distillMaxTokens || 500
+      }
+    );
+
+    return {
+      checkpoints: limitedCheckpoints,
+      workspaces: workspaceSummaries,
+      distilled: {
+        summary: distillResult.summary,
+        provider: distillResult.provider,
+        originalCount: limitedCheckpoints.length,
+        tokenReduction: calculateTokenReduction(limitedCheckpoints, distillResult)
+      }
+    };
   }
 
   // For cross-workspace, no single "active plan"

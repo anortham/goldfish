@@ -52,15 +52,51 @@ export interface RecallOptions {
   days?: number;          // Look back N days (default: 2)
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
-  search?: string;        // Fuzzy search query
+  search?: string;        // Search query (semantic or fuzzy)
   limit?: number;         // Max checkpoints to return (default: 10)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
+
+  // Semantic search options (Phase 2)
+  semantic?: boolean;     // Use semantic search (default: false)
+  minSimilarity?: number; // Min cosine similarity [0-1] (default: 0.0)
+
+  // Distillation options (Phase 3)
+  distill?: boolean;      // Enable LLM distillation (default: false)
+  distillProvider?: 'claude' | 'gemini' | 'auto' | 'none';  // LLM provider
+  distillMaxTokens?: number;  // Max tokens for distilled summary
+}
+
+export interface SearchResult {
+  checkpoint: Checkpoint;
+  similarity: number;     // Cosine similarity [0, 1]
+  rank: number;           // Result rank (1-indexed)
+}
+
+export interface DistillResult {
+  summary: string;
+  provider: 'claude' | 'gemini' | 'simple';
+  cached: boolean;
+  tokensIn: number;
+  tokensOut: number;
+  latencyMs: number;
 }
 
 export interface RecallResult {
   checkpoints: Checkpoint[];
   activePlan?: Plan;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
+
+  // Semantic search metadata (Phase 2)
+  searchMethod?: 'semantic' | 'fuzzy' | 'none';
+  searchResults?: SearchResult[];   // Full search results with similarity scores
+
+  // Distillation metadata (Phase 3)
+  distilled?: {
+    summary: string;
+    provider: 'claude' | 'gemini' | 'simple';
+    originalCount: number;
+    tokenReduction: number;  // Percentage reduction
+  };
 }
 
 export interface WorkspaceSummary {
