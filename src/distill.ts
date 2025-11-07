@@ -223,7 +223,9 @@ export async function distillCheckpoints(
   // Skip CLI attempts when running inside Claude Code to avoid recursion
   // (spawning Claude from within Claude causes 30s timeout)
   // Let Claude naturally distill results in its conversational response
-  if (process.env.CLAUDECODE === '1' && options.provider !== 'claude' && options.provider !== 'gemini') {
+  // Check for Claude Code environment indicators (MCP servers don't get CLAUDECODE but do get CLAUDE_CODE_ENTRYPOINT)
+  const isClaudeCode = process.env.CLAUDECODE === '1' || process.env.CLAUDE_CODE_ENTRYPOINT === 'cli';
+  if (isClaudeCode && options.provider !== 'claude' && options.provider !== 'gemini') {
     return simpleExtraction(checkpoints);
   }
 
