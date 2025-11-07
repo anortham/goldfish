@@ -152,6 +152,24 @@ More content.
     expect(checkpoints[1]!.description).toBe('Second checkpoint');
   });
 
+  it('preserves full timestamp precision with seconds and milliseconds', () => {
+    // This is critical for semantic search - embeddings are keyed by full timestamp
+    const checkpoint: Checkpoint = {
+      timestamp: '2025-10-13T14:30:36.443Z',  // Full precision with seconds/millis
+      description: 'Test checkpoint with precise timestamp',
+      summary: 'Test checkpoint with precise timestamp',
+      charCount: 42
+    };
+
+    // Format and then parse back
+    const formatted = formatCheckpoint(checkpoint);
+    const parsed = parseCheckpointFile(`# Checkpoints for 2025-10-13\n\n${formatted}`, '2025-10-13');
+
+    expect(parsed).toHaveLength(1);
+    // CRITICAL: Full timestamp must be preserved for semantic search to work
+    expect(parsed[0]!.timestamp).toBe('2025-10-13T14:30:36.443Z');
+  });
+
   // This documents a known limitation - if users put "## "non-timestamp text in descriptions,
   // content after it is lost. We'll keep the simple regex but document this.
 });

@@ -291,14 +291,21 @@ describe('EmbeddingEngine', () => {
       'auth security',
       checkpoints,
       10,
-      0.7 // High threshold
+      0.5 // Realistic threshold for real embeddings (0.5-0.8 is typical for related text)
     );
 
-    // Should only return highly similar results
+    // Should return at least one semantically similar result
     expect(results.length).toBeGreaterThan(0);
+    expect(results.length).toBeLessThanOrEqual(3); // At most 3 of the 4 checkpoints (unrelated one should be filtered)
+
+    // All returned results should meet similarity threshold
     for (const result of results) {
-      expect(result.similarity).toBeGreaterThanOrEqual(0.7);
+      expect(result.similarity).toBeGreaterThanOrEqual(0.5);
     }
+
+    // The unrelated database work should NOT be in results
+    const descriptions = results.map(r => r.checkpoint.description);
+    expect(descriptions).not.toContain('Completely unrelated database work');
   });
 
   it('handles embedding generation errors gracefully', async () => {

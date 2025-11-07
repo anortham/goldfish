@@ -13,10 +13,7 @@ import { join } from 'path';
 import { mkdir } from 'fs/promises';
 import type { Checkpoint } from './types';
 import { getWorkspacePath } from './workspace';
-
-// TODO: Replace with real ONNX model integration
-// For now, use a simple hash-based mock for testing
-const MOCK_EMBEDDINGS = true;
+import { pipeline, type FeatureExtractionPipeline } from '@xenova/transformers';
 
 /**
  * Configuration for embedding generation
@@ -57,6 +54,52 @@ const DEFAULT_CONFIG: EmbeddingConfig = {
   cachePath: '~/.goldfish/models',
   maxBatchSize: 100
 };
+
+/**
+ * Singleton model instance (lazy loaded)
+ */
+let globalModel: FeatureExtractionPipeline | null = null;
+let modelLoading: Promise<FeatureExtractionPipeline> | null = null;
+
+/**
+ * Loads the embedding model (singleton, cached)
+ */
+async function loadModel(): Promise<FeatureExtractionPipeline> {
+  // Return cached model if already loaded
+  if (globalModel) {
+    return globalModel;
+  }
+
+  // Wait for in-progress loading
+  if (modelLoading) {
+    return modelLoading;
+  }
+
+  // Start loading model
+  modelLoading = (async () => {
+    try {
+      // Load feature extraction pipeline with BGE model
+      // Model will be downloaded to ~/.cache/huggingface on first use
+      const model = await pipeline(
+        'feature-extraction',
+        'Xenova/bge-small-en-v1.5',
+        {
+          // Quantized version for faster inference
+          quantized: true,
+        }
+      );
+
+      globalModel = model;
+      modelLoading = null;
+      return model;
+    } catch (error) {
+      modelLoading = null;
+      throw new Error(`Failed to load embedding model: ${error}`);
+    }
+  })();
+
+  return modelLoading;
+}
 
 /**
  * Builds embedding text from checkpoint by combining relevant fields
@@ -108,79 +151,6 @@ export function cosineSimilarity(vec1: Float32Array, vec2: Float32Array): number
   return dotProduct / magnitude;
 }
 
-/**
- * Simple deterministic hash-based vector generation (mock for testing)
- * TODO: Replace with real ONNX model
- */
-function generateMockEmbedding(text: string, dimensions: number): Float32Array {
-  const vector = new Float32Array(dimensions);
-
-  // Handle empty text
-  if (!text || text.trim().length === 0) {
-    // Return zero vector for empty text (will have 0 similarity with everything)
-    return vector;
-  }
-
-  // Normalize text for consistent hashing
-  const normalizedText = text.toLowerCase().trim();
-
-  // Use a simple hash to generate deterministic but varied vectors
-  let hash = 0;
-  for (let i = 0; i < normalizedText.length; i++) {
-    hash = ((hash << 5) - hash) + normalizedText.charCodeAt(i);
-    hash = hash & hash; // Convert to 32bit integer
-  }
-
-  // Simple keyword-based semantic approximation for testing
-  // Weight certain keywords higher to simulate semantic understanding
-  const keywords = ['auth', 'authentication', 'security', 'bug', 'fix', 'database', 'migration'];
-  const keywordWeights = new Map<string, number>();
-
-  for (let i = 0; i < keywords.length; i++) {
-    if (normalizedText.includes(keywords[i])) {
-      keywordWeights.set(keywords[i], 0.3); // Boost for keyword presence
-    }
-  }
-
-  // Generate pseudo-random values based on hash and keywords
-  for (let i = 0; i < dimensions; i++) {
-    const seed = hash + i;
-
-    // Base pseudo-random value
-    const x = Math.sin(seed) * 10000;
-    let value = x - Math.floor(x);
-
-    // Apply keyword weights to specific dimensions
-    const keywordIndex = i % keywords.length;
-    const keyword = keywords[keywordIndex];
-    if (keywordWeights.has(keyword)) {
-      value += keywordWeights.get(keyword)!;
-    }
-
-    vector[i] = value;
-  }
-
-  // Normalize vector
-  let magnitude = 0;
-  for (let i = 0; i < dimensions; i++) {
-    magnitude += vector[i] * vector[i];
-  }
-  magnitude = Math.sqrt(magnitude);
-
-  if (magnitude === 0) {
-    // Return small random vector if normalization would divide by zero
-    for (let i = 0; i < dimensions; i++) {
-      vector[i] = 0.001;
-    }
-    return vector;
-  }
-
-  for (let i = 0; i < dimensions; i++) {
-    vector[i] /= magnitude;
-  }
-
-  return vector;
-}
 
 /**
  * Embedding engine for generating and searching embeddings
@@ -346,17 +316,40 @@ export class EmbeddingEngine {
   }
 
   /**
-   * Generates embedding vector for text
-   * TODO: Replace with real ONNX model
+   * Generates embedding vector for text using ONNX model
    */
   private async generateEmbedding(text: string): Promise<Float32Array> {
-    if (MOCK_EMBEDDINGS) {
-      // Mock implementation for testing
-      return generateMockEmbedding(text, this.config.dimensions);
+    // Handle empty text
+    if (!text || text.trim().length === 0) {
+      // Return zero vector for empty text
+      return new Float32Array(this.config.dimensions);
     }
 
-    // TODO: Implement real ONNX model inference
-    throw new Error('Real ONNX embeddings not yet implemented');
+    try {
+      // Load model (cached after first load)
+      const model = await loadModel();
+
+      // Generate embedding
+      const output = await model(text, {
+        pooling: 'mean',
+        normalize: true
+      });
+
+      // Extract the embedding array
+      // output is a Tensor, we need to convert to Float32Array
+      const embedding = output.data;
+
+      // Ensure correct dimensions
+      if (embedding.length !== this.config.dimensions) {
+        throw new Error(
+          `Model returned ${embedding.length} dimensions, expected ${this.config.dimensions}`
+        );
+      }
+
+      return new Float32Array(embedding);
+    } catch (error) {
+      throw new Error(`Failed to generate embedding: ${error}`);
+    }
   }
 
   /**

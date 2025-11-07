@@ -149,6 +149,26 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
           workspace: {
             type: 'string',
             description: 'Workspace scope: "current" (default), "all" (cross-workspace), or specific path. Optional - defaults to current workspace.'
+          },
+          semantic: {
+            type: 'boolean',
+            description: 'Enable semantic search using embeddings to find conceptually similar work (default: false). Use with search parameter.'
+          },
+          minSimilarity: {
+            type: 'number',
+            description: 'Minimum similarity threshold for semantic search (0.0-1.0, default: 0.0). Higher values return more relevant results.'
+          },
+          distill: {
+            type: 'boolean',
+            description: 'Enable LLM distillation to generate compact summaries of search results (default: false). Use with search parameter.'
+          },
+          distillProvider: {
+            type: 'string',
+            description: 'LLM provider for distillation: "auto" (default), "claude", "gemini", or "none".'
+          },
+          distillMaxTokens: {
+            type: 'number',
+            description: 'Maximum tokens for distilled summary (default: 500).'
           }
         }
       }

@@ -27,9 +27,17 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
   lines.push(`## ${time} - ${checkpoint.description}`);
   lines.push('');
 
-  // Metadata comment (for long descriptions with summary)
-  if (checkpoint.summary || checkpoint.charCount) {
+  // Metadata comment (for long descriptions with summary OR full timestamp precision)
+  // IMPORTANT: Full timestamp is critical for semantic search - embeddings are keyed by timestamp
+  // Check if timestamp has non-zero seconds/millis (not just :00.000Z)
+  const hasFullTimestamp = !checkpoint.timestamp.endsWith('T' + time + ':00.000Z');
+
+  if (checkpoint.summary || checkpoint.charCount || hasFullTimestamp) {
     lines.push('<!--');
+    // Store full timestamp if it has precision beyond HH:MM (critical for embedding lookup)
+    if (hasFullTimestamp) {
+      lines.push(`timestamp: ${checkpoint.timestamp}`);
+    }
     if (checkpoint.summary) {
       lines.push(`summary: ${checkpoint.summary}`);
     }
@@ -85,6 +93,7 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
     const [, time, description] = match;
 
     // Build timestamp (use provided date or extract from content)
+    // Will be overridden if full timestamp found in metadata comment
     let timestamp: string;
     if (date) {
       timestamp = `${date}T${time}:00.000Z`;
@@ -96,6 +105,7 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
     }
 
     // Parse metadata fields
+    let fullTimestamp: string | undefined;  // Full precision timestamp from metadata
     let summary: string | undefined;
     let charCount: number | undefined;
     let tags: string[] | undefined;
@@ -119,6 +129,11 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
 
       // Inside comment - extract metadata
       if (inComment) {
+        const timestampMatch = line.match(/^timestamp:\s*(.+)$/);
+        if (timestampMatch) {
+          fullTimestamp = timestampMatch[1]!.trim();
+        }
+
         const summaryMatch = line.match(/^summary:\s*(.+)$/);
         if (summaryMatch) {
           summary = summaryMatch[1]!.trim();
@@ -154,7 +169,9 @@ export function parseCheckpointFile(content: string, date?: string): Checkpoint[
     }
 
     const checkpoint: Checkpoint = {
-      timestamp,
+      // Use full timestamp from metadata if available (preserves seconds/millis)
+      // Otherwise use HH:MM-based timestamp (backward compatibility)
+      timestamp: fullTimestamp || timestamp,
       description: description!
     };
     if (summary) checkpoint.summary = summary;

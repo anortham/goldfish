@@ -12,7 +12,9 @@ Restore recent work context using the recall tool with RAG capabilities.
 - `/recall search <query>` → Semantic search only
 
 ```
-if "$ARGUMENTS" starts with "smart ":
+if "$ARGUMENTS" === "smart" or "$ARGUMENTS" === "search":
+  ERROR: "Usage: /recall smart <query> or /recall search <query>"
+else if "$ARGUMENTS" starts with "smart ":
   recall({
     search: "$ARGUMENTS after 'smart '",
     semantic: true,

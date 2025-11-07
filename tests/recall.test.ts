@@ -45,7 +45,8 @@ describe('Basic recall functionality', () => {
     const result = await recall({ workspace: TEST_WORKSPACE_A });
 
     expect(result.checkpoints).toHaveLength(3);
-    expect(result.checkpoints[0]!.description).toBe('Fixed authentication bug');
+    // Checkpoints are sorted by timestamp descending (newest first)
+    expect(result.checkpoints[0]!.description).toBe('Refactored database queries');
   });
 
   it('filters by number of days', async () => {

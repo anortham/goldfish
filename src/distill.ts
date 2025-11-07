@@ -220,6 +220,13 @@ export async function distillCheckpoints(
     return simpleExtraction(checkpoints);
   }
 
+  // Skip CLI attempts when running inside Claude Code to avoid recursion
+  // (spawning Claude from within Claude causes 30s timeout)
+  // Let Claude naturally distill results in its conversational response
+  if (process.env.CLAUDECODE === '1' && options.provider !== 'claude' && options.provider !== 'gemini') {
+    return simpleExtraction(checkpoints);
+  }
+
   // Build prompt
   const prompt = buildDistillPrompt(checkpoints, context, options.maxTokens || 500);
 
