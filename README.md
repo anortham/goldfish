@@ -53,6 +53,9 @@ bun setup
 
 # Optional: Migrate existing checkpoints to generate embeddings
 bun migrate
+
+# Migrate old checkpoints to new JSONL memory format (for team collaboration)
+bun run scripts/migrate-to-memories.ts goldfish ./
 ```
 
 The `bun setup` command will:
@@ -319,6 +322,37 @@ your-project/
 **You can read, edit, or commit these files.** They're yours and your team's.
 
 **Embeddings** are stored in SQLite for performance (384-dimensional vectors). Generated automatically on checkpoint save.
+
+---
+
+## Migrating Old Checkpoints to Memories
+
+If you have existing checkpoints in `~/.goldfish/{workspace}/checkpoints/*.md` and want to migrate them to the new team-shareable JSONL format:
+
+```bash
+# Preview what would be migrated (dry run)
+bun run scripts/migrate-to-memories.ts goldfish ./ --dry-run
+
+# Migrate checkpoints to .goldfish/memories/*.jsonl
+bun run scripts/migrate-to-memories.ts goldfish ./
+
+# The script will:
+# 1. Read all checkpoints from ~/.goldfish/goldfish/checkpoints/*.md
+# 2. Convert each checkpoint to a memory (inferring type from tags)
+# 3. Group memories by date (YYYY-MM-DD)
+# 4. Write to .goldfish/memories/YYYY-MM-DD.jsonl
+# 5. Trigger background embedding generation
+```
+
+**Type inference:**
+- Tags like `feature`, `feat` → `feature`
+- Tags like `bug-fix`, `fix` → `bug-fix`
+- Tags like `decision`, `architecture` → `decision`
+- Tags like `refactor` → `refactor`
+- Tags like `insight`, `learning` → `insight`
+- Everything else → `observation`
+
+After migration, you can commit the `.goldfish/memories/*.jsonl` files to git for team collaboration!
 
 ---
 
