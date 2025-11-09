@@ -5,6 +5,7 @@
       "name": "goldfish",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.0.4",
+        "@napi-rs/blake-hash": "^1.3.5",
         "@xenova/transformers": "^2.17.0",
         "fuse.js": "^7.0.0",
         "hnswlib-node": "^1.4.2",
@@ -21,6 +22,36 @@
     "@huggingface/jinja": ["@huggingface/jinja@0.2.2", "", {}, "sha512-/KPde26khDUIPkTGU82jdtTW9UAuvUTumCAbFs/7giR0SxsvZC4hru51PBvpijH6BVkHcROcvZM/lpy5h1jRRA=="],
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.20.0", "", { "dependencies": { "ajv": "^6.12.6", "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "express": "^5.0.1", "express-rate-limit": "^7.5.0", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.23.8", "zod-to-json-schema": "^3.24.1" } }, "sha512-kOQ4+fHuT4KbR2iq2IjeV32HiihueuOf1vJkq18z08CLZ1UQrTc8BXJpVfxZkq45+inLLD+D4xx4nBjUelJa4Q=="],
+
+    "@napi-rs/blake-hash": ["@napi-rs/blake-hash@1.3.5", "", { "optionalDependencies": { "@napi-rs/blake-hash-android-arm64": "1.3.5", "@napi-rs/blake-hash-darwin-arm64": "1.3.5", "@napi-rs/blake-hash-darwin-x64": "1.3.5", "@napi-rs/blake-hash-freebsd-x64": "1.3.5", "@napi-rs/blake-hash-linux-arm-gnueabihf": "1.3.5", "@napi-rs/blake-hash-linux-arm64-gnu": "1.3.5", "@napi-rs/blake-hash-linux-arm64-musl": "1.3.5", "@napi-rs/blake-hash-linux-ppc64-gnu": "1.3.5", "@napi-rs/blake-hash-linux-s390x-gnu": "1.3.5", "@napi-rs/blake-hash-linux-x64-gnu": "1.3.5", "@napi-rs/blake-hash-linux-x64-musl": "1.3.5", "@napi-rs/blake-hash-win32-arm64-msvc": "1.3.5", "@napi-rs/blake-hash-win32-ia32-msvc": "1.3.5", "@napi-rs/blake-hash-win32-x64-msvc": "1.3.5" } }, "sha512-7cYWntIvm6r4pipt0cNra/NDtxieo+68N7KxZXZDJp0MhbtsC+LATN29014jtaThUrKcx1/ztu8wtpFVzs/g4Q=="],
+
+    "@napi-rs/blake-hash-android-arm64": ["@napi-rs/blake-hash-android-arm64@1.3.5", "", { "os": "android", "cpu": "arm64" }, "sha512-1Q5WA8kFPdRUveE8IffkrNg1uFE076PfW5RMnX3m9FITH6ANZxyuXCGU7F726dQgKl7q7+0be4g15uMIbxvD9w=="],
+
+    "@napi-rs/blake-hash-darwin-arm64": ["@napi-rs/blake-hash-darwin-arm64@1.3.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-7ctuzx1iG/ZuFgPRkRodlnUYxslR+lZQBMoLX6y1J5U3xUQEIKim+XT/OUDSOXqWUoZOBkceMNTSXtVwj2JhUw=="],
+
+    "@napi-rs/blake-hash-darwin-x64": ["@napi-rs/blake-hash-darwin-x64@1.3.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-cv0bpyAXJyS7deJfRPKRitTBxjmADEKSir+BAwYTzYqG6TC26YEqKx7wfepWtTfByZcr78QD91LMaoycvFnGaA=="],
+
+    "@napi-rs/blake-hash-freebsd-x64": ["@napi-rs/blake-hash-freebsd-x64@1.3.5", "", { "os": "freebsd", "cpu": "x64" }, "sha512-Eczd+BDheRqx2BRmyA0++89jC99DZLYEMLLR1hpVrDgfQcR6RV08DBjjHPjoWT3PQmL+VUOkoD+Uh4OngK2Y2g=="],
+
+    "@napi-rs/blake-hash-linux-arm-gnueabihf": ["@napi-rs/blake-hash-linux-arm-gnueabihf@1.3.5", "", { "os": "linux", "cpu": "arm" }, "sha512-CSk4blsM+D/LPXKufFoTWs7lAgA89HhN6PsB+9oskQPiINFF++iq2eTDWF+yMT13uT+jYZbnoPH3K3uD+9+lZQ=="],
+
+    "@napi-rs/blake-hash-linux-arm64-gnu": ["@napi-rs/blake-hash-linux-arm64-gnu@1.3.5", "", { "os": "linux", "cpu": "arm64" }, "sha512-7ENesxQL2TTqQF3yxZh4NF43qUM0IJ6EqiHYzf1WEqSHV9yaGDjsqMh483tA3p7raHlkxoyVGNjeRZ9+arx6rg=="],
+
+    "@napi-rs/blake-hash-linux-arm64-musl": ["@napi-rs/blake-hash-linux-arm64-musl@1.3.5", "", { "os": "linux", "cpu": "arm64" }, "sha512-uy5E5wNKJHMQ4b7asDaxkh8vrk2W4w8QlFbHgp9dNkNFTbbAYHUJyiKJt9p2xDzpHCG4KfLYXdLlR9f0RyXGwg=="],
+
+    "@napi-rs/blake-hash-linux-ppc64-gnu": ["@napi-rs/blake-hash-linux-ppc64-gnu@1.3.5", "", { "os": "linux", "cpu": "ppc64" }, "sha512-z/11VkQn79+Zp8uunHvqsnzSC/+2L0L9sfvizCyVtOuSWSVO4x1wnSRBebrOEBqPi5asmP4akS8C25/iDGvKFA=="],
+
+    "@napi-rs/blake-hash-linux-s390x-gnu": ["@napi-rs/blake-hash-linux-s390x-gnu@1.3.5", "", { "os": "linux", "cpu": "s390x" }, "sha512-UJQrW37WZtn6xNLTHrT5uOV+vrm0nH6QE/H9KpFVu2F9Way2p/2UkbWPS1Fq1lADzYgc6tRvm1OECdvMqul4AQ=="],
+
+    "@napi-rs/blake-hash-linux-x64-gnu": ["@napi-rs/blake-hash-linux-x64-gnu@1.3.5", "", { "os": "linux", "cpu": "x64" }, "sha512-HjCOxo+LIKbQnipV/g0SBoHr9BOF5h3eA3VK0v4Bxm/4EG/ODOrrWf1r8iOYDICVmyUwk9DafAB/cKtqyopbcQ=="],
+
+    "@napi-rs/blake-hash-linux-x64-musl": ["@napi-rs/blake-hash-linux-x64-musl@1.3.5", "", { "os": "linux", "cpu": "x64" }, "sha512-O0Vha6EKRAEz0Rf+il61+X+8M68ADI534myXIsvus86jw7nWKogf4/cjzsMm3h823JxprgFxDfaXg5HZ+JP5TA=="],
+
+    "@napi-rs/blake-hash-win32-arm64-msvc": ["@napi-rs/blake-hash-win32-arm64-msvc@1.3.5", "", { "os": "win32", "cpu": "arm64" }, "sha512-dtQe01RTYIvo/oPEaTN1rAXZLi+uR7+wJMoTEVZ3Zl2TVyNO8GMbm5t35BgbBSsDBN2PsGF12zQCINsoqL2/TA=="],
+
+    "@napi-rs/blake-hash-win32-ia32-msvc": ["@napi-rs/blake-hash-win32-ia32-msvc@1.3.5", "", { "os": "win32", "cpu": "ia32" }, "sha512-ewHZGwRPK3PJw6XlZMQ7OaSN/DSYGzxPdCXr698NpHvmqe46VpiOY72b2RxZenJwvceXHqsbMXTyp26Hvy2mlA=="],
+
+    "@napi-rs/blake-hash-win32-x64-msvc": ["@napi-rs/blake-hash-win32-x64-msvc@1.3.5", "", { "os": "win32", "cpu": "x64" }, "sha512-f6ivvPWsUdcXi90Uq2OJHJpHhAoLRT0x6y0Hs4WM9Ow8E7PcIHCzcrPntmBFblC9qbtq+ZNmRtHMQ4kpQxDSIw=="],
 
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 

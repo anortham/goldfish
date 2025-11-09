@@ -29,6 +29,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@napi-rs/blake-hash": "^1.3.5",
     "@xenova/transformers": "^2.17.0",
     "fuse.js": "^7.0.0",
     "hnswlib-node": "^1.4.2",
