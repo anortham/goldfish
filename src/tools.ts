@@ -1,7 +1,7 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the 3 core tools: checkpoint, recall, and plan
+ * Contains the 4 core tools: checkpoint, store, recall, and plan
  * with aggressive behavioral language to encourage proper usage.
  */
 
@@ -76,6 +76,80 @@ REMEMBER: Semantic search finds conceptually similar work. Rich descriptions = b
           }
         },
         required: ['description']
+      }
+    },
+    {
+      name: 'store',
+      description: `Store a memory in project-level .goldfish/memories/ for team collaboration and semantic recall.
+
+**NEW TOOL (Phase 4)** - Project-level memory storage that:
+- Stores memories in .goldfish/memories/YYYY-MM-DD.jsonl (git-committable)
+- Automatically generates GPU-accelerated embeddings for semantic search
+- Enables team collaboration (commit memories with code)
+- Powers cross-project semantic recall
+
+Use store() when you want to:
+- Capture architectural decisions for the team
+- Document why certain approaches were chosen
+- Record bug fixes and their root causes
+- Share insights that benefit the whole project
+
+This complements checkpoint() (user-scoped) with project-scoped memory.
+
+**Memory Types:**
+- decision: Architecture, library, or approach choices
+- bug-fix: Bug resolutions with root cause analysis
+- feature: New feature implementations
+- insight: Important discoveries or learnings
+- observation: Noteworthy patterns or behaviors
+- refactor: Code improvements and why they were made
+
+**Sources:**
+- agent: AI-generated memory
+- user: User-provided context
+- system: Automated observations
+- development-session: Session-level insights
+
+**Rich Content Guidelines:**
+Write 2-4 sentences covering:
+✅ WHAT - The decision/fix/feature/insight
+✅ WHY - The problem it solves or goal it achieves
+✅ HOW - The approach taken (briefly)
+✅ TRADE-OFFS - What was considered (optional)
+
+GOOD: "Chose SQLite with vec0 extension for vector storage instead of PostgreSQL with pgvector. Rationale: Embedded database simplifies deployment and aligns with local-first architecture. Trade-off: Less scalable but acceptable for single-user scope. BGE-small model provides 384-dim embeddings with 10-30ms GPU generation time."
+
+BAD: "Added vector search" (no context, no why, no how)
+
+Returns: Confirmation with memory details and file path.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['decision', 'bug-fix', 'feature', 'insight', 'observation', 'refactor'],
+            description: 'Type of memory being stored'
+          },
+          source: {
+            type: 'string',
+            enum: ['agent', 'user', 'system', 'development-session'],
+            description: 'Source of the memory'
+          },
+          content: {
+            type: 'string',
+            description: 'Memory content (2-4 sentences recommended, covering WHAT/WHY/HOW)'
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional tags for categorization (e.g., ["database", "architecture", "performance"])'
+          },
+          workspacePath: {
+            type: 'string',
+            description: 'Workspace path (defaults to current directory). Usually omit this to use cwd.'
+          }
+        },
+        required: ['type', 'source', 'content']
       }
     },
     {

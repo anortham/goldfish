@@ -35,3 +35,6 @@ test-goldfish-data/
 *.log
 
 .julie/
+
+# Local test memories (not committed to repo)
+.goldfish/

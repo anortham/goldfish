@@ -19,14 +19,15 @@ AI coding sessions have a memory problem:
 
 Goldfish solves this by giving AI agents **transparent persistent memory with intelligent retrieval**:
 
-- ✅ **Checkpoints** - Save progress automatically throughout the session
+- ✅ **Checkpoints** - User-scoped progress saves (automatic throughout session)
+- ✅ **Store** - Project-scoped memories (git-committable for team sharing!)
 - ✅ **Recall** - Restore context at session start (across all projects!)
 - ✅ **Semantic Search** - Find conceptually similar work (not just keyword matches!)
 - ✅ **LLM Distillation** - Compact summaries via Claude/Gemini CLI (~80% token reduction)
 - ✅ **Plans** - Manage long-running work that survives crashes
 - ✅ **Standup Reports** - Aggregate work across all workspaces
 
-All stored as **human-readable markdown** in `~/.goldfish/`.
+Checkpoints stored as **human-readable markdown** in `~/.goldfish/`, memories stored as **JSONL** in `.goldfish/memories/` (git-committable!).
 
 ---
 
@@ -174,7 +175,62 @@ recall({ workspace: "all", days: 1 })
 // Returns work from ALL projects, not just the current one
 ```
 
-### 3. Plans - Long-Running Work Management
+### 3. Store - Project-Level Team Memory (NEW!)
+
+The `store` tool enables team collaboration by saving memories to **project-level** `.goldfish/memories/` files that can be committed to git:
+
+```typescript
+// AI agent usage
+store({
+  type: 'decision',
+  source: 'agent',
+  content: 'Chose SQLite with vec0 extension for vector storage. Embedded database simplifies deployment. Trade-off: less scalable but acceptable for single-user scope.',
+  tags: ['database', 'architecture']
+})
+```
+
+**Key Differences:**
+
+| Feature | Checkpoint (User-Scoped) | Store (Project-Scoped) |
+|---------|-------------------------|------------------------|
+| Storage | `~/.goldfish/{workspace}/checkpoints/` | `.goldfish/memories/` (in project) |
+| Visibility | Personal only | Git-committable for team |
+| Auto-generated | Yes (by AI during session) | Manual (explicit store() calls) |
+| Format | Markdown with YAML | JSONL (one line per memory) |
+| Use case | Progress tracking | Architectural decisions, insights |
+| Embeddings | Optional | Auto-generated (GPU-accelerated!) |
+
+**Team workflow example:**
+
+```bash
+# Developer A makes architectural decision
+# AI calls store() → saves to .goldfish/memories/2025-11-09.jsonl
+
+git add .goldfish/
+git commit -m "Add decision: SQLite for vector storage"
+git push
+
+# Developer B pulls changes
+git pull
+# Their Goldfish automatically syncs and generates embeddings
+
+# Developer B asks: "Why did we choose SQLite?"
+# Goldfish semantic search finds the decision instantly!
+```
+
+**Memory Types:**
+- `decision` - Architecture, library, or approach choices
+- `bug-fix` - Bug resolutions with root cause analysis
+- `feature` - New feature implementations
+- `insight` - Important discoveries or learnings
+- `observation` - Noteworthy patterns or behaviors
+- `refactor` - Code improvements and rationale
+
+**Automatic embedding generation:** When you store a memory, Goldfish automatically generates GPU-accelerated embeddings (10-30ms) for semantic search.
+
+**Saved to:** `.goldfish/memories/YYYY-MM-DD.jsonl` (one JSON object per line)
+
+### 4. Plans - Long-Running Work Management
 
 Plans are strategic documents that appear at the top of every recall:
 
@@ -202,7 +258,7 @@ tags: [auth, architecture, security]
 
 **Saved to:** `~/.goldfish/{workspace}/plans/auth-system-redesign.md`
 
-### 4. Standup Reports
+### 5. Standup Reports
 
 Generate reports across all your projects with optional LLM distillation:
 
@@ -232,30 +288,35 @@ Generate reports across all your projects with optional LLM distillation:
 
 ## Storage Structure
 
-Everything is **human-readable markdown** (except embeddings, which use SQLite):
+Everything is **human-readable** with a hybrid architecture:
 
+**User-level storage** (`~/.goldfish/`):
 ```
 ~/.goldfish/
   goldfish/                           # Workspace (normalized from path)
     checkpoints/
-      2025-10-13.md                  # Daily checkpoint files
+      2025-10-13.md                  # Daily checkpoint files (markdown)
       2025-10-14.md
     plans/
       auth-system-redesign.md        # Individual plans (YAML frontmatter)
       api-v2-migration.md
-    embeddings/
-      db.sqlite                      # Vector embeddings for semantic search
     .active-plan                     # Contains active plan ID
 
-  codesearch/                         # Another workspace
-    checkpoints/
-      2025-10-14.md
-    embeddings/
-      db.sqlite
-    plans/...
+  index.db                           # User-level embedding database (SQLite + vec0)
+                                     # Indexes memories from ALL workspaces
 ```
 
-**You can read, edit, or delete checkpoint/plan files directly.** They're yours.
+**Project-level storage** (`.goldfish/` in your project):
+```
+your-project/
+  .goldfish/
+    memories/
+      2025-11-09.jsonl               # Team-shareable memories (git-committable!)
+      2025-11-08.jsonl               # One JSON object per line
+    .gitignore                       # Excludes temp files, keeps memories
+```
+
+**You can read, edit, or commit these files.** They're yours and your team's.
 
 **Embeddings** are stored in SQLite for performance (384-dimensional vectors). Generated automatically on checkpoint save.
 

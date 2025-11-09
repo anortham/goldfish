@@ -282,8 +282,8 @@ describe('Tool descriptions', () => {
 
     const tools = getTools();
 
-    expect(tools).toHaveLength(3);
-    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'recall', 'plan']);
+    expect(tools).toHaveLength(4);
+    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'store', 'recall', 'plan']);
 
     // Each tool should have description and inputSchema
     for (const tool of tools) {
