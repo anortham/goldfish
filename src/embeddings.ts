@@ -2,18 +2,19 @@
  * Embeddings module for semantic search in Goldfish
  *
  * This module handles:
- * - Generating embeddings for checkpoints using ONNX models
+ * - Generating embeddings using julie-semantic (GPU-accelerated via DirectML/CUDA)
  * - Storing vectors in SQLite with Bun's built-in database
- * - Fast semantic search using HNSW index
- * - Cosine similarity calculations
+ * - Fast semantic search using cosine similarity
  */
 
 import { Database } from 'bun:sqlite';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { mkdir } from 'fs/promises';
+import { existsSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { platform, arch } from 'os';
 import type { Checkpoint } from './types';
 import { getWorkspacePath } from './workspace';
-import { pipeline, type FeatureExtractionPipeline } from '@xenova/transformers';
 
 /**
  * Configuration for embedding generation
@@ -49,56 +50,75 @@ export interface SearchResult {
  * Default configuration for BGE-Small-EN-V1.5 model
  */
 const DEFAULT_CONFIG: EmbeddingConfig = {
-  modelName: 'bge-small-en-v1.5',
+  modelName: 'bge-small',
   dimensions: 384,
   cachePath: '~/.goldfish/models',
   maxBatchSize: 100
 };
 
 /**
- * Singleton model instance (lazy loaded)
+ * Cached path to julie-semantic binary
  */
-let globalModel: FeatureExtractionPipeline | null = null;
-let modelLoading: Promise<FeatureExtractionPipeline> | null = null;
+let JULIE_SEMANTIC_PATH: string | null | undefined = undefined;
 
 /**
- * Loads the embedding model (singleton, cached)
+ * Finds the julie-semantic binary
+ * Returns the path if found, null if not available
+ * Checks in order: PATH → bundled binary → null
  */
-async function loadModel(): Promise<FeatureExtractionPipeline> {
-  // Return cached model if already loaded
-  if (globalModel) {
-    return globalModel;
+export function findJulieSemantic(): string | null {
+  // Return cached result
+  if (JULIE_SEMANTIC_PATH !== undefined) {
+    return JULIE_SEMANTIC_PATH;
   }
 
-  // Wait for in-progress loading
-  if (modelLoading) {
-    return modelLoading;
+  // 1. Check if julie-semantic is in PATH
+  const whichCommand = platform() === 'win32' ? 'where' : 'which';
+  const whichResult = spawnSync(whichCommand, ['julie-semantic'], {
+    encoding: 'utf-8',
+    shell: true
+  });
+
+  if (whichResult.status === 0 && whichResult.stdout.trim()) {
+    JULIE_SEMANTIC_PATH = 'julie-semantic';
+    console.log('✅ Found julie-semantic in PATH');
+    return JULIE_SEMANTIC_PATH;
   }
 
-  // Start loading model
-  modelLoading = (async () => {
-    try {
-      // Load feature extraction pipeline with BGE model
-      // Model will be downloaded to ~/.cache/huggingface on first use
-      const model = await pipeline(
-        'feature-extraction',
-        'Xenova/bge-small-en-v1.5',
-        {
-          // Quantized version for faster inference
-          quantized: true,
-        }
-      );
+  // 2. Check for bundled binary
+  let binaryName: string;
+  const currentPlatform = platform();
+  const currentArch = arch();
 
-      globalModel = model;
-      modelLoading = null;
-      return model;
-    } catch (error) {
-      modelLoading = null;
-      throw new Error(`Failed to load embedding model: ${error}`);
-    }
-  })();
+  if (currentPlatform === 'win32') {
+    binaryName = 'julie-semantic-windows.exe';
+  } else if (currentPlatform === 'darwin') {
+    binaryName = currentArch === 'arm64'
+      ? 'julie-semantic-macos-arm64'
+      : 'julie-semantic-macos-intel';
+  } else if (currentPlatform === 'linux') {
+    binaryName = 'julie-semantic-linux';
+  } else {
+    console.warn(`⚠️  Unsupported platform: ${currentPlatform} - semantic search disabled`);
+    JULIE_SEMANTIC_PATH = null;
+    return null;
+  }
 
-  return modelLoading;
+  // Check in bin/ directory (relative to this file)
+  const bundledPath = join(dirname(dirname(__filename)), 'bin', binaryName);
+
+  if (existsSync(bundledPath)) {
+    JULIE_SEMANTIC_PATH = bundledPath;
+    console.log(`✅ Using bundled julie-semantic: ${bundledPath}`);
+    return JULIE_SEMANTIC_PATH;
+  }
+
+  // 3. Not found - semantic search disabled
+  console.warn('⚠️  julie-semantic not found - semantic search will be disabled');
+  console.warn('   Goldfish will work with fuzzy search only');
+  console.warn('   Install julie-semantic from: https://github.com/anortham/julie/releases');
+  JULIE_SEMANTIC_PATH = null;
+  return null;
 }
 
 /**
@@ -151,6 +171,65 @@ export function cosineSimilarity(vec1: Float32Array, vec2: Float32Array): number
   return dotProduct / magnitude;
 }
 
+/**
+ * Generates embedding vector for text using julie-semantic
+ * Returns null if julie-semantic is not available or if generation fails
+ */
+async function generateEmbedding(text: string): Promise<Float32Array | null> {
+  // Check if julie-semantic is available
+  const juliePath = findJulieSemantic();
+
+  if (!juliePath) {
+    // Semantic search not available
+    return null;
+  }
+
+  // Handle empty text
+  if (!text || text.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    // Call julie-semantic subprocess
+    const result = spawnSync(
+      juliePath,
+      ['query', '--text', text, '--model', 'bge-small', '--format', 'json'],
+      {
+        encoding: 'utf-8',
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+        timeout: 30000, // 30 second timeout
+      }
+    );
+
+    if (result.error) {
+      console.error('❌ Failed to spawn julie-semantic:', result.error);
+      return null;
+    }
+
+    if (result.status !== 0) {
+      console.error('❌ julie-semantic failed:', result.stderr);
+      return null;
+    }
+
+    // Parse JSON output
+    const vector = JSON.parse(result.stdout.trim());
+
+    if (!Array.isArray(vector)) {
+      console.error('❌ Invalid julie-semantic output: expected array');
+      return null;
+    }
+
+    if (vector.length !== 384) {
+      console.error(`❌ Invalid embedding dimensions: expected 384, got ${vector.length}`);
+      return null;
+    }
+
+    return new Float32Array(vector);
+  } catch (error) {
+    console.error('❌ Embedding generation failed:', error);
+    return null;
+  }
+}
 
 /**
  * Embedding engine for generating and searching embeddings
@@ -161,6 +240,7 @@ export class EmbeddingEngine {
   private db: Database | null = null;
   private initialized: boolean = false;
   private checkpointCache: Map<string, Checkpoint> = new Map();
+  private semanticEnabled: boolean = false;
 
   constructor(workspace: string, config?: Partial<EmbeddingConfig>) {
     this.workspace = workspace;
@@ -173,6 +253,15 @@ export class EmbeddingEngine {
   async initialize(): Promise<void> {
     if (this.initialized) {
       return;
+    }
+
+    // Check if julie-semantic is available
+    const juliePath = findJulieSemantic();
+    this.semanticEnabled = juliePath !== null;
+
+    if (!this.semanticEnabled) {
+      console.warn('⚠️  Semantic search disabled - julie-semantic not found');
+      console.warn('   Goldfish will work with fuzzy search only');
     }
 
     const workspacePath = getWorkspacePath(this.workspace);
@@ -188,10 +277,11 @@ export class EmbeddingEngine {
     // Create schema
     this.createSchema();
 
-    // TODO: Initialize ONNX model
-    // TODO: Load or build HNSW index
-
     this.initialized = true;
+
+    if (this.semanticEnabled) {
+      console.log('✅ Embedding engine initialized with GPU acceleration');
+    }
   }
 
   /**
@@ -243,6 +333,13 @@ export class EmbeddingEngine {
   }
 
   /**
+   * Checks if semantic search is enabled
+   */
+  isSemanticEnabled(): boolean {
+    return this.semanticEnabled;
+  }
+
+  /**
    * Gets embedding dimensions
    */
   getDimensions(): number {
@@ -257,12 +354,23 @@ export class EmbeddingEngine {
       throw new Error('EmbeddingEngine not initialized');
     }
 
+    if (!this.semanticEnabled) {
+      // Skip embedding generation if semantic search is disabled
+      return;
+    }
+
     try {
       // Build text for embedding
       const text = buildEmbeddingText(checkpoint);
 
-      // Generate embedding
-      const vector = await this.generateEmbedding(text);
+      // Generate embedding via julie-semantic
+      const vector = await generateEmbedding(text);
+
+      if (!vector) {
+        // Embedding generation failed - skip but don't throw
+        console.warn(`⚠️  Failed to generate embedding for checkpoint ${checkpoint.timestamp}`);
+        return;
+      }
 
       // Store in database
       const vectorId = `vec_${checkpoint.timestamp}`;
@@ -289,8 +397,8 @@ export class EmbeddingEngine {
       // Cache checkpoint for search
       this.checkpointCache.set(checkpoint.timestamp, checkpoint);
     } catch (error) {
-      // Re-throw with more context
-      throw new Error(`Failed to embed checkpoint ${checkpoint.timestamp}: ${error}`);
+      // Log but don't fail - semantic search is optional
+      console.warn(`⚠️  Failed to embed checkpoint ${checkpoint.timestamp}:`, error);
     }
   }
 
@@ -300,6 +408,11 @@ export class EmbeddingEngine {
   async embedBatch(checkpoints: Checkpoint[]): Promise<void> {
     if (!this.initialized) {
       throw new Error('EmbeddingEngine not initialized');
+    }
+
+    if (!this.semanticEnabled) {
+      // Skip if semantic search is disabled
+      return;
     }
 
     // Process in batches
@@ -312,43 +425,6 @@ export class EmbeddingEngine {
       await Promise.all(
         batch.map(checkpoint => this.embedCheckpoint(checkpoint))
       );
-    }
-  }
-
-  /**
-   * Generates embedding vector for text using ONNX model
-   */
-  private async generateEmbedding(text: string): Promise<Float32Array> {
-    // Handle empty text
-    if (!text || text.trim().length === 0) {
-      // Return zero vector for empty text
-      return new Float32Array(this.config.dimensions);
-    }
-
-    try {
-      // Load model (cached after first load)
-      const model = await loadModel();
-
-      // Generate embedding
-      const output = await model(text, {
-        pooling: 'mean',
-        normalize: true
-      });
-
-      // Extract the embedding array
-      // output is a Tensor, we need to convert to Float32Array
-      const embedding = output.data;
-
-      // Ensure correct dimensions
-      if (embedding.length !== this.config.dimensions) {
-        throw new Error(
-          `Model returned ${embedding.length} dimensions, expected ${this.config.dimensions}`
-        );
-      }
-
-      return new Float32Array(embedding);
-    } catch (error) {
-      throw new Error(`Failed to generate embedding: ${error}`);
     }
   }
 
@@ -407,8 +483,18 @@ export class EmbeddingEngine {
       throw new Error('EmbeddingEngine not initialized');
     }
 
-    // Generate query embedding
-    const queryVector = await this.generateEmbedding(query);
+    if (!this.semanticEnabled) {
+      // Semantic search not available
+      return [];
+    }
+
+    // Generate query embedding via julie-semantic
+    const queryVector = await generateEmbedding(query);
+
+    if (!queryVector) {
+      // Query embedding failed
+      return [];
+    }
 
     // Build checkpoint lookup map
     const checkpointMap = new Map<string, Checkpoint>();
@@ -485,7 +571,7 @@ export class EmbeddingEngine {
 
   /**
    * Rebuilds HNSW index from stored vectors
-   * TODO: Implement real HNSW index
+   * TODO: Implement real HNSW index for faster search
    */
   async rebuildIndex(): Promise<void> {
     if (!this.initialized) {
