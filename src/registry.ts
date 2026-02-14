@@ -1,0 +1,145 @@
+/**
+ * Cross-project registry for Goldfish.
+ *
+ * Manages a registry at ~/.goldfish/registry.json that tracks which projects
+ * use Goldfish. Enables cross-project recall (standup reports, timeline aggregation).
+ */
+
+import { join, resolve } from 'path';
+import { homedir } from 'os';
+import { mkdir, writeFile, rename, stat } from 'fs/promises';
+import { withLock } from './lock';
+import { normalizeWorkspace } from './workspace';
+import type { Registry, RegisteredProject } from './types';
+
+/**
+ * Returns the default registry file path: ~/.goldfish/registry.json
+ */
+export function getRegistryPath(): string {
+  return join(homedir(), '.goldfish', 'registry.json');
+}
+
+/**
+ * Read and parse the registry file.
+ * Returns empty registry if file doesn't exist or is corrupted.
+ *
+ * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
+ */
+export async function getRegistry(registryDir?: string): Promise<Registry> {
+  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const filePath = join(dir, 'registry.json');
+
+  try {
+    const content = await Bun.file(filePath).text();
+    const parsed = JSON.parse(content);
+    // Basic validation: ensure it has a projects array
+    if (parsed && Array.isArray(parsed.projects)) {
+      return parsed as Registry;
+    }
+    return { projects: [] };
+  } catch {
+    // File doesn't exist (ENOENT) or invalid JSON - return empty
+    return { projects: [] };
+  }
+}
+
+/**
+ * Register a project in the cross-project registry.
+ * Idempotent - if the project path already exists, this is a no-op.
+ *
+ * @param projectPath - Path to the project root
+ * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
+ */
+export async function registerProject(projectPath: string, registryDir?: string): Promise<void> {
+  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const absolutePath = resolve(projectPath);
+  const filePath = join(dir, 'registry.json');
+
+  // Ensure directory exists before acquiring lock (lock file needs the dir)
+  await mkdir(dir, { recursive: true });
+
+  await withLock(filePath, async () => {
+    // Read current registry (inside lock to prevent races)
+    const registry = await getRegistry(dir);
+
+    // Check for existing entry (idempotent)
+    const exists = registry.projects.some(p => p.path === absolutePath);
+    if (exists) {
+      return;
+    }
+
+    // Add new entry
+    const entry: RegisteredProject = {
+      path: absolutePath,
+      name: normalizeWorkspace(absolutePath),
+      registered: new Date().toISOString(),
+    };
+    registry.projects.push(entry);
+
+    // Atomic write
+    const tmpPath = `${filePath}.tmp`;
+    await writeFile(tmpPath, JSON.stringify(registry, null, 2), 'utf-8');
+    await rename(tmpPath, filePath);
+  });
+}
+
+/**
+ * Remove a project from the registry.
+ * No-op if the project is not registered.
+ *
+ * @param projectPath - Path to the project root
+ * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
+ */
+export async function unregisterProject(projectPath: string, registryDir?: string): Promise<void> {
+  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const absolutePath = resolve(projectPath);
+  const filePath = join(dir, 'registry.json');
+
+  await withLock(filePath, async () => {
+    const registry = await getRegistry(dir);
+
+    const filtered = registry.projects.filter(p => p.path !== absolutePath);
+
+    // Only write if something changed
+    if (filtered.length !== registry.projects.length) {
+      registry.projects = filtered;
+
+      const tmpPath = `${filePath}.tmp`;
+      await writeFile(tmpPath, JSON.stringify(registry, null, 2), 'utf-8');
+      await rename(tmpPath, filePath);
+    }
+  });
+}
+
+/**
+ * List registered projects that have an active .memories/ directory.
+ * Stale entries (where .memories/ doesn't exist) are filtered from the result
+ * but NOT removed from the registry file.
+ *
+ * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
+ * @returns Projects sorted by name, filtered to only those with .memories/
+ */
+export async function listRegisteredProjects(registryDir?: string): Promise<RegisteredProject[]> {
+  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const registry = await getRegistry(dir);
+
+  // Check which projects have .memories/ directories
+  const validProjects: RegisteredProject[] = [];
+
+  for (const project of registry.projects) {
+    try {
+      const memoriesPath = join(project.path, '.memories');
+      const stats = await stat(memoriesPath);
+      if (stats.isDirectory()) {
+        validProjects.push(project);
+      }
+    } catch {
+      // .memories/ doesn't exist or not accessible - skip (stale)
+    }
+  }
+
+  // Sort by name
+  validProjects.sort((a, b) => a.name.localeCompare(b.name));
+
+  return validProjects;
+}

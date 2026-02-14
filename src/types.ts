@@ -84,3 +84,13 @@ export interface PlanAction {
   status?: 'active' | 'completed' | 'archived';
   updates?: PlanUpdate;
 }
+
+export interface RegisteredProject {
+  path: string;       // Absolute path to project root
+  name: string;       // Normalized workspace name (via normalizeWorkspace)
+  registered: string; // ISO 8601 UTC
+}
+
+export interface Registry {
+  projects: RegisteredProject[];
+}
