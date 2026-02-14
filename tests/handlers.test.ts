@@ -4,8 +4,11 @@ import { handleRecall } from '../src/handlers/recall';
 import { handlePlan } from '../src/handlers/plan';
 import { saveCheckpoint } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
-import { getWorkspacePath, ensureWorkspaceDir } from '../src/workspace';
+import { ensureMemoriesDir } from '../src/workspace';
 import { rm } from 'fs/promises';
+import { mkdtemp } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 /**
  * Test structured JSON responses for AI agent consumption
@@ -14,14 +17,15 @@ import { rm } from 'fs/promises';
  * with all necessary data, optimized for token efficiency.
  */
 
-const TEST_WORKSPACE = `test-handlers-${Date.now()}`;
+let TEST_DIR: string;
 
 beforeEach(async () => {
-  await ensureWorkspaceDir(TEST_WORKSPACE);
+  TEST_DIR = await mkdtemp(join(tmpdir(), 'test-handlers-'));
+  await ensureMemoriesDir(TEST_DIR);
 });
 
 afterEach(async () => {
-  await rm(getWorkspacePath(TEST_WORKSPACE), { recursive: true, force: true });
+  await rm(TEST_DIR, { recursive: true, force: true });
 });
 
 describe('Structured JSON responses', () => {
@@ -30,7 +34,7 @@ describe('Structured JSON responses', () => {
       const result = await handleCheckpoint({
         description: 'Test checkpoint',
         tags: ['test', 'feature'],
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       expect(result.content).toBeDefined();
@@ -45,32 +49,33 @@ describe('Structured JSON responses', () => {
       expect(parsed.summary).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
       expect(parsed.summary).toContain('Test checkpoint');
       expect(parsed.checkpoint).toBeDefined();
+      expect(parsed.checkpoint.id).toMatch(/^checkpoint_/);
       expect(parsed.checkpoint.description).toBe('Test checkpoint');
       expect(parsed.checkpoint.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(parsed.checkpoint.tags).toEqual(['test', 'feature']);
-      expect(parsed.checkpoint.workspace).toBe(TEST_WORKSPACE);
+      expect(parsed.checkpoint.workspace).toBe(TEST_DIR);
     });
 
     it('includes git context when available', async () => {
       const result = await handleCheckpoint({
         description: 'With git',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
 
-      // Git context may or may not be present, but structure should be there
-      if (parsed.checkpoint.gitBranch) {
-        expect(typeof parsed.checkpoint.gitBranch).toBe('string');
+      // Git context may or may not be present, but structure should be nested
+      if (parsed.checkpoint.git?.branch) {
+        expect(typeof parsed.checkpoint.git.branch).toBe('string');
       }
-      if (parsed.checkpoint.gitCommit) {
-        expect(typeof parsed.checkpoint.gitCommit).toBe('string');
+      if (parsed.checkpoint.git?.commit) {
+        expect(typeof parsed.checkpoint.git.commit).toBe('string');
       }
     });
 
     it('throws error for missing description', async () => {
       await expect(
-        handleCheckpoint({ workspace: TEST_WORKSPACE })
+        handleCheckpoint({ workspace: TEST_DIR })
       ).rejects.toThrow('Description is required');
     });
   });
@@ -81,19 +86,19 @@ describe('Structured JSON responses', () => {
       await saveCheckpoint({
         description: 'First checkpoint',
         tags: ['test'],
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       await saveCheckpoint({
         description: 'Second checkpoint',
         tags: ['feature'],
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
     });
 
     it('returns structured JSON with checkpoints array', async () => {
       const result = await handleRecall({
-        workspace: TEST_WORKSPACE,
+        workspace: TEST_DIR,
         days: 1
       });
 
@@ -116,12 +121,12 @@ describe('Structured JSON responses', () => {
         id: 'test-plan',
         title: 'Test Plan',
         content: 'Plan content here',
-        workspace: TEST_WORKSPACE,
+        workspace: TEST_DIR,
         activate: true
       });
 
       const result = await handleRecall({
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
@@ -135,7 +140,7 @@ describe('Structured JSON responses', () => {
 
     it('includes query parameters for context', async () => {
       const result = await handleRecall({
-        workspace: TEST_WORKSPACE,
+        workspace: TEST_DIR,
         days: 7,
         search: 'test'
       });
@@ -155,24 +160,24 @@ describe('Structured JSON responses', () => {
 
       const parsed = JSON.parse(result.content[0]!.text);
 
-      if (parsed.workspaces) {
-        expect(parsed.workspaces).toBeInstanceOf(Array);
-        for (const ws of parsed.workspaces) {
-          expect(ws.name).toBeDefined();
-          expect(typeof ws.checkpointCount).toBe('number');
-        }
-      }
+      // Cross-workspace returns empty until registry is implemented (Phase 3)
+      expect(parsed.checkpoints).toEqual([]);
     });
 
     it('returns empty array when no checkpoints found', async () => {
+      const emptyDir = await mkdtemp(join(tmpdir(), 'test-handlers-empty-'));
+      await ensureMemoriesDir(emptyDir);
+
       const result = await handleRecall({
-        workspace: 'nonexistent-workspace',
+        workspace: emptyDir,
         days: 1
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
 
       expect(parsed.checkpoints).toEqual([]);
+
+      await rm(emptyDir, { recursive: true, force: true });
     });
   });
 
@@ -183,7 +188,7 @@ describe('Structured JSON responses', () => {
           action: 'save',
           title: 'Test Plan',
           content: 'Plan content',
-          workspace: TEST_WORKSPACE,
+          workspace: TEST_DIR,
           activate: true
         });
 
@@ -207,7 +212,7 @@ describe('Structured JSON responses', () => {
           action: 'save',
           title: 'Not Activated Plan',
           content: 'Content',
-          workspace: TEST_WORKSPACE,
+          workspace: TEST_DIR,
           activate: false
         });
 
@@ -218,7 +223,7 @@ describe('Structured JSON responses', () => {
         expect(parsed.success).toBe(true);
 
         // Verify it's not THE active plan for the workspace
-        const recallResult = await handleRecall({ workspace: TEST_WORKSPACE });
+        const recallResult = await handleRecall({ workspace: TEST_DIR });
         const recallParsed = JSON.parse(recallResult.content[0]!.text);
 
         // Should have no activePlan since we didn't activate it
@@ -232,13 +237,13 @@ describe('Structured JSON responses', () => {
           id: 'test-plan',
           title: 'Test Plan',
           content: 'Plan content',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const result = await handlePlan({
           action: 'get',
           id: 'test-plan',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const parsed = JSON.parse(result.content[0]!.text);
@@ -257,19 +262,19 @@ describe('Structured JSON responses', () => {
           id: 'plan-1',
           title: 'Plan 1',
           content: 'Content 1',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         await savePlan({
           id: 'plan-2',
           title: 'Plan 2',
           content: 'Content 2',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const result = await handlePlan({
           action: 'list',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const parsed = JSON.parse(result.content[0]!.text);
@@ -287,14 +292,15 @@ describe('Structured JSON responses', () => {
       });
 
       it('filters by status', async () => {
-        // Create separate test workspace to avoid interference
-        const filterTestWorkspace = `${TEST_WORKSPACE}-filter`;
+        // Create separate temp dir to avoid interference
+        const filterDir = await mkdtemp(join(tmpdir(), 'test-handlers-filter-'));
+        await ensureMemoriesDir(filterDir);
 
         await savePlan({
           id: 'active-plan',
           title: 'Active',
           content: 'Content',
-          workspace: filterTestWorkspace,
+          workspace: filterDir,
           status: 'active'
         });
 
@@ -302,14 +308,14 @@ describe('Structured JSON responses', () => {
           id: 'completed-plan',
           title: 'Completed',
           content: 'Content',
-          workspace: filterTestWorkspace,
+          workspace: filterDir,
           status: 'completed'
         });
 
         const result = await handlePlan({
           action: 'list',
           status: 'completed',
-          workspace: filterTestWorkspace
+          workspace: filterDir
         });
 
         const parsed = JSON.parse(result.content[0]!.text);
@@ -317,12 +323,14 @@ describe('Structured JSON responses', () => {
         expect(parsed.plans.length).toBe(1);
         expect(parsed.plans[0].status).toBe('completed');
         expect(parsed.plans[0].id).toBe('completed-plan');
+
+        await rm(filterDir, { recursive: true, force: true });
       });
 
       it('returns empty array when no plans found', async () => {
         const result = await handlePlan({
           action: 'list',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const parsed = JSON.parse(result.content[0]!.text);
@@ -338,13 +346,13 @@ describe('Structured JSON responses', () => {
           id: 'test-plan',
           title: 'Test',
           content: 'Content',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const result = await handlePlan({
           action: 'activate',
           id: 'test-plan',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const parsed = JSON.parse(result.content[0]!.text);
@@ -361,14 +369,14 @@ describe('Structured JSON responses', () => {
           id: 'test-plan',
           title: 'Original',
           content: 'Content',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const result = await handlePlan({
           action: 'update',
           id: 'test-plan',
           updates: { title: 'Updated' },
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const parsed = JSON.parse(result.content[0]!.text);
@@ -385,13 +393,13 @@ describe('Structured JSON responses', () => {
           id: 'test-plan',
           title: 'Test',
           content: 'Content',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const result = await handlePlan({
           action: 'complete',
           id: 'test-plan',
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         });
 
         const parsed = JSON.parse(result.content[0]!.text);
@@ -408,7 +416,7 @@ describe('Token efficiency', () => {
   it('checkpoint response is compact', async () => {
     const result = await handleCheckpoint({
       description: 'Test',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     const text = result.content[0]!.text;
@@ -418,8 +426,8 @@ describe('Token efficiency', () => {
     expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/); // Should have a fish emoji in summary
     expect(text).not.toContain('**');
 
-    // Should be compact JSON (< 700 chars for simple checkpoint with metadata + search fields)
-    expect(text.length).toBeLessThan(700);
+    // Should be compact JSON (< 850 chars for checkpoint with id, nested git, and temp dir path)
+    expect(text.length).toBeLessThan(850);
   });
 
   it('recall response is compact for multiple checkpoints', async () => {
@@ -427,12 +435,12 @@ describe('Token efficiency', () => {
     for (let i = 0; i < 5; i++) {
       await saveCheckpoint({
         description: `Checkpoint ${i}`,
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
     }
 
     const result = await handleRecall({
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     const text = result.content[0]!.text;

@@ -3,7 +3,6 @@
  */
 
 import { savePlan, getPlan, listPlans, setActivePlan, updatePlan } from '../plans.js';
-import { getCurrentWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
 
 /**
@@ -11,7 +10,7 @@ import { getFishEmoji } from '../emoji.js';
  */
 export async function handlePlan(args: any) {
   const { action, workspace: wsArg } = args;
-  const workspace = wsArg || getCurrentWorkspace();
+  const workspace = wsArg || process.cwd();
 
   switch (action) {
     case 'save': {

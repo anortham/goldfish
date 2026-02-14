@@ -1,20 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { saveCheckpoint } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
-import { getWorkspacePath, ensureWorkspaceDir } from '../src/workspace';
-import { rm } from 'fs/promises';
+import { ensureMemoriesDir } from '../src/workspace';
+import { rm, mkdtemp } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 // We'll test the server module functions directly since running a full MCP server
 // in tests is complex. We'll validate tool handlers work correctly.
 
-const TEST_WORKSPACE = `test-server-${Date.now()}`;
+let TEST_DIR: string;
 
 beforeEach(async () => {
-  await ensureWorkspaceDir(TEST_WORKSPACE);
+  TEST_DIR = await mkdtemp(join(tmpdir(), 'test-server-'));
+  await ensureMemoriesDir(TEST_DIR);
 });
 
 afterEach(async () => {
-  await rm(getWorkspacePath(TEST_WORKSPACE), { recursive: true, force: true });
+  await rm(TEST_DIR, { recursive: true, force: true });
 });
 
 describe('Tool handlers', () => {
@@ -26,7 +29,7 @@ describe('Tool handlers', () => {
       const result = await handleCheckpoint({
         description: 'Test checkpoint',
         tags: ['test'],
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       expect(result.content).toBeDefined();
@@ -35,6 +38,7 @@ describe('Tool handlers', () => {
       // Response should be JSON
       const parsed = JSON.parse(result.content[0]!.text);
       expect(parsed.success).toBe(true);
+      expect(parsed.checkpoint.id).toMatch(/^checkpoint_/);
       expect(parsed.checkpoint.description).toBe('Test checkpoint');
       expect(parsed.checkpoint.tags).toEqual(['test']);
     });
@@ -44,15 +48,15 @@ describe('Tool handlers', () => {
 
       const result = await handleCheckpoint({
         description: 'With git context',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
       expect(parsed.success).toBe(true);
       expect(parsed.checkpoint.description).toBe('With git context');
-      // Git context may or may not be present
-      if (parsed.checkpoint.gitBranch) {
-        expect(typeof parsed.checkpoint.gitBranch).toBe('string');
+      // Git context may or may not be present (nested format)
+      if (parsed.checkpoint.git?.branch) {
+        expect(typeof parsed.checkpoint.git.branch).toBe('string');
       }
     });
 
@@ -60,7 +64,7 @@ describe('Tool handlers', () => {
       const { handleCheckpoint } = await import('../src/server');
 
       await expect(
-        handleCheckpoint({ workspace: TEST_WORKSPACE })
+        handleCheckpoint({ workspace: TEST_DIR })
       ).rejects.toThrow();
     });
   });
@@ -71,13 +75,13 @@ describe('Tool handlers', () => {
       await saveCheckpoint({
         description: 'First checkpoint',
         tags: ['test'],
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       await saveCheckpoint({
         description: 'Second checkpoint',
         tags: ['test'],
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
     });
 
@@ -85,7 +89,7 @@ describe('Tool handlers', () => {
       const { handleRecall } = await import('../src/server');
 
       const result = await handleRecall({
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       expect(result.content).toBeDefined();
@@ -108,12 +112,12 @@ describe('Tool handlers', () => {
         id: 'test-plan',
         title: 'Test Plan',
         content: 'Plan content',
-        workspace: TEST_WORKSPACE,
+        workspace: TEST_DIR,
         activate: true
       });
 
       const result = await handleRecall({
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
@@ -131,16 +135,16 @@ describe('Tool handlers', () => {
       });
 
       expect(result.content[0]!.type).toBe('text');
-      const text = result.content[0]!.text;
-      // Should contain workspace summaries
-      expect(text.length).toBeGreaterThan(0);
+      const parsed = JSON.parse(result.content[0]!.text);
+      // Cross-workspace returns empty until registry is implemented (Phase 3)
+      expect(parsed.checkpoints).toEqual([]);
     });
 
     it('applies search filter', async () => {
       const { handleRecall } = await import('../src/server');
 
       const result = await handleRecall({
-        workspace: TEST_WORKSPACE,
+        workspace: TEST_DIR,
         search: 'First'
       });
 
@@ -157,7 +161,7 @@ describe('Tool handlers', () => {
         action: 'save',
         title: 'Test Plan',
         content: 'Plan content',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       expect(result.content[0]!.type).toBe('text');
@@ -175,13 +179,13 @@ describe('Tool handlers', () => {
         id: 'test-plan',
         title: 'Test Plan',
         content: 'Content',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const result = await handlePlan({
         action: 'get',
         id: 'test-plan',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
@@ -196,19 +200,19 @@ describe('Tool handlers', () => {
         id: 'plan-1',
         title: 'Plan 1',
         content: 'Content',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       await savePlan({
         id: 'plan-2',
         title: 'Plan 2',
         content: 'Content',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const result = await handlePlan({
         action: 'list',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
@@ -227,13 +231,13 @@ describe('Tool handlers', () => {
         id: 'test-plan',
         title: 'Test',
         content: 'Content',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const result = await handlePlan({
         action: 'activate',
         id: 'test-plan',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
@@ -248,14 +252,14 @@ describe('Tool handlers', () => {
         id: 'test-plan',
         title: 'Original',
         content: 'Original content',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const result = await handlePlan({
         action: 'update',
         id: 'test-plan',
         updates: { title: 'Updated' },
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       });
 
       const parsed = JSON.parse(result.content[0]!.text);
@@ -269,7 +273,7 @@ describe('Tool handlers', () => {
       await expect(
         handlePlan({
           action: 'invalid' as any,
-          workspace: TEST_WORKSPACE
+          workspace: TEST_DIR
         })
       ).rejects.toThrow();
     });
@@ -341,7 +345,7 @@ describe('Error handling', () => {
     try {
       await handleCheckpoint({
         // Missing required description
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       } as any);
     } catch (error: any) {
       // Should throw, which will be caught by MCP server and formatted
@@ -352,13 +356,13 @@ describe('Error handling', () => {
   it('handles workspace errors gracefully', async () => {
     const { handleRecall } = await import('../src/server');
 
-    // Non-existent workspace should return empty results, not error
+    // Non-existent path should return empty results, not error
     const result = await handleRecall({
-      workspace: 'nonexistent-workspace-xyz'
+      workspace: '/tmp/nonexistent-workspace-xyz-' + Date.now()
     });
 
     expect(result.content[0]!.type).toBe('text');
-    // Should indicate no results found
-    expect(result.content[0]!.text.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(result.content[0]!.text);
+    expect(parsed.checkpoints).toEqual([]);
   });
 });
