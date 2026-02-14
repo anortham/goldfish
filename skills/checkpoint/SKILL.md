@@ -33,30 +33,35 @@ Every checkpoint you skip is context that future sessions lose forever. `mcp__go
 
 ## How to Write Good Descriptions
 
-Your description powers fuzzy search. Future sessions depend on FINDING relevant checkpoints. Write for searchability.
+Your description becomes the **markdown body** of a `.md` file. Format it with structure — headers, bullet points, bold, code spans. NOT a wall of text.
 
-### The WHAT/WHY/HOW/IMPACT Formula (3-5 sentences)
+### The WHAT/WHY/HOW/IMPACT Formula (use markdown)
 
 ```
 mcp__goldfish__checkpoint({
-  description: "Implemented JWT refresh token rotation in auth middleware. The existing single-token approach was vulnerable to token theft — rotating tokens on each use limits the window. Added RefreshTokenStore with atomic file writes and 7-day expiry. All 12 auth tests passing. This unblocks the session management PR.",
+  description: "## Implemented JWT refresh token rotation\n\nThe existing single-token approach was vulnerable to token theft.\n\n- **Approach:** Rotate tokens on each use, limiting the attack window\n- **Added:** `RefreshTokenStore` with atomic file writes and 7-day expiry\n- **Tests:** All 12 auth tests passing\n- **Impact:** Unblocks the session management PR",
   tags: ["feature", "auth", "security"]
 })
 ```
 
 ### Good vs Bad Descriptions
 
-**GOOD:**
+**GOOD (structured markdown):**
+```
+## Fixed race condition in checkpoint writes
+
+Concurrent saves could corrupt the daily markdown file.
+
+- **Root cause:** Non-atomic write pattern
+- **Fix:** Switched to write-tmp-then-rename with file locking
+- **Verified:** Reproduced with parallel test, confirmed fix
+```
+
+**BAD (wall of text):**
 "Fixed race condition in checkpoint file writes where concurrent saves could corrupt the daily markdown file. Root cause was non-atomic write pattern — switched to write-tmp-then-rename. Added file locking with exclusive create flag. Reproduced with parallel test and confirmed fix."
 
-**BAD:**
+**BAD (no context):**
 "Fixed file writing bug"
-
-**GOOD:**
-"Investigated memory leak in recall search. Fuse.js instances were being recreated on every call instead of cached. Profiling showed 50MB allocation per search on large checkpoint sets. Haven't fixed yet — need to decide between instance caching and lazy initialization."
-
-**BAD:**
-"Looked at memory issue"
 
 ## How to Choose Tags
 
@@ -71,7 +76,7 @@ Tags are for categorization, not for repeating the description. Keep them short 
 ### Example:
 ```
 mcp__goldfish__checkpoint({
-  description: "Redesigned plan storage to use YAML frontmatter in markdown files instead of separate JSON metadata. This aligns plans with the checkpoint format and makes everything grep-friendly. Migration script handles existing plans. Breaking change for plan IDs — old numeric IDs become slug-based.",
+  description: "## Redesigned plan storage format\n\nSwitched from separate JSON metadata to YAML frontmatter in markdown files.\n\n- **Why:** Aligns plans with checkpoint format, makes everything grep-friendly\n- **Migration:** Script handles existing plans automatically\n- **Breaking:** Plan IDs change from numeric to slug-based",
   tags: ["refactor", "plans", "breaking-change"]
 })
 ```

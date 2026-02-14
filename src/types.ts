@@ -53,6 +53,7 @@ export interface RecallOptions {
   search?: string;        // Fuzzy search query
   limit?: number;         // Max checkpoints to return (default: 10)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
+  _registryDir?: string;  // Internal: override registry dir for test isolation
 }
 
 export interface RecallResult {

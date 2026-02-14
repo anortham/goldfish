@@ -30,24 +30,22 @@ export function getInstructions(): string {
 
 ### Writing Effective Checkpoints (MANDATORY)
 
-Your checkpoint descriptions power fuzzy search. Write them for your future self.
+Your checkpoint descriptions are stored as **markdown file bodies**. Format them properly with structure — NOT walls of text.
 
 **REQUIRED in every checkpoint:**
 - WHAT you accomplished (the change)
 - WHY it mattered (the problem solved)
 - HOW you solved it (key approach/decision)
 
-**GOOD examples:**
-✅ "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case and verified fix prevents token reuse attacks."
-
-✅ "Implemented cross-project recall using registry pattern. Each project stores memories in .memories/ (git-committable), and ~/.goldfish/registry.json tracks all projects for standup aggregation."
+**GOOD example (markdown formatted):**
+✅ "## Fixed JWT validation bug\\n\\nExpired tokens were accepted due to inverted expiry check in \`validateToken()\`.\\n\\n- **Root cause:** Comparison operator was flipped\\n- **Fix:** Corrected expiry check, added edge-case test coverage\\n- **Impact:** Unblocks the auth PR, prevents token reuse attacks"
 
 **BAD examples:**
+❌ Wall of text with no formatting (hard to scan when recalled)
 ❌ "Fixed auth bug" (no context, no how, no why)
 ❌ "Updated tests" (what tests? why? what did you learn?)
-❌ "Refactored code" (which code? why refactor? what improved?)
 
-**Think:** Will you understand this checkpoint in 2 weeks when searching for "that auth bug"? If not, add more detail.
+**Use markdown:** Headers, bullet points, bold, code spans. These are .md files — make them readable.
 
 ### Planning (ExitPlanMode)
 1. When ExitPlanMode is called → save plan within 1 exchange

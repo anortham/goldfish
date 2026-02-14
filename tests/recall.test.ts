@@ -150,18 +150,22 @@ describe('Search functionality', () => {
 describe('Cross-workspace functionality', () => {
   let projectA: string;
   let projectB: string;
+  let registryDir: string;
 
   beforeEach(async () => {
+    // Use isolated registry directory for test isolation
+    registryDir = await mkdtemp(join(tmpdir(), 'test-registry-'));
+
     // Create two fake projects with .memories/ directories
     projectA = await mkdtemp(join(tmpdir(), 'test-cross-a-'));
     projectB = await mkdtemp(join(tmpdir(), 'test-cross-b-'));
     await ensureMemoriesDir(projectA);
     await ensureMemoriesDir(projectB);
 
-    // Register them in the registry
+    // Register them in the isolated registry
     const { registerProject } = await import('../src/registry');
-    await registerProject(projectA);
-    await registerProject(projectB);
+    await registerProject(projectA, registryDir);
+    await registerProject(projectB, registryDir);
 
     // Create checkpoints in each project
     await saveCheckpoint({
@@ -178,17 +182,15 @@ describe('Cross-workspace functionality', () => {
   });
 
   afterEach(async () => {
-    const { unregisterProject } = await import('../src/registry');
-    await unregisterProject(projectA);
-    await unregisterProject(projectB);
     await rm(projectA, { recursive: true, force: true });
     await rm(projectB, { recursive: true, force: true });
+    await rm(registryDir, { recursive: true, force: true });
   });
 
   it('aggregates across all registered projects', async () => {
-    const result = await recall({ workspace: 'all', days: 1 });
+    const result = await recall({ workspace: 'all', days: 1, _registryDir: registryDir });
 
-    expect(result.checkpoints.length).toBeGreaterThanOrEqual(2);
+    expect(result.checkpoints).toHaveLength(2);
 
     const descriptions = result.checkpoints.map(c => c.description);
     expect(descriptions).toContain('Work on project A');
@@ -196,10 +198,10 @@ describe('Cross-workspace functionality', () => {
   });
 
   it('returns workspace summaries', async () => {
-    const result = await recall({ workspace: 'all', days: 1 });
+    const result = await recall({ workspace: 'all', days: 1, _registryDir: registryDir });
 
     expect(result.workspaces).toBeDefined();
-    expect(result.workspaces!.length).toBeGreaterThanOrEqual(2);
+    expect(result.workspaces!).toHaveLength(2);
 
     for (const ws of result.workspaces!) {
       expect(ws.name).toBeTruthy();
@@ -209,7 +211,7 @@ describe('Cross-workspace functionality', () => {
   });
 
   it('tags checkpoints with workspace name', async () => {
-    const result = await recall({ workspace: 'all', days: 1, full: true });
+    const result = await recall({ workspace: 'all', days: 1, full: true, _registryDir: registryDir });
 
     // Each checkpoint should have a workspace field
     for (const checkpoint of result.checkpoints) {
@@ -218,18 +220,18 @@ describe('Cross-workspace functionality', () => {
   });
 
   it('applies global limit across projects', async () => {
-    const result = await recall({ workspace: 'all', days: 1, limit: 1 });
+    const result = await recall({ workspace: 'all', days: 1, limit: 1, _registryDir: registryDir });
     expect(result.checkpoints).toHaveLength(1);
   });
 
   it('returns empty when no projects registered', async () => {
-    // Unregister both projects
-    const { unregisterProject } = await import('../src/registry');
-    await unregisterProject(projectA);
-    await unregisterProject(projectB);
+    // Use a fresh empty registry
+    const emptyRegistryDir = await mkdtemp(join(tmpdir(), 'test-empty-registry-'));
 
-    const result = await recall({ workspace: 'all', days: 1 });
+    const result = await recall({ workspace: 'all', days: 1, _registryDir: emptyRegistryDir });
     expect(result.checkpoints).toEqual([]);
+
+    await rm(emptyRegistryDir, { recursive: true, force: true });
   });
 });
 

@@ -28,7 +28,7 @@ MANDATORY checkpoints (DO NOT SKIP):
 - After planning or architectural decisions - checkpoint NOW with rationale
 - After 10+ exchanges in discussion - checkpoint the reasoning NOW
 
-WRITE RICH DESCRIPTIONS: Your checkpoints power fuzzy search. Include WHAT you did, WHY it mattered, and HOW you solved it (3-5 sentences). Future sessions depend on finding relevant context - make it findable.
+WRITE RICH DESCRIPTIONS IN MARKDOWN: Your description becomes the body of a .md file. Use bullet points, headers, and formatting — NOT a wall of text. Include WHAT you did, WHY it mattered, and HOW you solved it. Future sessions depend on finding relevant context - make it findable AND readable.
 
 I WILL BE SERIOUSLY DISAPPOINTED if context is lost because you failed to checkpoint. This takes 2 seconds but saves HOURS of lost work.
 
@@ -49,19 +49,22 @@ Returns: Confirmation with checkpoint details and captured context.`,
         properties: {
           description: {
             type: 'string',
-            description: `Checkpoint description (3-5 sentences recommended).
+            description: `Checkpoint description in MARKDOWN format. This becomes the body of a .md file — format it properly.
 
 Your description powers fuzzy search. Future you needs context.
 
-INCLUDE:
+MUST INCLUDE (use markdown structure):
 - WHAT - The change/accomplishment
 - WHY - Problem solved or goal achieved
 - HOW - Key approach, decision, or discovery
 - IMPACT - What unblocked, what improved, what you learned
 
-GOOD: "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case. This was blocking the auth PR."
+GOOD (markdown formatted):
+"## Fixed JWT validation bug\\n\\nExpired tokens were being accepted due to inverted expiry check in \`validateToken()\`.\\n\\n- **Root cause:** Comparison operator was flipped\\n- **Fix:** Corrected the expiry comparison, added test coverage\\n- **Impact:** Unblocks the auth PR"
 
-BAD: "Fixed auth bug" (no context for future recall)`
+BAD (wall of text): "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case. This was blocking the auth PR."
+
+BAD (no context): "Fixed auth bug"`
           },
           tags: {
             type: 'array',

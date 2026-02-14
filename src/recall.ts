@@ -212,7 +212,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   }
 
   // Cross-workspace recall via registry
-  const projects = await listRegisteredProjects();
+  const projects = await listRegisteredProjects(options._registryDir);
 
   // Fetch from all registered projects in parallel
   const projectResults = await Promise.all(
