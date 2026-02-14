@@ -28,7 +28,7 @@ export function formatPlanFile(plan: Plan): string {
   };
 
   const yaml = stringifyYaml(frontmatter).trim();
-  return `---\n${yaml}\n---\n\n${plan.content}`;
+  return `---\n${yaml}\n---\n\n${plan.content}\n`;
 }
 
 /**
@@ -57,7 +57,7 @@ export function parsePlanFile(content: string): Plan {
     return {
       id: frontmatter.id,
       title: frontmatter.title,
-      content: markdownContent!,
+      content: markdownContent!.replace(/\n$/, ''),
       status: frontmatter.status,
       created: frontmatter.created,
       updated: frontmatter.updated,
@@ -106,19 +106,22 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
     tags: input.tags || []
   };
 
-  // Write plan file atomically (fail if exists - prevents TOCTOU race)
+  // Write plan file atomically
   const planPath = join(getPlansDir(projectPath), `${id}.md`);
   const content = formatPlanFile(plan);
 
+  // Check for duplicate ID before writing
   try {
-    // Use 'wx' flag for exclusive create (fails if file exists)
-    await writeFile(planPath, content, { flag: 'wx', encoding: 'utf-8' });
+    await readFile(planPath, 'utf-8');
+    throw new Error(`Plan with ID '${id}' already exists`);
   } catch (error: any) {
-    if (error.code === 'EEXIST') {
-      throw new Error(`Plan with ID '${id}' already exists`);
-    }
-    throw error;
+    if (error.code !== 'ENOENT') throw error;
   }
+
+  // Atomic write: temp file then rename
+  const tempPath = `${planPath}.tmp.${Date.now()}`;
+  await writeFile(tempPath, content, 'utf-8');
+  await rename(tempPath, planPath);
 
   // Auto-activate if requested (default: false)
   if (input.activate) {

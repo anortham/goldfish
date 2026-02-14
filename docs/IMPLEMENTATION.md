@@ -6,10 +6,11 @@
 
 **Test-Driven Development**: Write tests first. Every feature starts with a failing test.
 
-**Lessons Learned**: This is iteration #4, now at v5.0.0. We're taking the best from each previous attempt:
+**Lessons Learned**: This is iteration #5. We're taking the best from each previous attempt:
 - Original Goldfish: Workspace normalization, fuse.js search, transparency
 - Tusk: Aggressive behavioral language that works
 - .NET attempt: Behavioral adoption patterns, tool priorities
+- Goldfish 4.0: Markdown-only storage, radical simplicity, centralized ~/.goldfish/
 - Fixing: Race conditions, date bugs, cross-workspace issues, hook spam
 
 ---

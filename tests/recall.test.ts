@@ -321,6 +321,37 @@ describe('Date range filtering', () => {
 
     expect(result.checkpoints).toEqual([]);
   });
+
+  it('calculates from relative to to-date when only to is provided', async () => {
+    // Create a checkpoint now
+    await saveCheckpoint({
+      description: 'Recent checkpoint',
+      workspace: TEST_DIR_A
+    });
+
+    const today = new Date().toISOString().split('T')[0]!;
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]!;
+
+    // When only 'to' is provided, should look 7 days back from the 'to' date
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      to: tomorrow
+    });
+
+    // Today's checkpoint should be within 7 days of tomorrow
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+
+    // Now test with a past 'to' date — the 'from' should be relative to it, not now
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]!;
+
+    const pastResult = await recall({
+      workspace: TEST_DIR_A,
+      to: thirtyDaysAgo
+    });
+
+    // No checkpoints should be found — our checkpoint is today, not 30 days ago
+    expect(pastResult.checkpoints).toEqual([]);
+  });
 });
 
 describe('Checkpoint search (fuse.js)', () => {

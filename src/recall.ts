@@ -110,8 +110,9 @@ function getDateRange(options: RecallOptions): { from: string; to: string } {
 
   // 4. Only 'to' provided (7 days before to that point)
   if (options.to) {
-    const weekAgo = new Date(now.getTime() - 7 * 86400000);
-    return { from: weekAgo.toISOString(), to: options.to };
+    const toDate = new Date(options.to);
+    const weekBefore = new Date(toDate.getTime() - 7 * 86400000);
+    return { from: weekBefore.toISOString(), to: options.to };
   }
 
   // 5. Default: use 'days' parameter (default: 2 days)

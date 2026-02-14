@@ -60,7 +60,7 @@ Goldfish is a **Claude Code plugin** with:
 
 | Module | Purpose | Test File | Lines |
 |--------|---------|-----------|-------|
-| `src/workspace.ts` | Workspace detection, .memories/ paths | `tests/workspace.test.ts` | ~135 |
+| `src/workspace.ts` | Workspace normalization, .memories/ paths | `tests/workspace.test.ts` | ~78 |
 | `src/checkpoints.ts` | Checkpoint storage (YAML frontmatter individual files) | `tests/checkpoints.test.ts` | ~285 |
 | `src/plans.ts` | Plan management | `tests/plans.test.ts` | ~285 |
 | `src/recall.ts` | Search, aggregation, cross-project recall | `tests/recall.test.ts` | ~269 |
@@ -69,13 +69,13 @@ Goldfish is a **Claude Code plugin** with:
 | `src/lock.ts` | File locking utilities | `tests/lock.test.ts` | ~95 |
 | `src/server.ts` | MCP server | `tests/server.test.ts` | ~83 |
 | `src/handlers/` | Tool handlers (checkpoint, recall, plan) | `tests/handlers.test.ts` | ~275 |
-| `src/tools.ts` | Tool definitions | - | ~223 |
-| `src/instructions.ts` | Server instructions | - | ~73 |
+| `src/tools.ts` | Tool definitions | - | ~241 |
+| `src/instructions.ts` | Server instructions | - | ~81 |
 | `src/types.ts` | Type definitions | - | ~96 |
 | `src/emoji.ts` | Fish emoji helper | - | ~12 |
 | `src/summary.ts` | Auto-summary generation | - | ~34 |
 
-**Total production code: ~2,094 lines. Well-structured and maintainable.**
+**Total production code: ~2,070 lines. Well-structured and maintainable.**
 
 ### Key Types
 
@@ -118,7 +118,7 @@ interface RecallOptions {
 interface RegisteredProject {
   path: string;           // Absolute path to project
   name: string;           // Normalized workspace name
-  lastActive: string;     // ISO 8601 UTC
+  registered: string;     // ISO 8601 UTC
 }
 
 interface Registry {
@@ -196,7 +196,7 @@ git add tests/checkpoints.test.ts src/checkpoints.ts
 git commit -m "Add checkpoint storage with atomic writes"
 ```
 
-**Current test status: 223 tests, all passing.**
+**Current test status: 231 tests, all passing.**
 
 ---
 
@@ -298,11 +298,11 @@ bun test --coverage
 ## Tech Stack
 
 - **Runtime:** Bun (for speed + built-in test runner)
-- **MCP SDK:** `@modelcontextprotocol/sdk` (v1.0.4+)
+- **MCP SDK:** `@modelcontextprotocol/sdk` (^1.26.0)
 - **Search:** `fuse.js` (fuzzy search, proven from v1)
 - **YAML:** `yaml` package (for plan frontmatter)
 - **Language:** TypeScript
-- **Version:** 5.0.0
+- **Version:** 5.0.1
 
 ---
 

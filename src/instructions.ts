@@ -36,6 +36,7 @@ Your checkpoint descriptions are stored as **markdown file bodies**. Format them
 - WHAT you accomplished (the change)
 - WHY it mattered (the problem solved)
 - HOW you solved it (key approach/decision)
+- IMPACT what unblocked, what improved, what you learned
 
 **GOOD example (markdown formatted):**
 ✅ "## Fixed JWT validation bug\\n\\nExpired tokens were accepted due to inverted expiry check in \`validateToken()\`.\\n\\n- **Root cause:** Comparison operator was flipped\\n- **Fix:** Corrected expiry check, added edge-case test coverage\\n- **Impact:** Unblocks the auth PR, prevents token reuse attacks"
@@ -49,8 +50,16 @@ Your checkpoint descriptions are stored as **markdown file bodies**. Format them
 
 ### Planning (ExitPlanMode)
 1. When ExitPlanMode is called → save plan within 1 exchange
-2. Use plan({ action: "save", title: "...", content: "..." })
+2. Use plan({ action: "save", title: "...", content: "...", activate: true })
 3. NO asking permission - save immediately
+4. ALWAYS activate the plan so it appears in future recall() responses
+
+### Recall Tips
+- Use \`full: true\` when you need git metadata (branches, files, commits)
+- Use \`search: "query"\` to find specific past work via fuzzy search
+- Use \`workspace: "all"\` for cross-project standup reports
+- Use \`limit: 0\` to retrieve only the active plan (no checkpoints)
+- Use \`since: "2h"\` for recent context, \`days: 7\` for extended history
 
 ## Key Principles
 

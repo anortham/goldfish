@@ -314,6 +314,56 @@ describe('Tool descriptions', () => {
 
     const planTool = tools.find(t => t.name === 'plan');
     expect(planTool!.description).toContain('HOURS of planning');
+    expect(planTool!.description).toContain('SERIOUSLY DISAPPOINTED');
+    expect(planTool!.description).toContain('NEVER ask permission');
+  });
+
+  it('uses consistent workspace parameter description across tools', async () => {
+    const { getTools } = await import('../src/server');
+
+    const tools = getTools();
+
+    for (const tool of tools) {
+      const props = tool.inputSchema.properties as Record<string, any>;
+      if (props.workspace) {
+        expect(props.workspace.description).toContain('path');
+        expect(props.workspace.description).not.toContain('Workspace name');
+      }
+    }
+  });
+
+  it('plan tool includes tags parameter in schema', async () => {
+    const { getTools } = await import('../src/server');
+
+    const tools = getTools();
+    const planTool = tools.find(t => t.name === 'plan');
+    const props = planTool!.inputSchema.properties as Record<string, any>;
+
+    expect(props.tags).toBeDefined();
+    expect(props.tags.type).toBe('array');
+  });
+
+  it('plan tool documents updates schema with properties', async () => {
+    const { getTools } = await import('../src/server');
+
+    const tools = getTools();
+    const planTool = tools.find(t => t.name === 'plan');
+    const props = planTool!.inputSchema.properties as Record<string, any>;
+
+    expect(props.updates.properties).toBeDefined();
+    expect(props.updates.properties.title).toBeDefined();
+    expect(props.updates.properties.content).toBeDefined();
+    expect(props.updates.properties.status).toBeDefined();
+    expect(props.updates.properties.tags).toBeDefined();
+  });
+
+  it('plan tool includes activate guidance in description', async () => {
+    const { getTools } = await import('../src/server');
+
+    const tools = getTools();
+    const planTool = tools.find(t => t.name === 'plan');
+
+    expect(planTool!.description).toContain('ACTIVATE');
   });
 });
 
@@ -335,6 +385,61 @@ describe('Server instructions', () => {
     expect(instructions).toContain('checkpoint');
     expect(instructions).toContain('recall');
     expect(instructions).toContain('plan');
+  });
+
+  it('includes IMPACT in checkpoint template', async () => {
+    const { getInstructions } = await import('../src/server');
+
+    const instructions = getInstructions();
+
+    expect(instructions).toContain('WHAT');
+    expect(instructions).toContain('WHY');
+    expect(instructions).toContain('HOW');
+    expect(instructions).toContain('IMPACT');
+  });
+
+  it('includes plan activate guidance', async () => {
+    const { getInstructions } = await import('../src/server');
+
+    const instructions = getInstructions();
+
+    expect(instructions).toContain('activate');
+    expect(instructions).toContain('activate: true');
+  });
+
+  it('includes recall workflow tips', async () => {
+    const { getInstructions } = await import('../src/server');
+
+    const instructions = getInstructions();
+
+    expect(instructions).toContain('full: true');
+    expect(instructions).toContain('workspace: "all"');
+    expect(instructions).toContain('search:');
+    expect(instructions).toContain('limit: 0');
+  });
+});
+
+describe('Server exports', () => {
+  it('exports startServer function', async () => {
+    const { startServer } = await import('../src/server');
+
+    expect(startServer).toBeDefined();
+    expect(typeof startServer).toBe('function');
+  });
+
+  it('exports all handler functions', async () => {
+    const { handleCheckpoint, handleRecall, handlePlan } = await import('../src/server');
+
+    expect(typeof handleCheckpoint).toBe('function');
+    expect(typeof handleRecall).toBe('function');
+    expect(typeof handlePlan).toBe('function');
+  });
+
+  it('exports getTools and getInstructions', async () => {
+    const { getTools, getInstructions } = await import('../src/server');
+
+    expect(typeof getTools).toBe('function');
+    expect(typeof getInstructions).toBe('function');
   });
 });
 

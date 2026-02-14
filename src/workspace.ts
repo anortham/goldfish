@@ -1,15 +1,12 @@
 /**
  * Workspace detection and normalization utilities
  *
- * Workspaces represent different projects. Each workspace gets its own
- * isolated storage in ~/.goldfish/{workspace}/
+ * Workspaces represent different projects. Each project stores
+ * its memories in a local .memories/ directory.
  */
 
 import { join } from 'path';
-import { homedir } from 'os';
-import { mkdir, readdir } from 'fs/promises';
-
-const GOLDFISH_BASE = join(homedir(), '.goldfish');
+import { mkdir } from 'fs/promises';
 
 /**
  * Normalize a workspace identifier (path or name) to a simple name
@@ -49,60 +46,6 @@ export function normalizeWorkspace(pathOrName: string): string {
   }
 
   return name;
-}
-
-/**
- * Get the current workspace based on process.cwd()
- */
-export function getCurrentWorkspace(): string {
-  const cwd = process.cwd();
-  return normalizeWorkspace(cwd);
-}
-
-/**
- * Get the full path for a workspace's storage directory
- */
-export function getWorkspacePath(workspace: string): string {
-  const normalized = normalizeWorkspace(workspace);
-  return join(GOLDFISH_BASE, normalized);
-}
-
-/**
- * Ensure workspace directories exist (checkpoints/, plans/)
- */
-export async function ensureWorkspaceDir(workspace: string): Promise<void> {
-  const basePath = getWorkspacePath(workspace);
-  const checkpointsPath = join(basePath, 'checkpoints');
-  const plansPath = join(basePath, 'plans');
-
-  await mkdir(checkpointsPath, { recursive: true });
-  await mkdir(plansPath, { recursive: true });
-}
-
-/**
- * List all workspaces (directories in ~/.goldfish/)
- */
-export async function listWorkspaces(): Promise<string[]> {
-  try {
-    const entries = await readdir(GOLDFISH_BASE, { withFileTypes: true });
-    return entries
-      .filter(entry => entry.isDirectory())
-      .map(entry => entry.name)
-      .sort();
-  } catch (error: any) {
-    // If .goldfish doesn't exist yet, return empty array
-    if (error.code === 'ENOENT') {
-      return [];
-    }
-    throw error;
-  }
-}
-
-/**
- * Get goldfish base directory (mainly for testing)
- */
-export function getGoldfishBase(): string {
-  return GOLDFISH_BASE;
 }
 
 // ─── Project-level .memories/ storage ────────────────────────────────

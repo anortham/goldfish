@@ -14,7 +14,7 @@ export async function handlePlan(args: any) {
 
   switch (action) {
     case 'save': {
-      const { title, content, activate } = args;
+      const { title, content, activate, id, tags } = args;
       if (!title || !content) {
         throw new Error('Title and content are required for save action');
       }
@@ -23,7 +23,9 @@ export async function handlePlan(args: any) {
         title,
         content,
         workspace,
-        activate: activate ?? false
+        activate: activate ?? false,
+        ...(id && { id }),
+        ...(tags && { tags })
       });
 
       return {

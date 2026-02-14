@@ -66,6 +66,21 @@ describe('Plan file formatting', () => {
     const formatted = formatPlanFile(plan);
     expect(formatted).toContain('tags: []');
   });
+
+  it('ends with a trailing newline', () => {
+    const plan: Plan = {
+      id: 'newline-test',
+      title: 'Newline Test',
+      content: 'Content here',
+      status: 'active',
+      created: '2025-10-13T10:00:00.000Z',
+      updated: '2025-10-13T10:00:00.000Z',
+      tags: []
+    };
+
+    const formatted = formatPlanFile(plan);
+    expect(formatted.endsWith('\n')).toBe(true);
+  });
 });
 
 describe('Plan file parsing', () => {
@@ -229,6 +244,37 @@ describe('Plan storage', () => {
     });
 
     expect(plan.status).toBe('completed');
+  });
+
+  it('uses atomic write (no leftover .tmp files)', async () => {
+    await savePlan({
+      id: 'atomic-test',
+      title: 'Atomic Test',
+      content: 'Content',
+      workspace: TEST_DIR
+    });
+
+    const { readdir } = await import('fs/promises');
+    const plansDir = getPlansDir(TEST_DIR);
+    const files = await readdir(plansDir);
+    const tmpFiles = files.filter(f => f.includes('.tmp'));
+
+    expect(tmpFiles).toEqual([]);
+  });
+
+  it('saves plan file with trailing newline', async () => {
+    await savePlan({
+      id: 'newline-test',
+      title: 'Newline Test',
+      content: 'Content',
+      workspace: TEST_DIR
+    });
+
+    const { readFile } = await import('fs/promises');
+    const planPath = join(getPlansDir(TEST_DIR), 'newline-test.md');
+    const content = await readFile(planPath, 'utf-8');
+
+    expect(content.endsWith('\n')).toBe(true);
   });
 });
 

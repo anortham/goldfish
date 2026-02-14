@@ -229,6 +229,36 @@ describe('Structured JSON responses', () => {
         // Should have no activePlan since we didn't activate it
         expect(recallParsed.activePlan).toBeUndefined();
       });
+
+      it('forwards tags to savePlan', async () => {
+        const result = await handlePlan({
+          action: 'save',
+          title: 'Tagged Plan',
+          content: 'Content with tags',
+          workspace: TEST_DIR,
+          tags: ['milestone', 'auth']
+        });
+
+        const parsed = JSON.parse(result.content[0]!.text);
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.plan.tags).toEqual(['milestone', 'auth']);
+      });
+
+      it('forwards custom id to savePlan', async () => {
+        const result = await handlePlan({
+          action: 'save',
+          title: 'Custom ID Plan',
+          content: 'Content',
+          workspace: TEST_DIR,
+          id: 'my-custom-id'
+        });
+
+        const parsed = JSON.parse(result.content[0]!.text);
+
+        expect(parsed.success).toBe(true);
+        expect(parsed.plan.id).toBe('my-custom-id');
+      });
     });
 
     describe('get action', () => {

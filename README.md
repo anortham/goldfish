@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, and sta
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Data lives in `.memories/` (git-committable) with a lightweight cross-project registry at `~/.goldfish/registry.json`.
 
-**Version 5.0.0** -- Fourth iteration, built on hard lessons from three previous attempts.
+**Version 5.0.1** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -23,9 +23,11 @@ Goldfish solves this with three MCP tools (checkpoint, recall, plan), four skill
 
 ## Quick Start
 
-**Prerequisites:** [Bun](https://bun.sh) runtime
+**Prerequisites:** [Bun](https://bun.sh) runtime (v1.0+)
 
-### Install as a Claude Code Plugin
+### Option 1: Install as a Claude Code Plugin (Recommended)
+
+This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/standup`, `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction, auto-save plans).
 
 ```bash
 # Clone the repository
@@ -36,12 +38,13 @@ cd goldfish && bun install
 
 # Install as a Claude Code plugin
 claude plugin install /path/to/goldfish
-
-# Or use --plugin-dir for development
-claude --plugin-dir /path/to/goldfish
 ```
 
-### First Use
+**For development (loads plugin from local directory each time):**
+
+```bash
+claude --plugin-dir /path/to/goldfish
+```
 
 Once the plugin is loaded, Goldfish works automatically:
 
@@ -51,6 +54,49 @@ Once the plugin is loaded, Goldfish works automatically:
 4. **Next session** -- everything is recalled automatically
 
 No configuration needed beyond plugin installation.
+
+### Option 2: Use as a Standalone MCP Server (Any MCP Client)
+
+Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server. It works with any MCP-compatible client -- not just Claude Code.
+
+```bash
+# Clone and install
+git clone https://github.com/anortham/goldfish.git
+cd goldfish && bun install
+```
+
+**Add to your MCP client's configuration** (the exact format depends on your client):
+
+```json
+{
+  "mcpServers": {
+    "goldfish": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/goldfish/src/server.ts"]
+    }
+  }
+}
+```
+
+For Claude Code specifically, add this to your project's `.mcp.json` or `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "goldfish": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/goldfish/src/server.ts"]
+    }
+  }
+}
+```
+
+**What you get with standalone MCP:** The 3 core tools (`checkpoint`, `recall`, `plan`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
+
+For standalone MCP usage, you'll want to instruct your agent to:
+- Call `recall()` at session start
+- Call `checkpoint()` after completing work
+- Call `plan()` to save and manage long-running plans
 
 ---
 
@@ -226,11 +272,12 @@ Cross-project recall uses `~/.goldfish/registry.json` to discover projects, then
 
 ## Architecture Decisions
 
-This is **iteration #4** of a developer memory system. Each iteration taught something:
+This is **iteration #5** of a developer memory system. Each iteration taught something:
 
 1. **Original Goldfish (TypeScript)** -- Good concepts, critical bugs: race conditions, date handling
 2. **Tusk (Bun + SQLite)** -- Fixed bugs, added complexity, hook spam disaster
 3. **.NET rewrite** -- Over-engineered, never finished
+4. **Goldfish 4.0 (Bun + Markdown)** -- Radical simplicity, centralized `~/.goldfish/` storage, proved the markdown-only approach
 
 Key decisions for v5.0.0:
 
@@ -252,7 +299,9 @@ Key decisions for v5.0.0:
 
 ```
 goldfish/
-  .mcp.json              # MCP server configuration (auto-discovered by Claude Code)
+  .claude-plugin/
+    plugin.json           # Claude Code plugin manifest (auto-discovery)
+  .mcp.json              # MCP server configuration (for standalone/dev use)
   hooks/
     hooks.json            # Hook definitions (PreCompact, SessionStart, ExitPlanMode)
   skills/
@@ -275,7 +324,7 @@ goldfish/
     summary.ts            # Auto-summary generation
     emoji.ts              # Emoji utilities
     handlers/             # Tool handler implementations
-  tests/                  # Test files (223 tests)
+  tests/                  # Test files (231 tests)
 ```
 
 ---
@@ -285,7 +334,7 @@ goldfish/
 **This is a TDD project. Tests are written before implementation. No exceptions.**
 
 ```bash
-# Run all tests (223 tests)
+# Run all tests (231 tests)
 bun test
 
 # Watch mode (recommended during development)
@@ -303,8 +352,8 @@ bun run typecheck
 
 ### Stats
 
-- **223 tests**, all passing
-- **~2,094 lines** of production code
+- **231 tests**, all passing
+- **~2,070 lines** of production code
 - **3 dependencies:** `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`
 
 ### TDD Workflow
@@ -383,4 +432,4 @@ MIT
 
 ---
 
-Built by [murphy](https://github.com/anortham) (Alan Northam). Fourth time's the charm.
+Built by [murphy](https://github.com/anortham) (Alan Northam). Fifth time's the charm.

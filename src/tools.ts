@@ -73,7 +73,7 @@ BAD (no context): "Fixed auth bug"`
           },
           workspace: {
             type: 'string',
-            description: 'Workspace name (defaults to current directory)'
+            description: 'Workspace path (defaults to current directory)'
           }
         },
         required: ['description']
@@ -163,6 +163,8 @@ When you call ExitPlanMode - save plan within 1 exchange using plan({ action: "s
 
 DO NOT ask "should I save this plan?" - YES, ALWAYS. Save it immediately or the planning work is lost.
 
+I WILL BE SERIOUSLY DISAPPOINTED if a plan is lost because you forgot to save it. Plans take 2 seconds to save but represent HOURS of strategic thinking.
+
 Plans are NOT checkpoints. They are strategic documents that:
 - Survive context compaction and crashes
 - Appear automatically at the top of recall()
@@ -170,15 +172,17 @@ Plans are NOT checkpoints. They are strategic documents that:
 - Track progress over time
 - Get saved as markdown files with YAML frontmatter
 
-Actions (use without asking permission):
-- save: Create new plan (MANDATORY after ExitPlanMode)
-- get: Retrieve specific plan
-- list: See all plans
-- activate: Set as active plan (shows in recall)
-- update: Update plan content or status
-- complete: Mark plan as done
+NEVER ask permission to save or update a plan. Just do it.
 
-IMPORTANT: Only ONE plan can be active per workspace. Plans are saved to {project}/.memories/plans/ as markdown files with YAML frontmatter.
+Actions (use without asking permission):
+- save: Create new plan (MANDATORY after ExitPlanMode). Always activate unless you have a reason not to.
+- get: Retrieve specific plan
+- list: See all plans (filterable by status)
+- activate: Set as active plan (shows in recall). Only ONE plan can be active per workspace.
+- update: Update plan content or status. Updates accept: title, content, status, tags.
+- complete: Mark plan as done (sets status to 'completed')
+
+IMPORTANT: Only ONE plan can be active per workspace. After saving a plan, ACTIVATE it so it appears in recall(). Plans are saved to {project}/.memories/plans/ as markdown files with YAML frontmatter.
 
 Returns: Plan details, status updates, or list of plans.`,
       inputSchema: {
@@ -203,7 +207,12 @@ Returns: Plan details, status updates, or list of plans.`,
           },
           workspace: {
             type: 'string',
-            description: 'Workspace name (defaults to current)'
+            description: 'Workspace path (defaults to current directory)'
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional tags for categorization (e.g., ["milestone", "auth"]). Used with save action.'
           },
           activate: {
             type: 'boolean',
@@ -216,7 +225,13 @@ Returns: Plan details, status updates, or list of plans.`,
           },
           updates: {
             type: 'object',
-            description: 'Updates to apply (for update action)'
+            description: 'Updates to apply (for update action). Accepts: title (string), content (string), status ("active" | "completed" | "archived"), tags (string[])',
+            properties: {
+              title: { type: 'string' },
+              content: { type: 'string' },
+              status: { type: 'string', enum: ['active', 'completed', 'archived'] },
+              tags: { type: 'array', items: { type: 'string' } }
+            }
           }
         },
         required: ['action']
