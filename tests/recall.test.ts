@@ -148,10 +148,88 @@ describe('Search functionality', () => {
 });
 
 describe('Cross-workspace functionality', () => {
-  it('returns empty results when workspace="all" (registry not yet implemented)', async () => {
+  let projectA: string;
+  let projectB: string;
+
+  beforeEach(async () => {
+    // Create two fake projects with .memories/ directories
+    projectA = await mkdtemp(join(tmpdir(), 'test-cross-a-'));
+    projectB = await mkdtemp(join(tmpdir(), 'test-cross-b-'));
+    await ensureMemoriesDir(projectA);
+    await ensureMemoriesDir(projectB);
+
+    // Register them in the registry
+    const { registerProject } = await import('../src/registry');
+    await registerProject(projectA);
+    await registerProject(projectB);
+
+    // Create checkpoints in each project
+    await saveCheckpoint({
+      description: 'Work on project A',
+      tags: ['project-a'],
+      workspace: projectA
+    });
+
+    await saveCheckpoint({
+      description: 'Work on project B',
+      tags: ['project-b'],
+      workspace: projectB
+    });
+  });
+
+  afterEach(async () => {
+    const { unregisterProject } = await import('../src/registry');
+    await unregisterProject(projectA);
+    await unregisterProject(projectB);
+    await rm(projectA, { recursive: true, force: true });
+    await rm(projectB, { recursive: true, force: true });
+  });
+
+  it('aggregates across all registered projects', async () => {
+    const result = await recall({ workspace: 'all', days: 1 });
+
+    expect(result.checkpoints.length).toBeGreaterThanOrEqual(2);
+
+    const descriptions = result.checkpoints.map(c => c.description);
+    expect(descriptions).toContain('Work on project A');
+    expect(descriptions).toContain('Work on project B');
+  });
+
+  it('returns workspace summaries', async () => {
+    const result = await recall({ workspace: 'all', days: 1 });
+
+    expect(result.workspaces).toBeDefined();
+    expect(result.workspaces!.length).toBeGreaterThanOrEqual(2);
+
+    for (const ws of result.workspaces!) {
+      expect(ws.name).toBeTruthy();
+      expect(ws.path).toBeTruthy();
+      expect(ws.checkpointCount).toBeGreaterThan(0);
+    }
+  });
+
+  it('tags checkpoints with workspace name', async () => {
+    const result = await recall({ workspace: 'all', days: 1, full: true });
+
+    // Each checkpoint should have a workspace field
+    for (const checkpoint of result.checkpoints) {
+      expect((checkpoint as any).workspace).toBeTruthy();
+    }
+  });
+
+  it('applies global limit across projects', async () => {
+    const result = await recall({ workspace: 'all', days: 1, limit: 1 });
+    expect(result.checkpoints).toHaveLength(1);
+  });
+
+  it('returns empty when no projects registered', async () => {
+    // Unregister both projects
+    const { unregisterProject } = await import('../src/registry');
+    await unregisterProject(projectA);
+    await unregisterProject(projectB);
+
     const result = await recall({ workspace: 'all', days: 1 });
     expect(result.checkpoints).toEqual([]);
-    expect(result.workspaces).toEqual([]);
   });
 });
 

@@ -160,8 +160,8 @@ describe('Structured JSON responses', () => {
 
       const parsed = JSON.parse(result.content[0]!.text);
 
-      // Cross-workspace returns empty until registry is implemented (Phase 3)
-      expect(parsed.checkpoints).toEqual([]);
+      // Cross-workspace returns results from all registered projects
+      expect(parsed.checkpoints).toBeInstanceOf(Array);
     });
 
     it('returns empty array when no checkpoints found', async () => {

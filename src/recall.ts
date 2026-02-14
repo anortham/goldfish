@@ -6,9 +6,10 @@
  */
 
 import Fuse from 'fuse.js';
-import type { Checkpoint, RecallOptions, RecallResult } from './types';
+import type { Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange } from './checkpoints';
 import { getActivePlan } from './plans';
+import { listRegisteredProjects } from './registry';
 
 /**
  * Parse human-friendly time spans or ISO timestamps
@@ -210,10 +211,59 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     };
   }
 
-  // Cross-workspace recall (workspace === 'all')
-  // NOT YET IMPLEMENTED — requires registry from Phase 3
+  // Cross-workspace recall via registry
+  const projects = await listRegisteredProjects();
+
+  // Fetch from all registered projects in parallel
+  const projectResults = await Promise.all(
+    projects.map(async (project) => {
+      // Use a high limit per project, we'll apply global limit after merging
+      const { checkpoints } = await recallFromWorkspace(project.path, { ...options, limit: 99999 });
+      return { project, checkpoints };
+    })
+  );
+
+  // Build combined results
+  const allCheckpoints: Checkpoint[] = [];
+  const workspaceSummaries: WorkspaceSummary[] = [];
+
+  for (const { project, checkpoints } of projectResults) {
+    if (checkpoints.length > 0) {
+      // Tag each checkpoint with its project name
+      const tagged = checkpoints.map(c => ({ ...c, workspace: project.name }));
+      allCheckpoints.push(...tagged);
+
+      const summary: WorkspaceSummary = {
+        name: project.name,
+        path: project.path,
+        checkpointCount: checkpoints.length
+      };
+      // Get last activity from the most recent checkpoint
+      const lastActivity = checkpoints
+        .map(c => c.timestamp)
+        .filter(Boolean)
+        .sort()
+        .pop();
+      if (lastActivity) summary.lastActivity = lastActivity;
+      workspaceSummaries.push(summary);
+    }
+  }
+
+  // Sort combined checkpoints by timestamp (newest first)
+  allCheckpoints.sort((a, b) =>
+    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  // Apply limit to combined results
+  const limit = options.limit !== undefined ? options.limit : 10;
+  const limitedCheckpoints = limit > 0
+    ? allCheckpoints.slice(0, limit)
+    : limit === 0
+      ? []
+      : allCheckpoints;
+
   return {
-    checkpoints: [],
-    workspaces: []
+    checkpoints: limitedCheckpoints,
+    workspaces: workspaceSummaries
   };
 }

@@ -136,8 +136,8 @@ describe('Tool handlers', () => {
 
       expect(result.content[0]!.type).toBe('text');
       const parsed = JSON.parse(result.content[0]!.text);
-      // Cross-workspace returns empty until registry is implemented (Phase 3)
-      expect(parsed.checkpoints).toEqual([]);
+      // Cross-workspace returns results from all registered projects
+      expect(parsed.checkpoints).toBeInstanceOf(Array);
     });
 
     it('applies search filter', async () => {
