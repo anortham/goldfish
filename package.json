@@ -1,7 +1,7 @@
 {
   "name": "goldfish",
-  "version": "4.0.0",
-  "description": "Transparent developer memory system for AI agents - iteration #4, back to basics",
+  "version": "5.0.0",
+  "description": "Claude Code plugin — persistent developer memory with checkpoints, recall, plans, and standups",
   "type": "module",
   "main": "src/server.ts",
   "scripts": {

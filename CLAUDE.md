@@ -2,7 +2,7 @@
 
 **Target: AI agents contributing to Goldfish development**
 
-## 🚨 MANDATORY: Test-Driven Development
+## MANDATORY: Test-Driven Development
 
 **THIS IS A TDD PROJECT. NO EXCEPTIONS.**
 
@@ -15,14 +15,15 @@
 
 ---
 
-## Project Context: Iteration #4
+## Project Context: Iteration #5
 
-This is the **fourth iteration** of a developer memory system. We've learned hard lessons:
+This is the **fifth iteration** of a developer memory system. We've learned hard lessons:
 
 1. **Original Goldfish (TypeScript)** - Good concepts, critical bugs (race conditions, date handling)
 2. **Tusk (Bun + SQLite)** - Fixed bugs, became too complex, hook spam disaster
 3. **.NET rewrite** - Over-engineered, never finished
-4. **Goldfish 4.0** - **Radical simplicity**, markdown storage, evidence-based features
+4. **Goldfish 4.0** - Radical simplicity, markdown storage, evidence-based features
+5. **Goldfish 5.0** - **Claude Code plugin**, project-local `.memories/`, cross-project registry, skills & hooks
 
 **Core principle:** We only add complexity when we have EVIDENCE we need it.
 
@@ -30,47 +31,67 @@ This is the **fourth iteration** of a developer memory system. We've learned har
 
 ## Architecture Overview
 
-### Storage: Markdown Files (No Database)
+### Storage: Project-Local Markdown Files (No Database)
 
 ```
+{project}/.memories/
+  {date}/
+    {HHMMSS}_{hash}.md    # Individual checkpoint files (YAML frontmatter)
+  plans/
+    {plan-id}.md           # Individual plans (YAML frontmatter)
+  .active-plan             # Contains active plan ID
+
 ~/.goldfish/
-  {workspace}/
-    checkpoints/
-      2025-10-14.md       # Daily checkpoint files
-    plans/
-      auth-system.md      # Individual plans (YAML frontmatter)
-    .active-plan          # Contains active plan ID
+  registry.json            # Cross-project registry (auto-populated)
 ```
 
-**Everything is human-readable markdown.** No database. No binary formats. Git-friendly.
+**Everything is human-readable markdown.** No database. No binary formats. Git-friendly. Memories live with the project.
+
+### Claude Code Plugin
+
+Goldfish is a **Claude Code plugin** with:
+
+- **`.claude-plugin/plugin.json`** - Plugin manifest for auto-discovery
+- **`.mcp.json`** - MCP server auto-registration
+- **`skills/`** - 4 Claude Code skills (slash commands)
+- **`hooks/`** - 3 Claude Code hooks (lifecycle automation)
 
 ### Core Modules
 
 | Module | Purpose | Test File | Lines |
 |--------|---------|-----------|-------|
-| `src/workspace.ts` | Workspace detection/normalization | `tests/workspace.test.ts` | ~106 |
-| `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` | ~269 |
+| `src/workspace.ts` | Workspace detection, .memories/ paths | `tests/workspace.test.ts` | ~135 |
+| `src/checkpoints.ts` | Checkpoint storage (YAML frontmatter individual files) | `tests/checkpoints.test.ts` | ~285 |
 | `src/plans.ts` | Plan management | `tests/plans.test.ts` | ~285 |
-| `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` | ~228 |
-| `src/git.ts` | Git context capture | `tests/git.test.ts` | ~80 |
-| `src/lock.ts` | File locking utilities | `tests/lock.test.ts` | ~88 |
-| `src/server.ts` | MCP server | `tests/server.test.ts` | ~82 |
-| `src/handlers/` | Tool handlers | various | ~200 |
-| `src/tools.ts` | Tool definitions | - | ~80 |
-| `src/instructions.ts` | Server instructions | - | ~40 |
-| `src/types.ts` | Type definitions | - | ~84 |
+| `src/recall.ts` | Search, aggregation, cross-project recall | `tests/recall.test.ts` | ~269 |
+| `src/registry.ts` | Cross-project registry | `tests/registry.test.ts` | ~145 |
+| `src/git.ts` | Git context capture | `tests/git.test.ts` | ~84 |
+| `src/lock.ts` | File locking utilities | `tests/lock.test.ts` | ~95 |
+| `src/server.ts` | MCP server | `tests/server.test.ts` | ~83 |
+| `src/handlers/` | Tool handlers (checkpoint, recall, plan) | `tests/handlers.test.ts` | ~275 |
+| `src/tools.ts` | Tool definitions | - | ~223 |
+| `src/instructions.ts` | Server instructions | - | ~73 |
+| `src/types.ts` | Type definitions | - | ~96 |
+| `src/emoji.ts` | Fish emoji helper | - | ~12 |
+| `src/summary.ts` | Auto-summary generation | - | ~34 |
 
-**Total core code: ~1,735 lines. Well-structured and maintainable despite size growth.**
+**Total production code: ~2,094 lines. Well-structured and maintainable.**
 
 ### Key Types
 
 ```typescript
 interface Checkpoint {
+  id: string;             // checkpoint_{hash} unique identifier
   timestamp: string;      // ISO 8601 UTC (ALWAYS UTC!)
-  description: string;
+  description: string;    // Markdown body
   tags?: string[];
-  gitBranch?: string;
-  gitCommit?: string;
+  git?: GitContext;        // Nested git context
+  summary?: string;       // Auto-generated concise summary
+}
+
+interface GitContext {
+  branch?: string;
+  commit?: string;
   files?: string[];
 }
 
@@ -89,7 +110,19 @@ interface RecallOptions {
   days?: number;
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
+  since?: string;         // Relative time (e.g., "2h", "3d")
   search?: string;        // Fuzzy search query (fuse.js)
+  full?: boolean;         // Include full checkpoint bodies
+}
+
+interface RegisteredProject {
+  path: string;           // Absolute path to project
+  name: string;           // Normalized workspace name
+  lastActive: string;     // ISO 8601 UTC
+}
+
+interface Registry {
+  projects: RegisteredProject[];
 }
 ```
 
@@ -110,10 +143,10 @@ await rename(tmpPath, filePath);  // Atomic!
 ### 2. UTC Timestamps Everywhere
 
 ```typescript
-// ✅ CORRECT
+// CORRECT
 const timestamp = new Date().toISOString();
 
-// ❌ WRONG - caused bugs in v1
+// WRONG - caused bugs in v1
 const localDate = new Date().toLocaleDateString();
 ```
 
@@ -163,13 +196,13 @@ git add tests/checkpoints.test.ts src/checkpoints.ts
 git commit -m "Add checkpoint storage with atomic writes"
 ```
 
-**Current test status: 115 tests, all passing.**
+**Current test status: 223 tests, all passing.**
 
 ---
 
 ## Project Principles
 
-### ✅ DO
+### DO
 
 - Write tests first (TDD mandatory)
 - Keep data human-readable (markdown)
@@ -178,12 +211,12 @@ git commit -m "Add checkpoint storage with atomic writes"
 - Trust the agent's intelligence (let Claude be smart)
 - Read `docs/IMPLEMENTATION.md` for detailed specs
 - Keep code well-structured and maintainable
+- Store memories with the project (`.memories/` directory)
 
-### ❌ DON'T
+### DON'T
 
 - Write code before tests (TDD violation)
 - Add database (we're staying simple)
-- Add hooks prematurely (validate behavioral language works first)
 - Mix local dates with UTC (caused bugs in v1)
 - Add "intelligence" to storage layer (Goldfish is dumb storage, Claude is smart)
 - Add features without evidence from real usage
@@ -221,13 +254,13 @@ If you can't answer "yes" to 1, 2, 4 and "no" to 3, **DON'T ADD IT.**
 
 ## Common Mistakes to Avoid
 
-❌ Writing implementation before tests
-❌ Using local time instead of UTC
-❌ Direct file writes (use atomic pattern)
-❌ Adding features without evidence
-❌ Adding database "because it's better"
-❌ Premature optimization
-❌ Skipping file locking for concurrent writes
+- Writing implementation before tests
+- Using local time instead of UTC
+- Direct file writes (use atomic pattern)
+- Adding features without evidence
+- Adding database "because it's better"
+- Premature optimization
+- Skipping file locking for concurrent writes
 
 ---
 
@@ -269,6 +302,7 @@ bun test --coverage
 - **Search:** `fuse.js` (fuzzy search, proven from v1)
 - **YAML:** `yaml` package (for plan frontmatter)
 - **Language:** TypeScript
+- **Version:** 5.0.0
 
 ---
 
@@ -307,7 +341,8 @@ const commit = spawnSync(['git', 'rev-parse', '--short', 'HEAD']);
 - **`AGENTS.md`** - Pointer for AI agents (directs to appropriate doc)
 - **`CONTRIBUTING.md`** - Detailed development guide (comprehensive patterns)
 - **`docs/IMPLEMENTATION.md`** - Technical specification
-- **`INSTALL.md`** - Slash commands installation
+- **`skills/`** - Claude Code plugin skills (slash commands)
+- **`hooks/`** - Claude Code plugin hooks (lifecycle automation)
 
 ---
 
@@ -315,12 +350,12 @@ const commit = spawnSync(['git', 'rev-parse', '--short', 'HEAD']);
 
 You're doing it right when:
 
-✅ Every commit has tests
-✅ Tests are written BEFORE implementation
-✅ Data is readable in any text editor
-✅ Code stays well-structured and maintainable
-✅ No features added without evidence
-✅ Performance stays under target thresholds
+- Every commit has tests
+- Tests are written BEFORE implementation
+- Data is readable in any text editor
+- Code stays well-structured and maintainable
+- No features added without evidence
+- Performance stays under target thresholds
 
 ---
 

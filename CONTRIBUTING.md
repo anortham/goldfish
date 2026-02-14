@@ -1,6 +1,6 @@
 # Goldfish Development Guide
 
-## 🚨 MANDATORY: Test-Driven Development (TDD)
+## MANDATORY: Test-Driven Development (TDD)
 
 **THIS IS A TDD PROJECT. NO EXCEPTIONS.**
 
@@ -18,7 +18,7 @@ If you find yourself writing implementation code before tests, STOP. Delete it a
 
 ## Core Philosophy
 
-This is **iteration #4** of a developer memory system. We've learned hard lessons:
+This is **iteration #4** of a developer memory system, now at **v5.0.0**. We've learned hard lessons:
 
 ### What We've Tried Before
 1. **Original Goldfish (TS)**: JSON files, good concepts, critical bugs (race conditions, date handling)
@@ -26,7 +26,9 @@ This is **iteration #4** of a developer memory system. We've learned hard lesson
 3. **.NET rewrite**: Over-engineered, never finished
 
 ### What We're Building Now
-**Radical simplicity**: Markdown storage, fuse.js search, aggressive behavioral language. No database, no hooks initially, ~400 lines of core code.
+**Radical simplicity**: Markdown storage, fuse.js search, aggressive behavioral language. No database. ~2,094 lines of well-structured production code.
+
+**Goldfish is a Claude Code plugin** with skills, hooks, and an MCP server.
 
 **We only add complexity when we have EVIDENCE we need it.**
 
@@ -34,7 +36,7 @@ This is **iteration #4** of a developer memory system. We've learned hard lesson
 
 ## Project Principles
 
-### ✅ DO
+### DO
 - Write tests first (mandatory TDD)
 - Keep data human-readable (markdown)
 - Trust the agent's intelligence
@@ -43,13 +45,13 @@ This is **iteration #4** of a developer memory system. We've learned hard lesson
 - Validate with real Claude Code sessions
 - Read `docs/IMPLEMENTATION.md` for detailed specs
 
-### ❌ DON'T
+### DON'T
 - Write code before tests (TDD violation)
 - Add database (we're going simpler)
-- Add hooks prematurely (validate behavioral language works first)
 - Mix local dates with UTC (caused bugs in original)
 - Add "intelligence" to storage layer (let Claude be smart)
 - Add features without evidence of need
+- Tone down behavioral language in MCP tool descriptions
 
 ---
 
@@ -131,13 +133,15 @@ bun test --coverage
 
 ### Storage Structure
 ```
+{project}/.memories/
+  {date}/
+    {HHMMSS}_{hash}.md    # Individual YAML frontmatter checkpoints
+  plans/
+    {plan-id}.md
+  .active-plan
+
 ~/.goldfish/
-  {workspace}/
-    checkpoints/
-      2025-10-13.md       # Daily checkpoint files
-    plans/
-      auth-system.md      # Individual plans (YAML frontmatter)
-    .active-plan          # Contains plan ID
+  registry.json            # Cross-project registry
 ```
 
 ### Core Modules
@@ -148,19 +152,27 @@ bun test --coverage
 | `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` |
 | `src/plans.ts` | Plan management | `tests/plans.test.ts` |
 | `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` |
+| `src/registry.ts` | Cross-project registry | `tests/registry.test.ts` |
 | `src/git.ts` | Git context capture | `tests/git.test.ts` |
+| `src/lock.ts` | File locking utilities | `tests/lock.test.ts` |
+| `src/summary.ts` | Auto-summary generation | `tests/summary.test.ts` |
+| `src/emoji.ts` | Fish emoji helper | - |
 | `src/server.ts` | MCP server | `tests/server.test.ts` |
+| `src/handlers/` | Tool handlers (checkpoint, recall, plan) | various |
+| `src/tools.ts` | Tool definitions | - |
+| `src/instructions.ts` | Server behavioral instructions | - |
+| `src/types.ts` | TypeScript interfaces | - |
 
 ### Key Types
 
 ```typescript
 interface Checkpoint {
+  id: string;
   timestamp: string;      // ISO 8601 UTC
   description: string;
   tags?: string[];
-  gitBranch?: string;
-  gitCommit?: string;
-  files?: string[];
+  git?: GitContext;        // Nested: { branch, commit, files }
+  summary?: string;
 }
 
 interface Plan {
@@ -179,6 +191,8 @@ interface RecallOptions {
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
   search?: string;        // Fuzzy search query
+  since?: string;         // ISO 8601 UTC
+  full?: boolean;         // Include full checkpoint bodies
 }
 ```
 
@@ -228,7 +242,7 @@ function normalizeWorkspace(path: string): string {
   // Extract base directory name
   let name = path.replace(/^.*[/\\]/, '');
 
-  // Handle package names (@org/name → org-name)
+  // Handle package names (@org/name -> org-name)
   name = name.replace(/^@/, '').replace(/\//g, '-');
 
   // Lowercase and sanitize
@@ -239,10 +253,10 @@ function normalizeWorkspace(path: string): string {
 ### Date Handling (ALWAYS UTC)
 
 ```typescript
-// ✅ CORRECT - Use UTC everywhere
-const timestamp = new Date().toISOString();  // "2025-10-13T14:30:00.000Z"
+// CORRECT - Use UTC everywhere
+const timestamp = new Date().toISOString();  // "2026-02-14T14:30:00.000Z"
 
-// ❌ WRONG - Don't mix local and UTC
+// WRONG - Don't mix local and UTC
 const date = new Date();
 const localDate = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 ```
@@ -254,15 +268,21 @@ const localDate = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()
 ### View Stored Data
 
 ```bash
-# List all workspaces
-ls ~/.goldfish/
+# List checkpoint dates
+ls .memories/
 
 # View checkpoints for today
-cat ~/.goldfish/goldfish/checkpoints/$(date +%Y-%m-%d).md
+ls .memories/$(date +%Y-%m-%d)/
+
+# View a specific checkpoint
+cat .memories/2026-02-14/103000_a1b2c3d4.md
 
 # View active plan
-cat ~/.goldfish/goldfish/.active-plan
-cat ~/.goldfish/goldfish/plans/$(cat ~/.goldfish/goldfish/.active-plan).md
+cat .memories/.active-plan
+cat .memories/plans/$(cat .memories/.active-plan).md
+
+# View cross-project registry
+cat ~/.goldfish/registry.json
 ```
 
 ### Test in Isolation
@@ -367,21 +387,20 @@ Keep these docs updated:
 - `AGENTS.md` - Pointer to CLAUDE.md for AI agents
 - `CONTRIBUTING.md` - This file (development guide for contributors)
 - `docs/IMPLEMENTATION.md` - Detailed technical specification
-- `INSTALL.md` - Slash commands installation instructions
 - Code comments - Only for "why", not "what"
 
 ---
 
 ## Common Mistakes to Avoid
 
-❌ Writing implementation before tests
-❌ Skipping edge case tests
-❌ Using local time instead of UTC
-❌ Direct file writes (use atomic pattern)
-❌ Adding features without evidence
-❌ Toning down behavioral language
-❌ Adding database "because it's better"
-❌ Premature optimization
+- Writing implementation before tests
+- Skipping edge case tests
+- Using local time instead of UTC
+- Direct file writes (use atomic pattern)
+- Adding features without evidence
+- Toning down behavioral language
+- Adding database "because it's better"
+- Premature optimization
 
 ---
 
@@ -389,13 +408,13 @@ Keep these docs updated:
 
 You're doing it right when:
 
-✅ Every PR has tests
-✅ Tests are written before implementation
-✅ Data is readable in any text editor
-✅ Agents checkpoint proactively in real sessions
-✅ Agents recall at session start without prompting
-✅ Code is < 500 lines (core modules)
-✅ No complexity for complexity's sake
+- Every PR has tests
+- Tests are written before implementation
+- Data is readable in any text editor
+- Agents checkpoint proactively in real sessions
+- Agents recall at session start without prompting
+- Code is well-structured and maintainable
+- No complexity for complexity's sake
 
 ---
 
@@ -403,16 +422,13 @@ You're doing it right when:
 
 1. Read `docs/IMPLEMENTATION.md` for technical details
 2. Look at test files for usage examples
-3. Check previous iterations for context:
-   - `~/source/coa-goldfish-mcp/archive` - Original Goldfish
-   - `~/source/tusk` - Current Tusk implementation
-4. Ask questions (but TDD is non-negotiable)
+3. Ask questions (but TDD is non-negotiable)
 
 ---
 
 ## Remember
 
-**This is iteration #4. We've made mistakes before.**
+**This is iteration #4, now at v5.0.0. We've made mistakes before.**
 
 The difference this time: **radical simplicity** and **evidence-based feature development**.
 
