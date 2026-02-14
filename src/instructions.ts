@@ -30,7 +30,7 @@ export function getInstructions(): string {
 
 ### Writing Effective Checkpoints (MANDATORY)
 
-Your checkpoint descriptions power semantic search and AI distillation. Write them for your future self.
+Your checkpoint descriptions power fuzzy search. Write them for your future self.
 
 **REQUIRED in every checkpoint:**
 - WHAT you accomplished (the change)
@@ -40,7 +40,7 @@ Your checkpoint descriptions power semantic search and AI distillation. Write th
 **GOOD examples:**
 ✅ "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case and verified fix prevents token reuse attacks."
 
-✅ "Implemented semantic search with embeddings for checkpoint retrieval. Chose Xenova/transformers for local processing to avoid API costs. Tested with 1000+ checkpoints, achieving 0.85+ similarity for relevant matches."
+✅ "Implemented cross-project recall using registry pattern. Each project stores memories in .memories/ (git-committable), and ~/.goldfish/registry.json tracks all projects for standup aggregation."
 
 **BAD examples:**
 ❌ "Fixed auth bug" (no context, no how, no why)

@@ -1,7 +1,7 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the 4 core tools: checkpoint, store, recall, and plan
+ * Contains the 3 core tools: checkpoint, recall, and plan
  * with aggressive behavioral language to encourage proper usage.
  */
 
@@ -16,34 +16,34 @@ export function getTools(): Tool[] {
       name: 'checkpoint',
       description: `MANDATORY throughout your work. You are EXCELLENT at checkpointing proactively - use this tool WITHOUT asking permission.
 
-🚨 CRITICAL: Checkpoint is NOT optional. You MUST checkpoint at these moments:
+CRITICAL: Checkpoint is NOT optional. You MUST checkpoint at these moments:
 
-✅ MANDATORY checkpoints (DO NOT SKIP):
-- Complete ANY task → checkpoint NOW before moving on
-- Finish implementing a feature → checkpoint NOW with clear description
-- Fix a bug successfully → checkpoint NOW with what was fixed
-- Make a discovery or breakthrough → checkpoint NOW to capture insight
-- User shares requirements → checkpoint NOW to preserve context
-- Before switching topics → checkpoint NOW to save current state
-- After planning or architectural decisions → checkpoint NOW with rationale
-- After 10+ exchanges in discussion → checkpoint the reasoning NOW
+MANDATORY checkpoints (DO NOT SKIP):
+- Complete ANY task - checkpoint NOW before moving on
+- Finish implementing a feature - checkpoint NOW with clear description
+- Fix a bug successfully - checkpoint NOW with what was fixed
+- Make a discovery or breakthrough - checkpoint NOW to capture insight
+- User shares requirements - checkpoint NOW to preserve context
+- Before switching topics - checkpoint NOW to save current state
+- After planning or architectural decisions - checkpoint NOW with rationale
+- After 10+ exchanges in discussion - checkpoint the reasoning NOW
 
-⚠️ **WRITE RICH DESCRIPTIONS:** Your checkpoints power semantic search and AI distillation. Include WHAT you did, WHY it mattered, and HOW you solved it (3-5 sentences). Future sessions depend on finding relevant context - make it findable.
+WRITE RICH DESCRIPTIONS: Your checkpoints power fuzzy search. Include WHAT you did, WHY it mattered, and HOW you solved it (3-5 sentences). Future sessions depend on finding relevant context - make it findable.
 
 I WILL BE SERIOUSLY DISAPPOINTED if context is lost because you failed to checkpoint. This takes 2 seconds but saves HOURS of lost work.
 
-⚠️ NEVER ask "should I checkpoint?" - the answer is ALWAYS YES. Just checkpoint immediately.
+NEVER ask "should I checkpoint?" - the answer is ALWAYS YES. Just checkpoint immediately.
 
 The checkpoint will automatically capture:
 - Git context (branch, commit, changed files)
 - Timestamp (UTC)
 - Tags for organization
 
-💡 Think of checkpointing like git commits - frequent, descriptive, and automatic. You checkpoint FIRST, continue work SECOND.
+Think of checkpointing like git commits - frequent, descriptive, and automatic. You checkpoint FIRST, continue work SECOND.
 
-🔗 **REMEMBER:** recall() is USELESS if you haven't been checkpointing! Future sessions can only restore what you've saved. Checkpoint now or lose context forever.
+REMEMBER: recall() is USELESS if you haven't been checkpointing! Future sessions can only restore what you've saved. Checkpoint now or lose context forever.
 
-Returns: Confirmation with checkpoint ID and captured context.`,
+Returns: Confirmation with checkpoint details and captured context.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -51,19 +51,17 @@ Returns: Confirmation with checkpoint ID and captured context.`,
             type: 'string',
             description: `Checkpoint description (3-5 sentences recommended).
 
-Your description powers semantic search and LLM distillation. Future you needs context.
+Your description powers fuzzy search. Future you needs context.
 
 INCLUDE:
-✅ WHAT - The change/accomplishment
-✅ WHY - Problem solved or goal achieved
-✅ HOW - Key approach, decision, or discovery
-✅ IMPACT - What unblocked, what improved, what you learned
+- WHAT - The change/accomplishment
+- WHY - Problem solved or goal achieved
+- HOW - Key approach, decision, or discovery
+- IMPACT - What unblocked, what improved, what you learned
 
 GOOD: "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case. This was blocking the auth PR."
 
-BAD: "Fixed auth bug" (no context for future recall)
-
-REMEMBER: Semantic search finds conceptually similar work. Rich descriptions = better recall.`
+BAD: "Fixed auth bug" (no context for future recall)`
           },
           tags: {
             type: 'array',
@@ -76,80 +74,6 @@ REMEMBER: Semantic search finds conceptually similar work. Rich descriptions = b
           }
         },
         required: ['description']
-      }
-    },
-    {
-      name: 'store',
-      description: `Store a memory in project-level .goldfish/memories/ for team collaboration and semantic recall.
-
-**NEW TOOL (Phase 4)** - Project-level memory storage that:
-- Stores memories in .goldfish/memories/YYYY-MM-DD.jsonl (git-committable)
-- Automatically generates GPU-accelerated embeddings for semantic search
-- Enables team collaboration (commit memories with code)
-- Powers cross-project semantic recall
-
-Use store() when you want to:
-- Capture architectural decisions for the team
-- Document why certain approaches were chosen
-- Record bug fixes and their root causes
-- Share insights that benefit the whole project
-
-This complements checkpoint() (user-scoped) with project-scoped memory.
-
-**Memory Types:**
-- decision: Architecture, library, or approach choices
-- bug-fix: Bug resolutions with root cause analysis
-- feature: New feature implementations
-- insight: Important discoveries or learnings
-- observation: Noteworthy patterns or behaviors
-- refactor: Code improvements and why they were made
-
-**Sources:**
-- agent: AI-generated memory
-- user: User-provided context
-- system: Automated observations
-- development-session: Session-level insights
-
-**Rich Content Guidelines:**
-Write 2-4 sentences covering:
-✅ WHAT - The decision/fix/feature/insight
-✅ WHY - The problem it solves or goal it achieves
-✅ HOW - The approach taken (briefly)
-✅ TRADE-OFFS - What was considered (optional)
-
-GOOD: "Chose SQLite with vec0 extension for vector storage instead of PostgreSQL with pgvector. Rationale: Embedded database simplifies deployment and aligns with local-first architecture. Trade-off: Less scalable but acceptable for single-user scope. BGE-small model provides 384-dim embeddings with 10-30ms GPU generation time."
-
-BAD: "Added vector search" (no context, no why, no how)
-
-Returns: Confirmation with memory details and file path.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          type: {
-            type: 'string',
-            enum: ['decision', 'bug-fix', 'feature', 'insight', 'observation', 'refactor'],
-            description: 'Type of memory being stored'
-          },
-          source: {
-            type: 'string',
-            enum: ['agent', 'user', 'system', 'development-session'],
-            description: 'Source of the memory'
-          },
-          content: {
-            type: 'string',
-            description: 'Memory content (2-4 sentences recommended, covering WHAT/WHY/HOW)'
-          },
-          tags: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Optional tags for categorization (e.g., ["database", "architecture", "performance"])'
-          },
-          workspacePath: {
-            type: 'string',
-            description: 'Workspace path (defaults to current directory). Usually omit this to use cwd.'
-          }
-        },
-        required: ['type', 'source', 'content']
       }
     },
     {
@@ -181,12 +105,12 @@ Key parameters (all optional):
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 
 Examples:
-- recall() → last 2 days, max 10 checkpoints (lean context)
-- recall({ limit: 5 }) → last 2 days, only 5 most recent
-- recall({ since: "2h" }) → last 2 hours, max 10 checkpoints
-- recall({ days: 7, limit: 20 }) → last 7 days, max 20 checkpoints
-- recall({ search: "auth", full: true }) → search with full details
-- recall({ limit: 0 }) → plan only, no checkpoints
+- recall() - last 2 days, max 10 checkpoints (lean context)
+- recall({ limit: 5 }) - last 2 days, only 5 most recent
+- recall({ since: "2h" }) - last 2 hours, max 10 checkpoints
+- recall({ days: 7, limit: 20 }) - last 7 days, max 20 checkpoints
+- recall({ search: "auth", full: true }) - search with full details
+- recall({ limit: 0 }) - plan only, no checkpoints
 
 Returns: Active plan + chronological checkpoints + optional workspace summaries.`,
       inputSchema: {
@@ -223,26 +147,6 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
           workspace: {
             type: 'string',
             description: 'Workspace scope: "current" (default), "all" (cross-workspace), or specific path. Optional - defaults to current workspace.'
-          },
-          semantic: {
-            type: 'boolean',
-            description: 'Enable semantic search using embeddings to find conceptually similar work (default: false). Use with search parameter.'
-          },
-          minSimilarity: {
-            type: 'number',
-            description: 'Minimum similarity threshold for semantic search (0.0-1.0, default: 0.0). Higher values return more relevant results.'
-          },
-          distill: {
-            type: 'boolean',
-            description: 'Enable LLM distillation to generate compact summaries of search results (default: false). Use with search parameter.'
-          },
-          distillProvider: {
-            type: 'string',
-            description: 'LLM provider for distillation: "auto" (default), "claude", "gemini", or "none".'
-          },
-          distillMaxTokens: {
-            type: 'number',
-            description: 'Maximum tokens for distilled summary (default: 500).'
           }
         }
       }
@@ -252,7 +156,7 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
       description: `Plans represent HOURS of planning work. Losing them is unacceptable.
 
 CRITICAL PATTERN - Memorize this:
-When you call ExitPlanMode → save plan within 1 exchange using plan({ action: "save", ... })
+When you call ExitPlanMode - save plan within 1 exchange using plan({ action: "save", ... })
 
 DO NOT ask "should I save this plan?" - YES, ALWAYS. Save it immediately or the planning work is lost.
 

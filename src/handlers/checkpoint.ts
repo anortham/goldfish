@@ -24,6 +24,15 @@ export async function handleCheckpoint(args: any) {
   });
 
   // Return structured JSON for AI agent consumption with human-friendly summary
+  // Cap files list to keep response compact (token efficiency)
+  const MAX_FILES = 10;
+  const files = checkpoint.files;
+  const filesSummary = files
+    ? files.length > MAX_FILES
+      ? { files: files.slice(0, MAX_FILES), fileCount: files.length }
+      : { files }
+    : {};
+
   const response = {
     summary: `${getFishEmoji()} Checkpoint saved: ${description}`,
     success: true,
@@ -34,7 +43,7 @@ export async function handleCheckpoint(args: any) {
       workspace: ws,
       ...(checkpoint.gitBranch && { gitBranch: checkpoint.gitBranch }),
       ...(checkpoint.gitCommit && { gitCommit: checkpoint.gitCommit }),
-      ...(checkpoint.files && { files: checkpoint.files })
+      ...filesSummary
     }
   };
 

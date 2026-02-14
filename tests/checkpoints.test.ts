@@ -153,7 +153,7 @@ More content.
   });
 
   it('preserves full timestamp precision with seconds and milliseconds', () => {
-    // This is critical for semantic search - embeddings are keyed by full timestamp
+    // Full timestamp must be preserved for accurate recall
     const checkpoint: Checkpoint = {
       timestamp: '2025-10-13T14:30:36.443Z',  // Full precision with seconds/millis
       description: 'Test checkpoint with precise timestamp',
@@ -166,7 +166,7 @@ More content.
     const parsed = parseCheckpointFile(`# Checkpoints for 2025-10-13\n\n${formatted}`, '2025-10-13');
 
     expect(parsed).toHaveLength(1);
-    // CRITICAL: Full timestamp must be preserved for semantic search to work
+    // Full timestamp must be preserved for accurate recall
     expect(parsed[0]!.timestamp).toBe('2025-10-13T14:30:36.443Z');
   });
 
