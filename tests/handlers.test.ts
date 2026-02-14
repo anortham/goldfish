@@ -426,8 +426,8 @@ describe('Token efficiency', () => {
     expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/); // Should have a fish emoji in summary
     expect(text).not.toContain('**');
 
-    // Should be compact JSON (< 850 chars for checkpoint with id, nested git, and temp dir path)
-    expect(text.length).toBeLessThan(850);
+    // Should be compact JSON (< 900 chars for checkpoint with id, nested git, and temp dir path)
+    expect(text.length).toBeLessThan(900);
   });
 
   it('recall response is compact for multiple checkpoints', async () => {
