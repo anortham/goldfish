@@ -12,19 +12,20 @@ import {
 } from '../src/plans';
 import { acquireLock } from '../src/lock';
 import type { Plan, PlanInput } from '../src/types';
-import { getWorkspacePath, ensureWorkspaceDir } from '../src/workspace';
-import { rm } from 'fs/promises';
+import { getPlansDir, ensureMemoriesDir } from '../src/workspace';
+import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
+import { tmpdir } from 'os';
 
-const TEST_WORKSPACE = `test-plans-${Date.now()}`;
+let TEST_DIR: string;
 
 beforeEach(async () => {
-  await ensureWorkspaceDir(TEST_WORKSPACE);
+  TEST_DIR = await mkdtemp(join(tmpdir(), 'test-plans-'));
+  await ensureMemoriesDir(TEST_DIR);
 });
 
 afterEach(async () => {
-  const workspacePath = getWorkspacePath(TEST_WORKSPACE);
-  await rm(workspacePath, { recursive: true, force: true });
+  await rm(TEST_DIR, { recursive: true, force: true });
 });
 
 describe('Plan file formatting', () => {
@@ -134,7 +135,7 @@ describe('Plan storage', () => {
     const input: PlanInput = {
       title: 'Test Plan',
       content: 'Plan content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     };
 
     const plan = await savePlan(input);
@@ -149,14 +150,14 @@ describe('Plan storage', () => {
     const plan = await savePlan({
       title: '!!!',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     expect(plan.id).toBeTruthy();
     expect(plan.id.startsWith('plan-')).toBe(true);
     expect(plan.id).toMatch(/^[a-z0-9-]+$/);
 
-    const plans = await listPlans(TEST_WORKSPACE);
+    const plans = await listPlans(TEST_DIR);
     expect(plans.map(p => p.id)).toContain(plan.id);
   });
 
@@ -165,7 +166,7 @@ describe('Plan storage', () => {
       id: 'custom-id',
       title: 'Custom ID Plan',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     };
 
     const plan = await savePlan(input);
@@ -177,14 +178,13 @@ describe('Plan storage', () => {
       id: 'test-plan',
       title: 'Test',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     };
 
     await savePlan(input);
 
     const planPath = join(
-      getWorkspacePath(TEST_WORKSPACE),
-      'plans',
+      getPlansDir(TEST_DIR),
       'test-plan.md'
     );
 
@@ -197,7 +197,7 @@ describe('Plan storage', () => {
       id: 'duplicate',
       title: 'First',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     await expect(
@@ -205,7 +205,7 @@ describe('Plan storage', () => {
         id: 'duplicate',
         title: 'Second',
         content: 'Content',
-        workspace: TEST_WORKSPACE
+        workspace: TEST_DIR
       })
     ).rejects.toThrow();
   });
@@ -214,7 +214,7 @@ describe('Plan storage', () => {
     const plan = await savePlan({
       title: 'Test',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     expect(plan.status).toBe('active');
@@ -225,7 +225,7 @@ describe('Plan storage', () => {
       title: 'Test',
       content: 'Content',
       status: 'completed',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     expect(plan.status).toBe('completed');
@@ -238,19 +238,19 @@ describe('Plan retrieval', () => {
       id: 'plan-1',
       title: 'First Plan',
       content: 'Content 1',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     await savePlan({
       id: 'plan-2',
       title: 'Second Plan',
       content: 'Content 2',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
   });
 
   it('gets plan by ID', async () => {
-    const plan = await getPlan(TEST_WORKSPACE, 'plan-1');
+    const plan = await getPlan(TEST_DIR, 'plan-1');
 
     expect(plan).toBeTruthy();
     expect(plan!.id).toBe('plan-1');
@@ -258,12 +258,12 @@ describe('Plan retrieval', () => {
   });
 
   it('returns null for non-existent plan', async () => {
-    const plan = await getPlan(TEST_WORKSPACE, 'nonexistent');
+    const plan = await getPlan(TEST_DIR, 'nonexistent');
     expect(plan).toBeNull();
   });
 
   it('lists all plans in workspace', async () => {
-    const plans = await listPlans(TEST_WORKSPACE);
+    const plans = await listPlans(TEST_DIR);
 
     expect(plans).toHaveLength(2);
     expect(plans.map(p => p.id)).toContain('plan-1');
@@ -275,24 +275,24 @@ describe('Plan retrieval', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
 
     // Update plan-1 to make it newer
-    await updatePlan(TEST_WORKSPACE, 'plan-1', {
+    await updatePlan(TEST_DIR, 'plan-1', {
       content: 'Updated content'
     });
 
-    const plans = await listPlans(TEST_WORKSPACE);
+    const plans = await listPlans(TEST_DIR);
 
     expect(plans[0]!.id).toBe('plan-1');  // Most recently updated
     expect(plans[1]!.id).toBe('plan-2');
   });
 
   it('returns empty array when no plans exist', async () => {
-    const emptyWorkspace = `test-empty-${Date.now()}`;
-    await ensureWorkspaceDir(emptyWorkspace);
+    const emptyDir = await mkdtemp(join(tmpdir(), 'test-empty-'));
+    await ensureMemoriesDir(emptyDir);
 
-    const plans = await listPlans(emptyWorkspace);
+    const plans = await listPlans(emptyDir);
     expect(plans).toEqual([]);
 
-    await rm(getWorkspacePath(emptyWorkspace), { recursive: true, force: true });
+    await rm(emptyDir, { recursive: true, force: true });
   });
 });
 
@@ -302,40 +302,40 @@ describe('Active plan management', () => {
       id: 'plan-1',
       title: 'First Plan',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
     await savePlan({
       id: 'plan-2',
       title: 'Second Plan',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
   });
 
   it('sets active plan', async () => {
-    await setActivePlan(TEST_WORKSPACE, 'plan-1');
+    await setActivePlan(TEST_DIR, 'plan-1');
 
-    const activePlan = await getActivePlan(TEST_WORKSPACE);
+    const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan?.id).toBe('plan-1');
   });
 
   it('switches active plan', async () => {
-    await setActivePlan(TEST_WORKSPACE, 'plan-1');
-    await setActivePlan(TEST_WORKSPACE, 'plan-2');
+    await setActivePlan(TEST_DIR, 'plan-1');
+    await setActivePlan(TEST_DIR, 'plan-2');
 
-    const activePlan = await getActivePlan(TEST_WORKSPACE);
+    const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan?.id).toBe('plan-2');
   });
 
   it('returns null when no active plan set', async () => {
-    const activePlan = await getActivePlan(TEST_WORKSPACE);
+    const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan).toBeNull();
   });
 
   it('throws when setting non-existent plan as active', async () => {
     await expect(
-      setActivePlan(TEST_WORKSPACE, 'nonexistent')
+      setActivePlan(TEST_DIR, 'nonexistent')
     ).rejects.toThrow();
   });
 
@@ -344,11 +344,11 @@ describe('Active plan management', () => {
       id: 'auto-active',
       title: 'Auto Active Plan',
       content: 'Content',
-      workspace: TEST_WORKSPACE,
+      workspace: TEST_DIR,
       activate: true
     });
 
-    const activePlan = await getActivePlan(TEST_WORKSPACE);
+    const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan?.id).toBe('auto-active');
   });
 
@@ -357,11 +357,11 @@ describe('Active plan management', () => {
       id: 'not-active',
       title: 'Not Active Plan',
       content: 'Content',
-      workspace: TEST_WORKSPACE,
+      workspace: TEST_DIR,
       activate: false
     });
 
-    const activePlan = await getActivePlan(TEST_WORKSPACE);
+    const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan).toBeNull();
   });
 });
@@ -373,57 +373,57 @@ describe('Plan updates', () => {
       title: 'Original Title',
       content: 'Original content',
       tags: ['original'],
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
   });
 
   it('updates plan title', async () => {
-    await updatePlan(TEST_WORKSPACE, 'test-plan', {
+    await updatePlan(TEST_DIR, 'test-plan', {
       title: 'New Title'
     });
 
-    const plan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan!.title).toBe('New Title');
     expect(plan!.content).toBe('Original content');  // Unchanged
   });
 
   it('updates plan content', async () => {
-    await updatePlan(TEST_WORKSPACE, 'test-plan', {
+    await updatePlan(TEST_DIR, 'test-plan', {
       content: 'New content'
     });
 
-    const plan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan!.content).toBe('New content');
     expect(plan!.title).toBe('Original Title');  // Unchanged
   });
 
   it('updates plan status', async () => {
-    await updatePlan(TEST_WORKSPACE, 'test-plan', {
+    await updatePlan(TEST_DIR, 'test-plan', {
       status: 'completed'
     });
 
-    const plan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan!.status).toBe('completed');
   });
 
   it('updates plan tags', async () => {
-    await updatePlan(TEST_WORKSPACE, 'test-plan', {
+    await updatePlan(TEST_DIR, 'test-plan', {
       tags: ['new', 'tags']
     });
 
-    const plan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan!.tags).toEqual(['new', 'tags']);
   });
 
   it('updates multiple fields at once', async () => {
-    await updatePlan(TEST_WORKSPACE, 'test-plan', {
+    await updatePlan(TEST_DIR, 'test-plan', {
       title: 'Updated Title',
       content: 'Updated content',
       status: 'archived',
       tags: ['updated']
     });
 
-    const plan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan!.title).toBe('Updated Title');
     expect(plan!.content).toBe('Updated content');
     expect(plan!.status).toBe('archived');
@@ -431,17 +431,17 @@ describe('Plan updates', () => {
   });
 
   it('updates the updated timestamp', async () => {
-    const originalPlan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const originalPlan = await getPlan(TEST_DIR, 'test-plan');
     const originalUpdated = originalPlan!.updated;
 
     // Small delay to ensure timestamp difference
     await new Promise(resolve => setTimeout(resolve, 10));
 
-    await updatePlan(TEST_WORKSPACE, 'test-plan', {
+    await updatePlan(TEST_DIR, 'test-plan', {
       content: 'New content'
     });
 
-    const updatedPlan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const updatedPlan = await getPlan(TEST_DIR, 'test-plan');
     expect(updatedPlan!.updated).not.toBe(originalUpdated);
     expect(new Date(updatedPlan!.updated).getTime())
       .toBeGreaterThan(new Date(originalUpdated).getTime());
@@ -449,7 +449,7 @@ describe('Plan updates', () => {
 
   it('throws when updating non-existent plan', async () => {
     await expect(
-      updatePlan(TEST_WORKSPACE, 'nonexistent', { title: 'New' })
+      updatePlan(TEST_DIR, 'nonexistent', { title: 'New' })
     ).rejects.toThrow();
   });
 });
@@ -460,22 +460,22 @@ describe('Plan deletion', () => {
       id: 'test-plan',
       title: 'Test Plan',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
   });
 
   it('deletes plan file', async () => {
-    await deletePlan(TEST_WORKSPACE, 'test-plan');
+    await deletePlan(TEST_DIR, 'test-plan');
 
-    const plan = await getPlan(TEST_WORKSPACE, 'test-plan');
+    const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan).toBeNull();
   });
 
   it('clears active plan if deleted plan was active', async () => {
-    await setActivePlan(TEST_WORKSPACE, 'test-plan');
-    await deletePlan(TEST_WORKSPACE, 'test-plan');
+    await setActivePlan(TEST_DIR, 'test-plan');
+    await deletePlan(TEST_DIR, 'test-plan');
 
-    const activePlan = await getActivePlan(TEST_WORKSPACE);
+    const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan).toBeNull();
   });
 
@@ -484,24 +484,23 @@ describe('Plan deletion', () => {
       id: 'other-plan',
       title: 'Other',
       content: 'Content',
-      workspace: TEST_WORKSPACE
+      workspace: TEST_DIR
     });
 
-    await deletePlan(TEST_WORKSPACE, 'test-plan');
+    await deletePlan(TEST_DIR, 'test-plan');
 
-    const otherPlan = await getPlan(TEST_WORKSPACE, 'other-plan');
+    const otherPlan = await getPlan(TEST_DIR, 'other-plan');
     expect(otherPlan).toBeTruthy();
   });
 
   it('waits for in-flight updates before deleting plan', async () => {
     const planPath = join(
-      getWorkspacePath(TEST_WORKSPACE),
-      'plans',
+      getPlansDir(TEST_DIR),
       'test-plan.md'
     );
 
     const release = await acquireLock(planPath);
-    const deletePromise = deletePlan(TEST_WORKSPACE, 'test-plan');
+    const deletePromise = deletePlan(TEST_DIR, 'test-plan');
 
     // Allow deletePlan to attempt deletion while lock is held
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -517,7 +516,7 @@ describe('Plan deletion', () => {
 
   it('throws when deleting non-existent plan', async () => {
     await expect(
-      deletePlan(TEST_WORKSPACE, 'nonexistent')
+      deletePlan(TEST_DIR, 'nonexistent')
     ).rejects.toThrow();
   });
 });

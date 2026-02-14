@@ -2,16 +2,16 @@
  * Plan storage and management
  *
  * Plans are stored as individual markdown files with YAML frontmatter:
- * ~/.goldfish/{workspace}/plans/{plan-id}.md
+ * {project}/.memories/plans/{plan-id}.md
  *
- * Active plan is tracked in: ~/.goldfish/{workspace}/.active-plan
+ * Active plan is tracked in: {project}/.memories/.active-plan
  */
 
 import { join } from 'path';
 import { readFile, writeFile, readdir, unlink, rename } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Plan, PlanInput, PlanUpdate } from './types';
-import { getWorkspacePath, ensureWorkspaceDir, getCurrentWorkspace } from './workspace';
+import { getMemoriesDir, getPlansDir, ensureMemoriesDir } from './workspace';
 import { withLock } from './lock';
 
 /**
@@ -90,8 +90,8 @@ function generatePlanId(title: string): string {
  * Save a new plan
  */
 export async function savePlan(input: PlanInput): Promise<Plan> {
-  const workspace = input.workspace || getCurrentWorkspace();
-  await ensureWorkspaceDir(workspace);
+  const projectPath = input.workspace || process.cwd();
+  await ensureMemoriesDir(projectPath);
 
   const now = new Date().toISOString();
   const id = input.id || generatePlanId(input.title);
@@ -107,7 +107,7 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
   };
 
   // Write plan file atomically (fail if exists - prevents TOCTOU race)
-  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
+  const planPath = join(getPlansDir(projectPath), `${id}.md`);
   const content = formatPlanFile(plan);
 
   try {
@@ -122,7 +122,7 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
 
   // Auto-activate if requested (default: false)
   if (input.activate) {
-    await setActivePlan(workspace, id);
+    await setActivePlan(projectPath, id);
   }
 
   return plan;
@@ -131,8 +131,8 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
 /**
  * Get a plan by ID
  */
-export async function getPlan(workspace: string, id: string): Promise<Plan | null> {
-  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
+export async function getPlan(projectPath: string, id: string): Promise<Plan | null> {
+  const planPath = join(getPlansDir(projectPath), `${id}.md`);
 
   try {
     const content = await readFile(planPath, 'utf-8');
@@ -148,8 +148,8 @@ export async function getPlan(workspace: string, id: string): Promise<Plan | nul
 /**
  * List all plans in a workspace (sorted by updated date, newest first)
  */
-export async function listPlans(workspace: string): Promise<Plan[]> {
-  const plansDir = join(getWorkspacePath(workspace), 'plans');
+export async function listPlans(projectPath: string): Promise<Plan[]> {
+  const plansDir = getPlansDir(projectPath);
 
   let files: string[];
   try {
@@ -170,7 +170,7 @@ export async function listPlans(workspace: string): Promise<Plan[]> {
   const plans = await Promise.all(
     planFiles.map(async (file) => {
       const id = file.replace('.md', '');
-      return getPlan(workspace, id);
+      return getPlan(projectPath, id);
     })
   );
 
@@ -185,12 +185,12 @@ export async function listPlans(workspace: string): Promise<Plan[]> {
 /**
  * Get the currently active plan for a workspace
  */
-export async function getActivePlan(workspace: string): Promise<Plan | null> {
-  const activePlanPath = join(getWorkspacePath(workspace), '.active-plan');
+export async function getActivePlan(projectPath: string): Promise<Plan | null> {
+  const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
   try {
     const planId = (await readFile(activePlanPath, 'utf-8')).trim();
-    return await getPlan(workspace, planId);
+    return await getPlan(projectPath, planId);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return null;
@@ -202,14 +202,14 @@ export async function getActivePlan(workspace: string): Promise<Plan | null> {
 /**
  * Set the active plan for a workspace
  */
-export async function setActivePlan(workspace: string, planId: string): Promise<void> {
+export async function setActivePlan(projectPath: string, planId: string): Promise<void> {
   // Verify plan exists
-  const plan = await getPlan(workspace, planId);
+  const plan = await getPlan(projectPath, planId);
   if (!plan) {
     throw new Error(`Plan '${planId}' does not exist`);
   }
 
-  const activePlanPath = join(getWorkspacePath(workspace), '.active-plan');
+  const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
   // Write atomically
   const tempPath = `${activePlanPath}.tmp.${Date.now()}`;
@@ -221,15 +221,15 @@ export async function setActivePlan(workspace: string, planId: string): Promise<
  * Update an existing plan
  */
 export async function updatePlan(
-  workspace: string,
+  projectPath: string,
   id: string,
   updates: PlanUpdate
 ): Promise<void> {
-  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
+  const planPath = join(getPlansDir(projectPath), `${id}.md`);
 
   // Use file lock to prevent race conditions on concurrent updates
   await withLock(planPath, async () => {
-    const plan = await getPlan(workspace, id);
+    const plan = await getPlan(projectPath, id);
     if (!plan) {
       throw new Error(`Plan '${id}' does not exist`);
     }
@@ -252,9 +252,9 @@ export async function updatePlan(
 /**
  * Delete a plan
  */
-export async function deletePlan(workspace: string, id: string): Promise<void> {
-  const planPath = join(getWorkspacePath(workspace), 'plans', `${id}.md`);
-  const activePlanPath = join(getWorkspacePath(workspace), '.active-plan');
+export async function deletePlan(projectPath: string, id: string): Promise<void> {
+  const planPath = join(getPlansDir(projectPath), `${id}.md`);
+  const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
   let shouldClearActive = false;
   try {
@@ -267,7 +267,7 @@ export async function deletePlan(workspace: string, id: string): Promise<void> {
   }
 
   await withLock(planPath, async () => {
-    const plan = await getPlan(workspace, id);
+    const plan = await getPlan(projectPath, id);
     if (!plan) {
       throw new Error(`Plan '${id}' does not exist`);
     }
