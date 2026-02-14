@@ -432,4 +432,4 @@ MIT
 
 ---
 
-Built by [murphy](https://github.com/anortham) (Alan Northam). Fifth time's the charm.
+Fifth time's the charm.
