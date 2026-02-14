@@ -6,10 +6,9 @@
  */
 
 import Fuse from 'fuse.js';
-import type { Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from './types';
+import type { Checkpoint, RecallOptions, RecallResult } from './types';
 import { getCheckpointsForDateRange } from './checkpoints';
 import { getActivePlan } from './plans';
-import { getCurrentWorkspace, listWorkspaces } from './workspace';
 
 /**
  * Parse human-friendly time spans or ISO timestamps
@@ -61,8 +60,8 @@ export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Che
     keys: [
       { name: 'description', weight: 2 },  // Description is most important
       { name: 'tags', weight: 1 },
-      { name: 'gitBranch', weight: 0.5 },
-      { name: 'files', weight: 0.3 }
+      { name: 'git.branch', weight: 0.5 },
+      { name: 'git.files', weight: 0.3 }
     ],
     threshold: 0.4,  // 0 = perfect match, 1 = match anything
     includeScore: true,
@@ -156,11 +155,12 @@ async function recallFromWorkspace(
     });
   }
 
-  // Apply limit (default: 10, most recent first)
-  // Sort by timestamp descending (newest first), then limit
-  checkpoints = checkpoints.sort((a, b) =>
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  );
+  // Sort by timestamp descending (newest first) — but preserve fuse.js relevance order for searches
+  if (!options.search) {
+    checkpoints = checkpoints.sort((a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }
 
   const limit = options.limit !== undefined ? options.limit : 10;
   if (limit > 0) {
@@ -171,11 +171,11 @@ async function recallFromWorkspace(
 
   // Strip metadata fields based on full flag
   checkpoints = checkpoints.map(checkpoint => {
-    const { summary, charCount, ...cleanCheckpoint } = checkpoint;
+    const { summary, ...cleanCheckpoint } = checkpoint;
 
     // Strip verbose metadata unless full: true
     if (!options.full) {
-      const { files, gitBranch, gitCommit, ...minimal } = cleanCheckpoint;
+      const { git, ...minimal } = cleanCheckpoint;
       return minimal;
     }
 
@@ -189,30 +189,6 @@ async function recallFromWorkspace(
 }
 
 /**
- * Get workspace summary (for cross-workspace recall)
- */
-async function getWorkspaceSummary(
-  workspace: string,
-  checkpoints: Checkpoint[]
-): Promise<WorkspaceSummary> {
-  // Get latest checkpoint timestamp
-  const sortedCheckpoints = checkpoints
-    .filter(c => c.timestamp)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  const lastActivity = sortedCheckpoints[0]?.timestamp;
-
-  const summary: WorkspaceSummary = {
-    name: workspace,
-    path: workspace,  // In this simple version, name = path
-    checkpointCount: checkpoints.length
-  };
-  if (lastActivity) summary.lastActivity = lastActivity;
-
-  return summary;
-}
-
-/**
  * Recall checkpoints (main entry point)
  *
  * Retrieves checkpoints from specified workspace(s) with optional search
@@ -222,11 +198,11 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
 
   // Single workspace recall
   if (workspace !== 'all') {
-    const targetWorkspace = workspace === 'current'
-      ? getCurrentWorkspace()
+    const projectPath = workspace === 'current'
+      ? process.cwd()
       : workspace;
 
-    const { checkpoints, activePlan } = await recallFromWorkspace(targetWorkspace, options);
+    const { checkpoints, activePlan } = await recallFromWorkspace(projectPath, options);
 
     return {
       checkpoints,
@@ -235,49 +211,9 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   }
 
   // Cross-workspace recall (workspace === 'all')
-  const workspaceNames = await listWorkspaces();
-
-  // Fetch from all workspaces in parallel for better performance
-  // For cross-workspace, collect ALL checkpoints (we'll apply global limit at the end)
-  const workspaceResults = await Promise.all(
-    workspaceNames.map(async (ws) => {
-      const { checkpoints } = await recallFromWorkspace(ws, { ...options, limit: 99999 });
-      return { ws, checkpoints };
-    })
-  );
-
-  // Build combined results
-  const allCheckpoints: Checkpoint[] = [];
-  const workspaceSummaries: WorkspaceSummary[] = [];
-
-  for (const { ws, checkpoints } of workspaceResults) {
-    if (checkpoints.length > 0) {
-      allCheckpoints.push(...checkpoints);
-
-      const summary = await getWorkspaceSummary(ws, checkpoints);
-      workspaceSummaries.push(summary);
-    }
-  }
-
-  // Sort combined checkpoints by timestamp (newest first)
-  allCheckpoints.sort((a, b) =>
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  );
-
-  // Apply limit to combined results (cross-workspace needs global limit, not per-workspace)
-  const limit = options.limit !== undefined ? options.limit : 10;
-  let limitedCheckpoints: Checkpoint[];
-  if (limit > 0) {
-    limitedCheckpoints = allCheckpoints.slice(0, limit);
-  } else if (limit === 0) {
-    limitedCheckpoints = [];
-  } else {
-    limitedCheckpoints = allCheckpoints;
-  }
-
-  // For cross-workspace, no single "active plan"
+  // NOT YET IMPLEMENTED — requires registry from Phase 3
   return {
-    checkpoints: limitedCheckpoints,
-    workspaces: workspaceSummaries
+    checkpoints: [],
+    workspaces: []
   };
 }
