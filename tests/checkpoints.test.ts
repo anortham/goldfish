@@ -10,6 +10,7 @@ import {
 } from '../src/checkpoints';
 import type { Checkpoint, CheckpointInput } from '../src/types';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
+import { listRegisteredProjects, unregisterProject } from '../src/registry';
 import { join } from 'path';
 import { rm, readdir, readFile, writeFile, mkdir } from 'fs/promises';
 
@@ -21,6 +22,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // Clean up registry entry to avoid polluting the real registry
+  await unregisterProject(tempDir);
   await rm(tempDir, { recursive: true, force: true });
 });
 
@@ -662,5 +665,27 @@ Work on day ${day}
       '2020-01-31'
     );
     expect(checkpoints).toEqual([]);
+  });
+});
+
+// ─── Auto-registration ──────────────────────────────────────────────
+
+describe('Auto-registration', () => {
+  it('registers project in registry after saving checkpoint', async () => {
+    // Save a checkpoint to our temp directory
+    await saveCheckpoint({
+      description: 'Auto-register test',
+      workspace: tempDir
+    });
+
+    // Give the fire-and-forget registration time to complete
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Our test dir should be registered
+    const projects = await listRegisteredProjects();
+    const registered = projects.find(p => p.path === tempDir);
+    // ensureMemoriesDir was called in beforeEach, so .memories/ exists
+    expect(registered).toBeDefined();
+    expect(registered!.name).toBeTruthy();
   });
 });

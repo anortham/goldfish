@@ -13,6 +13,7 @@ import { getMemoriesDir, ensureMemoriesDir } from './workspace';
 import { getGitContext } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
+import { registerProject } from './registry';
 
 /**
  * Generate a deterministic checkpoint ID from timestamp and description.
@@ -163,6 +164,11 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
     const content = formatCheckpoint(checkpoint);
     await writeFile(tempPath, content, 'utf-8');
     await rename(tempPath, filePath);
+  });
+
+  // Auto-register project in cross-project registry (fire-and-forget)
+  registerProject(projectPath).catch(() => {
+    // Silently ignore registration failures — this is best-effort
   });
 
   return checkpoint;
