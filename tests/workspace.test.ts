@@ -1,13 +1,17 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, afterEach } from 'bun:test';
 import {
   normalizeWorkspace,
   getCurrentWorkspace,
   getWorkspacePath,
   listWorkspaces,
-  ensureWorkspaceDir
+  ensureWorkspaceDir,
+  getMemoriesDir,
+  getPlansDir,
+  ensureMemoriesDir,
 } from '../src/workspace';
 import { join } from 'path';
 import { homedir } from 'os';
+import { rm, stat } from 'fs/promises';
 
 describe('Workspace normalization', () => {
   it('normalizes full Unix path to simple name', () => {
@@ -151,5 +155,77 @@ describe('List workspaces', () => {
       expect(ws).not.toContain('/');
       expect(ws).not.toContain('\\');
     }
+  });
+});
+
+describe('Project-level .memories/ storage', () => {
+  const tmpDirs: string[] = [];
+
+  function makeTmpDir(): string {
+    const dir = `/tmp/test-goldfish-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    tmpDirs.push(dir);
+    return dir;
+  }
+
+  afterEach(async () => {
+    for (const dir of tmpDirs) {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+    tmpDirs.length = 0;
+  });
+
+  describe('getMemoriesDir', () => {
+    it('returns {cwd}/.memories/ when no arg is provided', () => {
+      const result = getMemoriesDir();
+      expect(result).toBe(join(process.cwd(), '.memories'));
+    });
+
+    it('returns {projectPath}/.memories/ when a path is provided', () => {
+      expect(getMemoriesDir('/some/path')).toBe('/some/path/.memories');
+      expect(getMemoriesDir('/Users/murphy/source/goldfish')).toBe('/Users/murphy/source/goldfish/.memories');
+    });
+  });
+
+  describe('getPlansDir', () => {
+    it('returns {cwd}/.memories/plans/ when no arg is provided', () => {
+      const result = getPlansDir();
+      expect(result).toBe(join(process.cwd(), '.memories', 'plans'));
+    });
+
+    it('returns {projectPath}/.memories/plans/ when a path is provided', () => {
+      expect(getPlansDir('/some/path')).toBe('/some/path/.memories/plans');
+      expect(getPlansDir('/Users/murphy/source/goldfish')).toBe('/Users/murphy/source/goldfish/.memories/plans');
+    });
+  });
+
+  describe('ensureMemoriesDir', () => {
+    it('creates .memories/ and .memories/plans/ directories', async () => {
+      const tmpDir = makeTmpDir();
+      // tmpDir itself doesn't exist yet — ensureMemoriesDir should create it recursively
+      await ensureMemoriesDir(tmpDir);
+
+      const memoriesStat = await stat(join(tmpDir, '.memories'));
+      expect(memoriesStat.isDirectory()).toBe(true);
+
+      const plansStat = await stat(join(tmpDir, '.memories', 'plans'));
+      expect(plansStat.isDirectory()).toBe(true);
+    });
+
+    it('is idempotent — calling twice does not throw', async () => {
+      const tmpDir = makeTmpDir();
+      await ensureMemoriesDir(tmpDir);
+      await ensureMemoriesDir(tmpDir);
+
+      const memoriesStat = await stat(join(tmpDir, '.memories'));
+      expect(memoriesStat.isDirectory()).toBe(true);
+    });
+
+    it('uses cwd when no arg is provided', () => {
+      // Just verify it doesn't throw and returns the right path shape
+      // We don't actually want to create .memories/ in our project root during tests,
+      // so we only test with explicit paths above. This test verifies the function signature.
+      const dir = getMemoriesDir();
+      expect(dir).toBe(join(process.cwd(), '.memories'));
+    });
   });
 });

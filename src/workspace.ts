@@ -104,3 +104,32 @@ export async function listWorkspaces(): Promise<string[]> {
 export function getGoldfishBase(): string {
   return GOLDFISH_BASE;
 }
+
+// ─── Project-level .memories/ storage ────────────────────────────────
+
+/**
+ * Get the .memories/ directory path for a project.
+ * Falls back to process.cwd() if no projectPath is provided.
+ */
+export function getMemoriesDir(projectPath?: string): string {
+  const base = projectPath ?? process.cwd();
+  return join(base, '.memories');
+}
+
+/**
+ * Get the .memories/plans/ directory path for a project.
+ * Falls back to process.cwd() if no projectPath is provided.
+ */
+export function getPlansDir(projectPath?: string): string {
+  return join(getMemoriesDir(projectPath), 'plans');
+}
+
+/**
+ * Ensure .memories/ and .memories/plans/ directories exist for a project.
+ * Falls back to process.cwd() if no projectPath is provided.
+ */
+export async function ensureMemoriesDir(projectPath?: string): Promise<void> {
+  const plansDir = getPlansDir(projectPath);
+  // Creating plans/ with recursive:true also creates .memories/ parent
+  await mkdir(plansDir, { recursive: true });
+}
