@@ -1,244 +1,167 @@
 /**
  * Checkpoint storage and retrieval
  *
- * Checkpoints are stored in daily markdown files:
- * ~/.goldfish/{workspace}/checkpoints/YYYY-MM-DD.md
+ * Checkpoints are stored as individual markdown files with YAML frontmatter:
+ * {project}/.memories/{date}/{HHMMSS}_{hash}.md
  */
 
 import { join } from 'path';
-import { readFile, writeFile, readdir, rename } from 'fs/promises';
+import { readFile, writeFile, readdir, rename, mkdir } from 'fs/promises';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Checkpoint, CheckpointInput } from './types';
-import { getWorkspacePath, ensureWorkspaceDir, getCurrentWorkspace } from './workspace';
+import { getMemoriesDir, ensureMemoriesDir } from './workspace';
 import { getGitContext } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
 
 /**
- * Format a checkpoint as markdown
+ * Generate a deterministic checkpoint ID from timestamp and description.
+ * Format: checkpoint_{first 8 hex chars of SHA-256 hash}
+ */
+export function generateCheckpointId(timestamp: string, description: string): string {
+  const input = `${timestamp}:${description}`;
+  const hash = new Bun.CryptoHasher('sha256')
+    .update(input)
+    .digest('hex')
+    .slice(0, 8);
+  return `checkpoint_${hash}`;
+}
+
+/**
+ * Get the filename for a checkpoint file.
+ * Format: HHMMSS_first4ofhash.md
+ */
+export function getCheckpointFilename(checkpoint: Checkpoint): string {
+  // Extract HH:MM:SS from ISO timestamp
+  const timePart = checkpoint.timestamp.substring(11, 19); // "HH:MM:SS"
+  const hhmmss = timePart.replace(/:/g, '');
+
+  // Extract first 4 chars of the hash portion of the ID
+  const hash4 = checkpoint.id.replace('checkpoint_', '').slice(0, 4);
+
+  return `${hhmmss}_${hash4}.md`;
+}
+
+/**
+ * Format a checkpoint as YAML frontmatter + markdown body
  */
 export function formatCheckpoint(checkpoint: Checkpoint): string {
-  // Extract time from ISO timestamp (UTC)
-  const time = checkpoint.timestamp.substring(11, 16);  // HH:MM
+  // Build frontmatter object with only present fields
+  const frontmatter: Record<string, unknown> = {
+    id: checkpoint.id,
+    timestamp: checkpoint.timestamp
+  };
 
-  const lines: string[] = [];
-
-  // Header with time
-  lines.push(`## ${time} - ${checkpoint.description}`);
-  lines.push('');
-
-  // Metadata comment (for long descriptions with summary OR full timestamp precision)
-  // Check if timestamp has non-zero seconds/millis (not just :00.000Z)
-  const hasFullTimestamp = !checkpoint.timestamp.endsWith('T' + time + ':00.000Z');
-
-  if (checkpoint.summary || checkpoint.charCount || hasFullTimestamp) {
-    lines.push('<!--');
-    // Store full timestamp if it has precision beyond HH:MM (critical for embedding lookup)
-    if (hasFullTimestamp) {
-      lines.push(`timestamp: ${checkpoint.timestamp}`);
-    }
-    if (checkpoint.summary) {
-      lines.push(`summary: ${checkpoint.summary}`);
-    }
-    if (checkpoint.charCount) {
-      lines.push(`charCount: ${checkpoint.charCount}`);
-    }
-    lines.push('-->');
-    lines.push('');
-  }
-
-  // Optional metadata fields
   if (checkpoint.tags && checkpoint.tags.length > 0) {
-    lines.push(`- **Tags**: ${checkpoint.tags.join(', ')}`);
-  }
-  if (checkpoint.gitBranch) {
-    lines.push(`- **Branch**: ${checkpoint.gitBranch}`);
-  }
-  if (checkpoint.gitCommit) {
-    lines.push(`- **Commit**: ${checkpoint.gitCommit}`);
-  }
-  if (checkpoint.files && checkpoint.files.length > 0) {
-    lines.push(`- **Files**: ${checkpoint.files.join(', ')}`);
+    frontmatter.tags = checkpoint.tags;
   }
 
-  lines.push('');
+  if (checkpoint.git) {
+    // Only include git fields that are present
+    const git: Record<string, unknown> = {};
+    if (checkpoint.git.branch) git.branch = checkpoint.git.branch;
+    if (checkpoint.git.commit) git.commit = checkpoint.git.commit;
+    if (checkpoint.git.files && checkpoint.git.files.length > 0) {
+      git.files = checkpoint.git.files;
+    }
+    if (Object.keys(git).length > 0) {
+      frontmatter.git = git;
+    }
+  }
 
-  return lines.join('\n');
+  if (checkpoint.summary) {
+    frontmatter.summary = checkpoint.summary;
+  }
+
+  const yaml = stringifyYaml(frontmatter).trim();
+  return `---\n${yaml}\n---\n\n${checkpoint.description}\n`;
 }
 
 /**
- * Parse a checkpoint markdown file into structured objects
+ * Parse a single checkpoint from a YAML frontmatter markdown file
  */
-export function parseCheckpointFile(content: string, date?: string): Checkpoint[] {
-  if (!content.trim()) {
-    return [];
+export function parseCheckpointFile(content: string): Checkpoint {
+  // Split on frontmatter delimiters
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) {
+    throw new Error('Invalid checkpoint file: no YAML frontmatter found');
   }
 
-  const checkpoints: Checkpoint[] = [];
+  const yamlContent = match[1]!;
+  const body = match[2]!.trim();
 
-  // Split by checkpoint headers (## HH:MM)
-  const sections = content.split(/^## /m).slice(1);  // Skip content before first header
+  const frontmatter = parseYaml(yamlContent) as {
+    id: string;
+    timestamp: string;
+    tags?: string[];
+    git?: { branch?: string; commit?: string; files?: string[] };
+    summary?: string;
+  };
 
-  for (const section of sections) {
-    const lines = section.split('\n');
-    const firstLine = lines[0];
+  const checkpoint: Checkpoint = {
+    id: frontmatter.id,
+    timestamp: frontmatter.timestamp,
+    description: body
+  };
 
-    if (!firstLine) continue;
+  if (frontmatter.tags) checkpoint.tags = frontmatter.tags;
+  if (frontmatter.git) checkpoint.git = frontmatter.git;
+  if (frontmatter.summary) checkpoint.summary = frontmatter.summary;
 
-    // Parse header: "HH:MM - Description"
-    const match = firstLine.match(/^(\d{2}:\d{2}) - (.+)$/);
-    if (!match) continue;
-
-    const [, time, description] = match;
-
-    // Build timestamp (use provided date or extract from content)
-    // Will be overridden if full timestamp found in metadata comment
-    let timestamp: string;
-    if (date) {
-      timestamp = `${date}T${time}:00.000Z`;
-    } else {
-      // Try to extract date from file header
-      const dateMatch = content.match(/# Checkpoints for (\d{4}-\d{2}-\d{2})/);
-      const extractedDate = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
-      timestamp = `${extractedDate}T${time}:00.000Z`;
-    }
-
-    // Parse metadata fields
-    let fullTimestamp: string | undefined;  // Full precision timestamp from metadata
-    let summary: string | undefined;
-    let charCount: number | undefined;
-    let tags: string[] | undefined;
-    let gitBranch: string | undefined;
-    let gitCommit: string | undefined;
-    let files: string[] | undefined;
-
-    // Track if we're inside an HTML comment
-    let inComment = false;
-
-    for (const line of lines.slice(1)) {
-      // Check for HTML comment start/end
-      if (line.trim() === '<!--') {
-        inComment = true;
-        continue;
-      }
-      if (line.trim() === '-->') {
-        inComment = false;
-        continue;
-      }
-
-      // Inside comment - extract metadata
-      if (inComment) {
-        const timestampMatch = line.match(/^timestamp:\s*(.+)$/);
-        if (timestampMatch) {
-          fullTimestamp = timestampMatch[1]!.trim();
-        }
-
-        const summaryMatch = line.match(/^summary:\s*(.+)$/);
-        if (summaryMatch) {
-          summary = summaryMatch[1]!.trim();
-        }
-
-        const charCountMatch = line.match(/^charCount:\s*(\d+)$/);
-        if (charCountMatch) {
-          charCount = parseInt(charCountMatch[1]!, 10);
-        }
-        continue;
-      }
-
-      // Outside comment - parse regular metadata
-      const tagMatch = line.match(/^- \*\*Tags\*\*: (.+)$/);
-      if (tagMatch) {
-        tags = tagMatch[1]!.split(', ').map(t => t.trim());
-      }
-
-      const branchMatch = line.match(/^- \*\*Branch\*\*: (.+)$/);
-      if (branchMatch) {
-        gitBranch = branchMatch[1]!.trim();
-      }
-
-      const commitMatch = line.match(/^- \*\*Commit\*\*: (.+)$/);
-      if (commitMatch) {
-        gitCommit = commitMatch[1]!.trim();
-      }
-
-      const filesMatch = line.match(/^- \*\*Files\*\*: (.+)$/);
-      if (filesMatch) {
-        files = filesMatch[1]!.split(', ').map(f => f.trim());
-      }
-    }
-
-    const checkpoint: Checkpoint = {
-      // Use full timestamp from metadata if available (preserves seconds/millis)
-      // Otherwise use HH:MM-based timestamp (backward compatibility)
-      timestamp: fullTimestamp || timestamp,
-      description: description!
-    };
-    if (summary) checkpoint.summary = summary;
-    if (charCount) checkpoint.charCount = charCount;
-    if (tags) checkpoint.tags = tags;
-    if (gitBranch) checkpoint.gitBranch = gitBranch;
-    if (gitCommit) checkpoint.gitCommit = gitCommit;
-    if (files) checkpoint.files = files;
-
-    checkpoints.push(checkpoint);
-  }
-
-  return checkpoints;
+  return checkpoint;
 }
 
 /**
- * Save a checkpoint to the appropriate daily file
+ * Save a checkpoint as an individual file
  * Uses atomic write-then-rename to prevent corruption
  */
 export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint> {
-  const workspace = input.workspace || getCurrentWorkspace();
-  await ensureWorkspaceDir(workspace);
+  const projectPath = input.workspace || process.cwd();
+  await ensureMemoriesDir(projectPath);
 
   // Create checkpoint with current timestamp
   const timestamp = new Date().toISOString();
   const gitContext = getGitContext();
 
+  // Generate deterministic ID
+  const id = generateCheckpointId(timestamp, input.description);
+
   const checkpoint: Checkpoint = {
+    id,
     timestamp,
     description: input.description
   };
-  if (input.tags) checkpoint.tags = input.tags;
-  if (gitContext.branch) checkpoint.gitBranch = gitContext.branch;
-  if (gitContext.commit) checkpoint.gitCommit = gitContext.commit;
-  if (gitContext.files) checkpoint.files = gitContext.files;
 
-  // Auto-generate metadata for long descriptions
+  if (input.tags) checkpoint.tags = input.tags;
+
+  // Set git context as nested object
+  if (gitContext.branch || gitContext.commit || gitContext.files) {
+    checkpoint.git = gitContext;
+  }
+
+  // Auto-generate summary for long descriptions
   const summary = generateSummary(input.description);
   if (summary) {
     checkpoint.summary = summary;
-    checkpoint.charCount = input.description.length;
   }
 
-  // Determine file path (daily file)
+  // Determine file path
   const date = timestamp.split('T')[0]!;
-  const checkpointsDir = join(getWorkspacePath(workspace), 'checkpoints');
-  const filePath = join(checkpointsDir, `${date}.md`);
+  const memoriesDir = getMemoriesDir(projectPath);
+  const dateDir = join(memoriesDir, date);
 
-  // Use file lock to prevent race conditions on concurrent writes
-  await withLock(filePath, async () => {
-    // Read existing content (if file exists)
-    let existingContent = '';
-    try {
-      existingContent = await readFile(filePath, 'utf-8');
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        throw error;
-      }
-      // File doesn't exist, create with header
-      existingContent = `# Checkpoints for ${date}\n\n`;
-    }
+  // Ensure date directory exists
+  await mkdir(dateDir, { recursive: true });
 
-    // Append formatted checkpoint
-    const formattedCheckpoint = formatCheckpoint(checkpoint);
-    const newContent = existingContent + formattedCheckpoint;
+  const filename = getCheckpointFilename(checkpoint);
+  const filePath = join(dateDir, filename);
 
+  // Use file lock on the date directory to prevent name collisions
+  await withLock(dateDir, async () => {
     // Atomic write (write to temp file, then rename)
     const tempPath = `${filePath}.tmp.${Date.now()}`;
-    await writeFile(tempPath, newContent, 'utf-8');
+    const content = formatCheckpoint(checkpoint);
+    await writeFile(tempPath, content, 'utf-8');
     await rename(tempPath, filePath);
   });
 
@@ -249,42 +172,58 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
  * Get all checkpoints for a specific day
  */
 export async function getCheckpointsForDay(
-  workspace: string,
+  projectPath: string,
   date: string
 ): Promise<Checkpoint[]> {
-  const filePath = join(
-    getWorkspacePath(workspace),
-    'checkpoints',
-    `${date}.md`
-  );
+  const dateDir = join(getMemoriesDir(projectPath), date);
 
+  let files: string[];
   try {
-    const content = await readFile(filePath, 'utf-8');
-    return parseCheckpointFile(content, date);
+    files = await readdir(dateDir);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return [];
     }
     throw error;
   }
+
+  const mdFiles = files.filter(f => f.endsWith('.md')).sort();
+
+  const checkpoints: Checkpoint[] = [];
+  for (const file of mdFiles) {
+    try {
+      const content = await readFile(join(dateDir, file), 'utf-8');
+      const checkpoint = parseCheckpointFile(content);
+      checkpoints.push(checkpoint);
+    } catch {
+      // Skip files that can't be parsed (e.g., corrupted)
+      continue;
+    }
+  }
+
+  // Sort by timestamp
+  return checkpoints.sort((a, b) =>
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 }
 
 /**
  * Get all checkpoints across a date range (inclusive)
  *
+ * @param projectPath - Path to the project directory
  * @param fromDate - ISO 8601 timestamp or YYYY-MM-DD date
  * @param toDate - ISO 8601 timestamp or YYYY-MM-DD date
  */
 export async function getCheckpointsForDateRange(
-  workspace: string,
+  projectPath: string,
   fromDate: string,
   toDate: string
 ): Promise<Checkpoint[]> {
-  const checkpointsDir = join(getWorkspacePath(workspace), 'checkpoints');
+  const memoriesDir = getMemoriesDir(projectPath);
 
-  let files: string[];
+  let entries: string[];
   try {
-    files = await readdir(checkpointsDir);
+    entries = await readdir(memoriesDir);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return [];
@@ -298,38 +237,36 @@ export async function getCheckpointsForDateRange(
   // If toDate is a date-only string (no time component), treat it as end of day
   let toTimestamp: number;
   if (toDate.includes('T')) {
-    // Full timestamp - use as-is
     toTimestamp = new Date(toDate).getTime();
   } else {
-    // Date-only - use end of day (23:59:59.999)
     toTimestamp = new Date(toDate + 'T23:59:59.999Z').getTime();
   }
 
-  // Extract date portions to determine which files to read
+  // Extract date portions to determine which directories to scan
   const fromDateOnly = fromDate.split('T')[0]!;
   const toDateOnly = toDate.split('T')[0]!;
 
   const from = new Date(fromDateOnly);
   const to = new Date(toDateOnly);
 
-  const relevantFiles = files
-    .filter(f => f.endsWith('.md'))
-    .filter(f => {
-      const fileDate = f.replace('.md', '');
-      const date = new Date(fileDate);
-      return date >= from && date <= to;
+  // Filter to date directories within range
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  const relevantDirs = entries
+    .filter(e => datePattern.test(e))
+    .filter(e => {
+      const dirDate = new Date(e);
+      return dirDate >= from && dirDate <= to;
     })
     .sort();
 
-  // Load all checkpoints
+  // Load all checkpoints from relevant directories
   const allCheckpoints: Checkpoint[] = [];
-  for (const file of relevantFiles) {
-    const date = file.replace('.md', '');
-    const checkpoints = await getCheckpointsForDay(workspace, date);
+  for (const dir of relevantDirs) {
+    const checkpoints = await getCheckpointsForDay(projectPath, dir);
     allCheckpoints.push(...checkpoints);
   }
 
-  // Filter by actual timestamp (not just file date)
+  // Filter by actual timestamp (not just directory date)
   const filtered = allCheckpoints.filter(checkpoint => {
     const checkpointTime = new Date(checkpoint.timestamp).getTime();
     return checkpointTime >= fromTimestamp && checkpointTime <= toTimestamp;

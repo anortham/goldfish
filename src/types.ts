@@ -3,14 +3,12 @@
  */
 
 export interface Checkpoint {
+  id: string;             // checkpoint_{hash} unique identifier
   timestamp: string;      // ISO 8601 UTC
-  description: string;
-  summary?: string;       // Auto-generated concise summary (for long descriptions)
-  charCount?: number;     // Character count of description
+  description: string;    // Markdown body
   tags?: string[];
-  gitBranch?: string;
-  gitCommit?: string;
-  files?: string[];
+  git?: GitContext;        // Git context at checkpoint time
+  summary?: string;       // Auto-generated concise summary (for recall display)
 }
 
 export interface CheckpointInput {

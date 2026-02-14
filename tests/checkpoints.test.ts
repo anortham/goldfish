@@ -4,198 +4,462 @@ import {
   getCheckpointsForDay,
   getCheckpointsForDateRange,
   parseCheckpointFile,
-  formatCheckpoint
+  formatCheckpoint,
+  generateCheckpointId,
+  getCheckpointFilename
 } from '../src/checkpoints';
 import type { Checkpoint, CheckpointInput } from '../src/types';
-import { getWorkspacePath, ensureWorkspaceDir } from '../src/workspace';
+import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { join } from 'path';
-import { rm } from 'fs/promises';
+import { rm, readdir, readFile, writeFile, mkdir } from 'fs/promises';
 
-const TEST_WORKSPACE = `test-checkpoints-${Date.now()}`;
+let tempDir: string;
 
 beforeEach(async () => {
-  await ensureWorkspaceDir(TEST_WORKSPACE);
+  tempDir = `/tmp/test-checkpoints-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await ensureMemoriesDir(tempDir);
 });
 
 afterEach(async () => {
-  const workspacePath = getWorkspacePath(TEST_WORKSPACE);
-  await rm(workspacePath, { recursive: true, force: true });
+  await rm(tempDir, { recursive: true, force: true });
 });
 
-describe('Checkpoint formatting', () => {
-  it('formats checkpoint with all fields', () => {
+// ─── formatCheckpoint ────────────────────────────────────────────────
+
+describe('formatCheckpoint', () => {
+  it('formats checkpoint with all fields as YAML frontmatter + body', () => {
     const checkpoint: Checkpoint = {
-      timestamp: '2025-10-13T14:30:00.000Z',
-      description: 'Fixed authentication bug',
+      id: 'checkpoint_a1b2c3d4',
+      timestamp: '2026-02-14T09:30:42.123Z',
+      description: 'Fixed JWT validation bug where expired tokens were accepted.',
       tags: ['bug-fix', 'auth'],
-      gitBranch: 'feature/auth',
-      gitCommit: 'a1b2c3d',
-      files: ['src/auth/jwt.ts', 'src/auth/session.ts']
+      git: {
+        branch: 'feature/jwt-fix',
+        commit: 'a1b2c3d',
+        files: ['src/auth/jwt.ts', 'tests/auth.test.ts']
+      },
+      summary: 'Fixed JWT validation bug'
     };
 
     const formatted = formatCheckpoint(checkpoint);
 
-    expect(formatted).toContain('## 14:30');
-    expect(formatted).toContain('Fixed authentication bug');
-    expect(formatted).toContain('- **Tags**: bug-fix, auth');
-    expect(formatted).toContain('- **Branch**: feature/auth');
-    expect(formatted).toContain('- **Commit**: a1b2c3d');
-    expect(formatted).toContain('- **Files**: src/auth/jwt.ts, src/auth/session.ts');
+    // Should start and end with YAML frontmatter delimiters
+    expect(formatted).toMatch(/^---\n/);
+    expect(formatted).toContain('\n---\n');
+
+    // Should contain YAML fields
+    expect(formatted).toContain('id: checkpoint_a1b2c3d4');
+    expect(formatted).toContain('timestamp: 2026-02-14T09:30:42.123Z');
+    expect(formatted).toContain('summary: Fixed JWT validation bug');
+
+    // Tags as YAML array
+    expect(formatted).toContain('tags:');
+    expect(formatted).toContain('  - bug-fix');
+    expect(formatted).toContain('  - auth');
+
+    // Git context as nested YAML
+    expect(formatted).toContain('git:');
+    expect(formatted).toContain('  branch: feature/jwt-fix');
+    expect(formatted).toContain('  commit: a1b2c3d');
+    expect(formatted).toContain('  files:');
+    expect(formatted).toContain('    - src/auth/jwt.ts');
+    expect(formatted).toContain('    - tests/auth.test.ts');
+
+    // Body after frontmatter
+    expect(formatted).toContain('\n\nFixed JWT validation bug where expired tokens were accepted.\n');
   });
 
-  it('formats checkpoint with minimal fields', () => {
+  it('formats checkpoint with minimal fields (just id, timestamp, description)', () => {
     const checkpoint: Checkpoint = {
-      timestamp: '2025-10-13T09:00:00.000Z',
+      id: 'checkpoint_deadbeef',
+      timestamp: '2026-02-14T10:00:00.000Z',
       description: 'Simple checkpoint'
     };
 
     const formatted = formatCheckpoint(checkpoint);
 
-    expect(formatted).toContain('## 09:00');
-    expect(formatted).toContain('Simple checkpoint');
-    expect(formatted).not.toContain('Tags');
-    expect(formatted).not.toContain('Branch');
+    expect(formatted).toContain('id: checkpoint_deadbeef');
+    expect(formatted).toContain('timestamp:');
+    expect(formatted).not.toContain('tags:');
+    expect(formatted).not.toContain('git:');
+    expect(formatted).not.toContain('summary:');
+    expect(formatted).toContain('\n\nSimple checkpoint\n');
   });
 
-  it('uses UTC time for formatting', () => {
+  it('includes git context as nested YAML when present', () => {
     const checkpoint: Checkpoint = {
-      timestamp: '2025-10-13T23:45:00.000Z',
-      description: 'Late night work'
+      id: 'checkpoint_11111111',
+      timestamp: '2026-02-14T12:00:00.000Z',
+      description: 'With git context',
+      git: {
+        branch: 'main',
+        commit: 'abc1234'
+      }
     };
 
     const formatted = formatCheckpoint(checkpoint);
-    expect(formatted).toContain('## 23:45');
-  });
-});
 
-describe('Checkpoint parsing', () => {
-  it('parses checkpoint file with multiple entries', () => {
-    const content = `# Checkpoints for 2025-10-13
-
-## 09:30 - Fixed authentication timeout bug
-Implemented JWT refresh tokens to extend session duration.
-
-- **Tags**: bug-fix, auth, critical
-- **Branch**: feature/jwt-refresh
-- **Commit**: a1b2c3d
-- **Files**: src/auth/jwt.ts, src/auth/refresh.ts
-
-## 14:45 - Discussed memory architecture
-Analyzed three previous implementations.
-
-- **Tags**: planning, goldfish
-`;
-
-    const checkpoints = parseCheckpointFile(content);
-
-    expect(checkpoints).toHaveLength(2);
-
-    expect(checkpoints[0]!.description).toBe('Fixed authentication timeout bug');
-    expect(checkpoints[0]!.tags).toEqual(['bug-fix', 'auth', 'critical']);
-    expect(checkpoints[0]!.gitBranch).toBe('feature/jwt-refresh');
-    expect(checkpoints[0]!.gitCommit).toBe('a1b2c3d');
-    expect(checkpoints[0]!.files).toEqual(['src/auth/jwt.ts', 'src/auth/refresh.ts']);
-
-    expect(checkpoints[1]!.description).toBe('Discussed memory architecture');
-    expect(checkpoints[1]!.tags).toEqual(['planning', 'goldfish']);
+    expect(formatted).toContain('git:');
+    expect(formatted).toContain('  branch: main');
+    expect(formatted).toContain('  commit: abc1234');
+    // No files key if not present
+    expect(formatted).not.toContain('files:');
   });
 
-  it('handles checkpoint without metadata fields', () => {
-    const content = `# Checkpoints for 2025-10-13
-
-## 10:00 - Simple checkpoint
-Just some description text.
-`;
-
-    const checkpoints = parseCheckpointFile(content);
-
-    expect(checkpoints).toHaveLength(1);
-    expect(checkpoints[0]!.description).toBe('Simple checkpoint');
-    expect(checkpoints[0]!.tags).toBeUndefined();
-  });
-
-  it('extracts timestamp from header', () => {
-    const content = `# Checkpoints for 2025-10-13
-
-## 14:30 - Test checkpoint
-Description here.
-`;
-
-    const checkpoints = parseCheckpointFile(content, '2025-10-13');
-
-    expect(checkpoints[0]!.timestamp).toMatch(/^2025-10-13T14:30:00/);
-  });
-
-  it('handles empty file gracefully', () => {
-    const checkpoints = parseCheckpointFile('');
-    expect(checkpoints).toEqual([]);
-  });
-
-  it('preserves content even with markdown headers inside', () => {
-    // Current implementation: splits on "## " but only parses if matches HH:MM
-    // This means content after non-timestamp "## " lines is lost
-    const content = `# Checkpoints for 2025-10-13
-
-## 14:30 - First checkpoint
-
-Some content here.
-
-## 15:00 - Second checkpoint
-
-More content.
-`;
-
-    const checkpoints = parseCheckpointFile(content);
-
-    expect(checkpoints).toHaveLength(2);
-    expect(checkpoints[0]!.description).toBe('First checkpoint');
-    expect(checkpoints[1]!.description).toBe('Second checkpoint');
-  });
-
-  it('preserves full timestamp precision with seconds and milliseconds', () => {
-    // Full timestamp must be preserved for accurate recall
+  it('includes tags as YAML array when present', () => {
     const checkpoint: Checkpoint = {
-      timestamp: '2025-10-13T14:30:36.443Z',  // Full precision with seconds/millis
-      description: 'Test checkpoint with precise timestamp',
-      summary: 'Test checkpoint with precise timestamp',
-      charCount: 42
+      id: 'checkpoint_22222222',
+      timestamp: '2026-02-14T13:00:00.000Z',
+      description: 'Tagged checkpoint',
+      tags: ['feature', 'frontend', 'css']
     };
 
-    // Format and then parse back
     const formatted = formatCheckpoint(checkpoint);
-    const parsed = parseCheckpointFile(`# Checkpoints for 2025-10-13\n\n${formatted}`, '2025-10-13');
 
-    expect(parsed).toHaveLength(1);
-    // Full timestamp must be preserved for accurate recall
-    expect(parsed[0]!.timestamp).toBe('2025-10-13T14:30:36.443Z');
+    expect(formatted).toContain('tags:');
+    expect(formatted).toContain('  - feature');
+    expect(formatted).toContain('  - frontend');
+    expect(formatted).toContain('  - css');
   });
 
-  // This documents a known limitation - if users put "## "non-timestamp text in descriptions,
-  // content after it is lost. We'll keep the simple regex but document this.
+  it('includes summary in frontmatter when present', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_33333333',
+      timestamp: '2026-02-14T14:00:00.000Z',
+      description: 'A very long description that goes on and on about the refactoring work done today.',
+      summary: 'Refactoring work'
+    };
+
+    const formatted = formatCheckpoint(checkpoint);
+
+    expect(formatted).toContain('summary: Refactoring work');
+    // Summary is in frontmatter, description is in body
+    expect(formatted).toContain('\n\nA very long description');
+  });
 });
 
-describe('Checkpoint storage', () => {
-  it('saves checkpoint to daily file', async () => {
+// ─── parseCheckpointFile ─────────────────────────────────────────────
+
+describe('parseCheckpointFile', () => {
+  it('parses checkpoint with all fields', () => {
+    const content = `---
+id: checkpoint_a1b2c3d4
+timestamp: "2026-02-14T09:30:42.123Z"
+tags:
+  - bug-fix
+  - auth
+git:
+  branch: feature/jwt-fix
+  commit: a1b2c3d
+  files:
+    - src/auth/jwt.ts
+    - tests/auth.test.ts
+summary: Fixed JWT validation bug
+---
+
+Fixed JWT validation bug where expired tokens were accepted.
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.id).toBe('checkpoint_a1b2c3d4');
+    expect(checkpoint.timestamp).toBe('2026-02-14T09:30:42.123Z');
+    expect(checkpoint.tags).toEqual(['bug-fix', 'auth']);
+    expect(checkpoint.git).toEqual({
+      branch: 'feature/jwt-fix',
+      commit: 'a1b2c3d',
+      files: ['src/auth/jwt.ts', 'tests/auth.test.ts']
+    });
+    expect(checkpoint.summary).toBe('Fixed JWT validation bug');
+    expect(checkpoint.description).toBe('Fixed JWT validation bug where expired tokens were accepted.');
+  });
+
+  it('parses checkpoint with minimal fields', () => {
+    const content = `---
+id: checkpoint_deadbeef
+timestamp: "2026-02-14T10:00:00.000Z"
+---
+
+Simple checkpoint
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.id).toBe('checkpoint_deadbeef');
+    expect(checkpoint.timestamp).toBe('2026-02-14T10:00:00.000Z');
+    expect(checkpoint.description).toBe('Simple checkpoint');
+    expect(checkpoint.tags).toBeUndefined();
+    expect(checkpoint.git).toBeUndefined();
+    expect(checkpoint.summary).toBeUndefined();
+  });
+
+  it('round-trips through formatCheckpoint and parseCheckpointFile', () => {
+    const original: Checkpoint = {
+      id: 'checkpoint_roundtrip',
+      timestamp: '2026-02-14T15:30:42.789Z',
+      description: 'Round-trip test with all fields populated.',
+      tags: ['test', 'roundtrip'],
+      git: {
+        branch: 'feature/test',
+        commit: 'ff00ff0',
+        files: ['src/foo.ts', 'src/bar.ts']
+      },
+      summary: 'Round-trip test'
+    };
+
+    const formatted = formatCheckpoint(original);
+    const parsed = parseCheckpointFile(formatted);
+
+    expect(parsed.id).toBe(original.id);
+    expect(parsed.timestamp).toBe(original.timestamp);
+    expect(parsed.description).toBe(original.description);
+    expect(parsed.tags).toEqual(original.tags);
+    expect(parsed.git).toEqual(original.git);
+    expect(parsed.summary).toBe(original.summary);
+  });
+
+  it('handles missing git section gracefully', () => {
+    const content = `---
+id: checkpoint_nogit
+timestamp: "2026-02-14T10:00:00.000Z"
+tags:
+  - test
+---
+
+No git context here.
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.git).toBeUndefined();
+    expect(checkpoint.tags).toEqual(['test']);
+  });
+
+  it('handles missing tags gracefully', () => {
+    const content = `---
+id: checkpoint_notags
+timestamp: "2026-02-14T10:00:00.000Z"
+git:
+  branch: main
+---
+
+No tags here.
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.tags).toBeUndefined();
+    expect(checkpoint.git!.branch).toBe('main');
+  });
+
+  it('trims whitespace from description body', () => {
+    const content = `---
+id: checkpoint_trim
+timestamp: "2026-02-14T10:00:00.000Z"
+---
+
+  Some description with leading spaces.
+
+And trailing newlines.
+
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    // Description should be trimmed
+    expect(checkpoint.description).toBe('Some description with leading spaces.\n\nAnd trailing newlines.');
+  });
+});
+
+// ─── generateCheckpointId ────────────────────────────────────────────
+
+describe('generateCheckpointId', () => {
+  it('generates deterministic ID from timestamp + description', () => {
+    const id = generateCheckpointId('2026-02-14T09:30:42.123Z', 'Test description');
+    expect(id).toMatch(/^checkpoint_[0-9a-f]{8}$/);
+  });
+
+  it('same input produces same output', () => {
+    const id1 = generateCheckpointId('2026-02-14T09:30:42.123Z', 'Same description');
+    const id2 = generateCheckpointId('2026-02-14T09:30:42.123Z', 'Same description');
+    expect(id1).toBe(id2);
+  });
+
+  it('different input produces different output', () => {
+    const id1 = generateCheckpointId('2026-02-14T09:30:42.123Z', 'Description A');
+    const id2 = generateCheckpointId('2026-02-14T09:30:42.123Z', 'Description B');
+    expect(id1).not.toBe(id2);
+
+    const id3 = generateCheckpointId('2026-02-14T09:30:42.123Z', 'Same text');
+    const id4 = generateCheckpointId('2026-02-14T10:00:00.000Z', 'Same text');
+    expect(id3).not.toBe(id4);
+  });
+
+  it('format is checkpoint_{8-hex-chars}', () => {
+    const id = generateCheckpointId('2026-02-14T12:00:00.000Z', 'Any description');
+    expect(id).toMatch(/^checkpoint_[0-9a-f]{8}$/);
+  });
+});
+
+// ─── getCheckpointFilename ───────────────────────────────────────────
+
+describe('getCheckpointFilename', () => {
+  it('generates filename from checkpoint as HHMMSS_hash4.md', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_a1b2c3d4',
+      timestamp: '2026-02-14T09:30:42.123Z',
+      description: 'Test'
+    };
+
+    const filename = getCheckpointFilename(checkpoint);
+    expect(filename).toBe('093042_a1b2.md');
+  });
+
+  it('handles different timestamps correctly', () => {
+    const checkpoint1: Checkpoint = {
+      id: 'checkpoint_deadbeef',
+      timestamp: '2026-02-14T14:05:09.000Z',
+      description: 'Test'
+    };
+    expect(getCheckpointFilename(checkpoint1)).toBe('140509_dead.md');
+
+    const checkpoint2: Checkpoint = {
+      id: 'checkpoint_00ff11aa',
+      timestamp: '2026-02-14T23:59:59.999Z',
+      description: 'Test'
+    };
+    expect(getCheckpointFilename(checkpoint2)).toBe('235959_00ff.md');
+  });
+
+  it('handles midnight correctly', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_abcd1234',
+      timestamp: '2026-02-14T00:00:00.000Z',
+      description: 'Midnight checkpoint'
+    };
+    expect(getCheckpointFilename(checkpoint)).toBe('000000_abcd.md');
+  });
+});
+
+// ─── saveCheckpoint ──────────────────────────────────────────────────
+
+describe('saveCheckpoint', () => {
+  it('saves checkpoint as individual file in .memories/{date}/', async () => {
     const input: CheckpointInput = {
-      description: 'Test checkpoint',
+      description: 'Test checkpoint save',
       tags: ['test'],
-      workspace: TEST_WORKSPACE
+      workspace: tempDir
     };
 
-    await saveCheckpoint(input);
+    const checkpoint = await saveCheckpoint(input);
+    const today = checkpoint.timestamp.split('T')[0]!;
 
-    const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
+    // Check file exists in the right location
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, today);
+    const files = await readdir(dateDir);
 
-    expect(checkpoints.length).toBeGreaterThan(0);
-    expect(checkpoints[0]!.description).toBe('Test checkpoint');
-    expect(checkpoints[0]!.tags).toEqual(['test']);
+    expect(files.length).toBe(1);
+    expect(files[0]).toMatch(/^\d{6}_[0-9a-f]{4}\.md$/);
   });
 
-  it('appends to existing daily file', async () => {
+  it('checkpoint has valid id field', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'ID test',
+      workspace: tempDir
+    });
+
+    expect(checkpoint.id).toMatch(/^checkpoint_[0-9a-f]{8}$/);
+  });
+
+  it('checkpoint has git context as nested object', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'Git context test',
+      workspace: tempDir
+    });
+
+    // We're running in a git repo, so git context should be present
+    // The git field should be a nested object (not flat gitBranch/gitCommit)
+    if (checkpoint.git) {
+      expect(checkpoint.git).toHaveProperty('branch');
+      expect(checkpoint.git).toHaveProperty('commit');
+      // Should NOT have old flat fields
+      expect((checkpoint as any).gitBranch).toBeUndefined();
+      expect((checkpoint as any).gitCommit).toBeUndefined();
+    }
+  });
+
+  it('file content is valid YAML frontmatter + markdown body', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'Content validation test',
+      tags: ['validation'],
+      workspace: tempDir
+    });
+
+    const today = checkpoint.timestamp.split('T')[0]!;
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, today);
+    const files = await readdir(dateDir);
+    const content = await readFile(join(dateDir, files[0]!), 'utf-8');
+
+    // Should be valid YAML frontmatter format
+    expect(content).toMatch(/^---\n/);
+    expect(content).toContain('\n---\n');
+    expect(content).toContain('id: ' + checkpoint.id);
+    expect(content).toContain('Content validation test');
+    expect(content).toContain('  - validation');
+  });
+
+  it('auto-generates summary for long descriptions', async () => {
+    const longDescription = 'Successfully refactored the entire authentication system to use JWT tokens instead of session cookies. Updated all middleware, tests, and documentation. Added refresh token support and improved error handling for expired tokens.';
+
+    const checkpoint = await saveCheckpoint({
+      description: longDescription,
+      workspace: tempDir
+    });
+
+    expect(checkpoint.summary).toBeDefined();
+    expect(checkpoint.summary!.length).toBeLessThanOrEqual(150);
+  });
+
+  it('does not generate summary for short descriptions', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'Short description',
+      workspace: tempDir
+    });
+
+    expect(checkpoint.summary).toBeUndefined();
+  });
+
+  it('handles concurrent writes safely (10 parallel saves)', async () => {
+    const writes = Array.from({ length: 10 }, (_, i) =>
+      saveCheckpoint({
+        description: `Concurrent checkpoint ${i}`,
+        workspace: tempDir
+      })
+    );
+
+    const checkpoints = await Promise.all(writes);
+
+    // All 10 checkpoints should be saved
+    expect(checkpoints).toHaveLength(10);
+
+    // All should have unique IDs
+    const ids = new Set(checkpoints.map(c => c.id));
+    expect(ids.size).toBe(10);
+
+    // Verify files on disk
+    const today = checkpoints[0]!.timestamp.split('T')[0]!;
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, today);
+    const files = await readdir(dateDir);
+    expect(files.length).toBe(10);
+  });
+
+  it('saves multiple checkpoints as separate files', async () => {
     await saveCheckpoint({
       description: 'First checkpoint',
-      workspace: TEST_WORKSPACE
+      workspace: tempDir
     });
 
     // Small delay to ensure different timestamps
@@ -203,81 +467,27 @@ describe('Checkpoint storage', () => {
 
     await saveCheckpoint({
       description: 'Second checkpoint',
-      workspace: TEST_WORKSPACE
+      workspace: tempDir
     });
 
     const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, today);
+    const files = await readdir(dateDir);
 
-    expect(checkpoints).toHaveLength(2);
-    expect(checkpoints[0]!.description).toBe('First checkpoint');
-    expect(checkpoints[1]!.description).toBe('Second checkpoint');
-  });
-
-  it('captures git context automatically', async () => {
-    await saveCheckpoint({
-      description: 'Test with git',
-      workspace: TEST_WORKSPACE
-    });
-
-    const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
-
-    // Git context may or may not exist depending on whether we're in a repo
-    // Just verify the fields are present (even if undefined)
-    expect(checkpoints[0]).toHaveProperty('gitBranch');
-    expect(checkpoints[0]).toHaveProperty('gitCommit');
-  });
-
-  it('handles concurrent writes safely', async () => {
-    const writes = Array.from({ length: 10 }, (_, i) =>
-      saveCheckpoint({
-        description: `Checkpoint ${i}`,
-        workspace: TEST_WORKSPACE
-      })
-    );
-
-    await Promise.all(writes);
-
-    const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
-
-    // All 10 checkpoints should be saved
-    expect(checkpoints).toHaveLength(10);
-
-    // Verify all unique descriptions are present (not overwritten)
-    const descriptions = checkpoints.map(c => c.description);
-    for (let i = 0; i < 10; i++) {
-      expect(descriptions).toContain(`Checkpoint ${i}`);
-    }
-  });
-
-  it('creates daily file if it doesn\'t exist', async () => {
-    // First checkpoint of the day
-    await saveCheckpoint({
-      description: 'First today',
-      workspace: TEST_WORKSPACE
-    });
-
-    const today = new Date().toISOString().split('T')[0]!;
-    const checkpointsPath = join(
-      getWorkspacePath(TEST_WORKSPACE),
-      'checkpoints',
-      `${today}.md`
-    );
-
-    const exists = await Bun.file(checkpointsPath).exists();
-    expect(exists).toBe(true);
+    // Each checkpoint is its own file
+    expect(files.length).toBe(2);
   });
 });
 
-describe('Checkpoint retrieval', () => {
-  beforeEach(async () => {
-    // Create some test checkpoints
+// ─── getCheckpointsForDay ────────────────────────────────────────────
+
+describe('getCheckpointsForDay', () => {
+  it('returns checkpoints for a specific day', async () => {
     await saveCheckpoint({
       description: 'Morning work',
       tags: ['feature'],
-      workspace: TEST_WORKSPACE
+      workspace: tempDir
     });
 
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -285,13 +495,11 @@ describe('Checkpoint retrieval', () => {
     await saveCheckpoint({
       description: 'Afternoon work',
       tags: ['bug-fix'],
-      workspace: TEST_WORKSPACE
+      workspace: tempDir
     });
-  });
 
-  it('retrieves all checkpoints for a specific day', async () => {
     const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
+    const checkpoints = await getCheckpointsForDay(tempDir, today);
 
     expect(checkpoints).toHaveLength(2);
     expect(checkpoints[0]!.description).toBe('Morning work');
@@ -299,141 +507,160 @@ describe('Checkpoint retrieval', () => {
   });
 
   it('returns empty array for day with no checkpoints', async () => {
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, '2020-01-01');
+    const checkpoints = await getCheckpointsForDay(tempDir, '2020-01-01');
     expect(checkpoints).toEqual([]);
   });
 
-  it('retrieves checkpoints across date range', async () => {
+  it('returns checkpoints sorted by timestamp', async () => {
+    // Create checkpoints with small delays to ensure ordering
+    for (let i = 0; i < 3; i++) {
+      await saveCheckpoint({
+        description: `Checkpoint ${i}`,
+        workspace: tempDir
+      });
+      if (i < 2) await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
     const today = new Date().toISOString().split('T')[0]!;
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]!;
+    const checkpoints = await getCheckpointsForDay(tempDir, today);
 
-    // Add a checkpoint with yesterday's date (manually create file)
-    const yesterdayPath = join(
-      getWorkspacePath(TEST_WORKSPACE),
-      'checkpoints',
-      `${yesterday}.md`
-    );
-    const content = `# Checkpoints for ${yesterday}
-
-## 15:00 - Yesterday's work
-Some work from yesterday.
-
-- **Tags**: old
-`;
-    await Bun.write(yesterdayPath, content);
-
-    const checkpoints = await getCheckpointsForDateRange(
-      TEST_WORKSPACE,
-      yesterday,
-      today
-    );
-
-    expect(checkpoints.length).toBeGreaterThanOrEqual(3);  // 1 from yesterday + 2 from today
+    expect(checkpoints).toHaveLength(3);
+    for (let i = 1; i < checkpoints.length; i++) {
+      const prev = new Date(checkpoints[i - 1]!.timestamp).getTime();
+      const curr = new Date(checkpoints[i]!.timestamp).getTime();
+      expect(curr).toBeGreaterThanOrEqual(prev);
+    }
   });
 
-  it('sorts checkpoints by timestamp', async () => {
-    const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
+  it('each checkpoint has an id field', async () => {
+    await saveCheckpoint({
+      description: 'ID check',
+      workspace: tempDir
+    });
 
-    // Should be in chronological order
-    for (let i = 1; i < checkpoints.length; i++) {
-      const prev = new Date(checkpoints[i - 1]!.timestamp);
-      const curr = new Date(checkpoints[i]!.timestamp);
-      expect(curr.getTime()).toBeGreaterThanOrEqual(prev.getTime());
-    }
+    const today = new Date().toISOString().split('T')[0]!;
+    const checkpoints = await getCheckpointsForDay(tempDir, today);
+
+    expect(checkpoints[0]!.id).toMatch(/^checkpoint_[0-9a-f]{8}$/);
   });
 });
 
-describe('Checkpoint metadata', () => {
-  it('formats checkpoint with metadata for long descriptions', () => {
-    const longDescription = 'A'.repeat(200);
-    const checkpoint: Checkpoint = {
-      timestamp: '2025-10-13T14:30:00.000Z',
-      description: longDescription,
-      summary: 'Brief summary of the work',
-      charCount: 200,
-      tags: ['feature']
-    };
+// ─── getCheckpointsForDateRange ──────────────────────────────────────
 
-    const formatted = formatCheckpoint(checkpoint);
-
-    // Should include metadata comment
-    expect(formatted).toContain('<!--');
-    expect(formatted).toContain('summary: Brief summary of the work');
-    expect(formatted).toContain('charCount: 200');
-    expect(formatted).toContain('-->');
-  });
-
-  it('formats checkpoint without metadata for short descriptions', () => {
-    const checkpoint: Checkpoint = {
-      timestamp: '2025-10-13T14:30:00.000Z',
-      description: 'Short description'
-    };
-
-    const formatted = formatCheckpoint(checkpoint);
-
-    // Should not include metadata comment
-    expect(formatted).not.toContain('<!--');
-    expect(formatted).not.toContain('summary:');
-  });
-
-  it('parses checkpoint with metadata from HTML comment', () => {
-    const content = `# Checkpoints for 2025-10-13
-
-## 14:30 - Long detailed description of authentication system refactoring
-
-<!--
-summary: Refactored authentication system
-charCount: 250
--->
-
-- **Tags**: refactoring, auth
-`;
-
-    const checkpoints = parseCheckpointFile(content);
-
-    expect(checkpoints[0]!.summary).toBe('Refactored authentication system');
-    expect(checkpoints[0]!.charCount).toBe(250);
-  });
-
-  it('auto-generates metadata when saving long checkpoint', async () => {
-    const longDescription = 'Successfully refactored the entire authentication system to use JWT tokens instead of session cookies. Updated all middleware, tests, and documentation. Added refresh token support and improved error handling for expired tokens.';
-
-    const checkpoint = await saveCheckpoint({
-      description: longDescription,
-      workspace: TEST_WORKSPACE
-    });
-
-    // Should auto-generate summary and charCount
-    expect(checkpoint.summary).toBeDefined();
-    expect(checkpoint.summary!.length).toBeLessThanOrEqual(150);
-    expect(checkpoint.charCount).toBe(longDescription.length);
-  });
-
-  it('does not generate metadata for short checkpoint', async () => {
-    const checkpoint = await saveCheckpoint({
-      description: 'Short description',
-      workspace: TEST_WORKSPACE
-    });
-
-    // Should not generate summary for short descriptions
-    expect(checkpoint.summary).toBeUndefined();
-    expect(checkpoint.charCount).toBeUndefined();
-  });
-
-  it('preserves metadata through save and load cycle', async () => {
-    const longDescription = 'A'.repeat(200);
-
+describe('getCheckpointsForDateRange', () => {
+  it('returns checkpoints across date range', async () => {
+    // Save a checkpoint for today
     await saveCheckpoint({
-      description: longDescription,
-      workspace: TEST_WORKSPACE
+      description: 'Today work',
+      workspace: tempDir
     });
+
+    // Manually create a checkpoint for yesterday
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]!;
+    const memoriesDir = getMemoriesDir(tempDir);
+    const yesterdayDir = join(memoriesDir, yesterday);
+    await mkdir(yesterdayDir, { recursive: true });
+
+    const yesterdayContent = `---
+id: checkpoint_yester01
+timestamp: "${yesterday}T15:00:00.000Z"
+tags:
+  - old
+---
+
+Yesterday's work
+`;
+    await writeFile(join(yesterdayDir, '150000_yest.md'), yesterdayContent, 'utf-8');
 
     const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(TEST_WORKSPACE, today);
+    const checkpoints = await getCheckpointsForDateRange(tempDir, yesterday, today);
 
-    // Metadata should be preserved
-    expect(checkpoints[0]!.summary).toBeDefined();
-    expect(checkpoints[0]!.charCount).toBe(200);
+    expect(checkpoints.length).toBeGreaterThanOrEqual(2);
+
+    // Should contain both yesterday and today
+    const descriptions = checkpoints.map(c => c.description);
+    expect(descriptions).toContain("Yesterday's work");
+    expect(descriptions).toContain('Today work');
+  });
+
+  it('filters by actual timestamp, not just directory date', async () => {
+    // Create a date directory with a checkpoint that has a specific timestamp
+    const date = '2026-01-15';
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, date);
+    await mkdir(dateDir, { recursive: true });
+
+    // Checkpoint at 10:00
+    const content1 = `---
+id: checkpoint_morning1
+timestamp: "${date}T10:00:00.000Z"
+---
+
+Morning checkpoint
+`;
+    await writeFile(join(dateDir, '100000_morn.md'), content1, 'utf-8');
+
+    // Checkpoint at 20:00
+    const content2 = `---
+id: checkpoint_evening1
+timestamp: "${date}T20:00:00.000Z"
+---
+
+Evening checkpoint
+`;
+    await writeFile(join(dateDir, '200000_even.md'), content2, 'utf-8');
+
+    // Query from 15:00 to 23:59 — should only get the evening checkpoint
+    const checkpoints = await getCheckpointsForDateRange(
+      tempDir,
+      `${date}T15:00:00.000Z`,
+      `${date}T23:59:59.999Z`
+    );
+
+    expect(checkpoints).toHaveLength(1);
+    expect(checkpoints[0]!.description).toBe('Evening checkpoint');
+  });
+
+  it('sorts chronologically across multiple days', async () => {
+    const memoriesDir = getMemoriesDir(tempDir);
+
+    // Create checkpoints across 3 days
+    for (let day = 10; day <= 12; day++) {
+      const date = `2026-01-${day}`;
+      const dateDir = join(memoriesDir, date);
+      await mkdir(dateDir, { recursive: true });
+
+      const content = `---
+id: checkpoint_day${day}abc
+timestamp: "${date}T12:00:00.000Z"
+---
+
+Work on day ${day}
+`;
+      await writeFile(join(dateDir, `120000_day${day.toString().padStart(2, '0')}.md`), content, 'utf-8');
+    }
+
+    const checkpoints = await getCheckpointsForDateRange(
+      tempDir,
+      '2026-01-10',
+      '2026-01-12'
+    );
+
+    expect(checkpoints).toHaveLength(3);
+    // Verify chronological order
+    for (let i = 1; i < checkpoints.length; i++) {
+      const prev = new Date(checkpoints[i - 1]!.timestamp).getTime();
+      const curr = new Date(checkpoints[i]!.timestamp).getTime();
+      expect(curr).toBeGreaterThanOrEqual(prev);
+    }
+  });
+
+  it('returns empty array when no checkpoints in range', async () => {
+    const checkpoints = await getCheckpointsForDateRange(
+      tempDir,
+      '2020-01-01',
+      '2020-01-31'
+    );
+    expect(checkpoints).toEqual([]);
   });
 });
