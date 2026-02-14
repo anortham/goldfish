@@ -65,9 +65,10 @@ Your checkpoint descriptions power fuzzy search. Write them for your future self
 
 ## Storage
 
-All data is stored as human-readable markdown in ~/.goldfish/{workspace}/:
-- Checkpoints: Daily files (checkpoints/YYYY-MM-DD.md)
+All data is stored as human-readable markdown in {project}/.memories/:
+- Checkpoints: Individual YAML frontmatter files ({date}/{HHMMSS}_{hash}.md)
 - Plans: Individual files (plans/{plan-id}.md)
+- Cross-project registry: ~/.goldfish/registry.json
 
-Everything is transparent, git-friendly, and human-readable.`;
+Everything is transparent, git-committable, and human-readable.`;
 }

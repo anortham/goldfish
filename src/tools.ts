@@ -175,7 +175,7 @@ Actions (use without asking permission):
 - update: Update plan content or status
 - complete: Mark plan as done
 
-IMPORTANT: Only ONE plan can be active per workspace. Plans are saved to ~/.goldfish/{workspace}/plans/ as markdown files.
+IMPORTANT: Only ONE plan can be active per workspace. Plans are saved to {project}/.memories/plans/ as markdown files with YAML frontmatter.
 
 Returns: Plan details, status updates, or list of plans.`,
       inputSchema: {

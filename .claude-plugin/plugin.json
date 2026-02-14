@@ -1,20 +1,11 @@
 {
-  "name": "goldfish-memory",
-  "version": "1.0.0",
-  "description": "Persistent memory system for AI agents. Provides transparent checkpointing, recall, and long-term planning that survives context resets and session crashes.",
+  "name": "goldfish",
+  "description": "Developer memory system — checkpoints, recall, plans, and standups for AI-assisted development",
+  "version": "5.0.0",
   "author": {
-    "name": "murphy"
+    "name": "Alan Northam"
   },
-  "homepage": "https://github.com/yourusername/goldfish",
+  "repository": "https://github.com/murphy/goldfish",
   "license": "MIT",
-  "keywords": [
-    "memory",
-    "persistence",
-    "checkpoints",
-    "planning",
-    "context",
-    "ai-agent"
-  ],
-  "commands": "./commands/",
-  "skills": "./skills/"
+  "keywords": ["memory", "checkpoints", "recall", "standup", "developer-tools"]
 }
