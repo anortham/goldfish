@@ -45,47 +45,49 @@ Map each checkpoint to a plan goal. Identify:
 
 ## Report Format
 
-Structure the assessment as four sections:
+Start with a header that identifies the plan and assessment date, then structure as four sections followed by an overall health assessment.
+
+### Header
+
+```
+## Plan Status — "Auth System Overhaul" — Feb 14, 2026
+3/5 items complete (60%)
+```
+
+Always include the completion fraction for instant comprehension.
 
 ### Completed
 Plan items with clear checkpoint evidence of completion. Include the approximate date completed and any notable details.
 
-```
 - [x] JWT refresh token rotation — completed Feb 12, shipped with full test coverage
 - [x] Rate limiter Redis support — completed Feb 13, integration tests passing
-```
 
 ### In Progress
 Plan items with recent checkpoints showing active work but not yet complete.
 
-```
 - [ ] Session management API — 3 checkpoints this week, endpoints implemented but missing error handling
 - [ ] Admin dashboard auth — started Feb 13, basic scaffold in place
-```
 
 ### Not Started
 Plan items with no checkpoint activity at all. Flag these — they might be blocked, deprioritized, or forgotten.
 
-```
 - [ ] API documentation — no activity found
 - [ ] Load testing — no activity found (may be blocked by staging environment)
-```
 
 ### Drift Assessment
 Work captured in checkpoints that doesn't map to any plan item. This isn't automatically bad — emergent work happens — but it should be called out.
 
-```
 **Unplanned work detected:**
 - Bug fix: file corruption on concurrent writes (2 checkpoints, Feb 11)
 - Dependency upgrade: fuse.js v7 migration (1 checkpoint, Feb 12)
 
 These consumed ~1 day of effort outside the plan scope.
-```
 
-## Assessing Health
+### Overall: Minor Drift
 
-After the four sections, give an honest overall assessment:
+Render the health assessment as a `### Overall:` header with the verdict, followed by a direct, honest summary.
 
+Health levels:
 - **On track** — Most plan items progressing, minimal drift, no blockers
 - **Minor drift** — Some unplanned work but plan items still advancing
 - **Significant drift** — More unplanned work than planned work, or key items stalled

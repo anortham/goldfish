@@ -22,38 +22,37 @@ export async function handleCheckpoint(args: any) {
     workspace: ws
   });
 
-  // Return structured JSON for AI agent consumption with human-friendly summary
-  // Build git context for response, capping files for token efficiency
+  // Build readable markdown response
   const MAX_FILES = 10;
   const git = checkpoint.git;
-  const gitResponse = git ? {
-    git: {
-      ...(git.branch && { branch: git.branch }),
-      ...(git.commit && { commit: git.commit }),
-      ...(git.files && git.files.length > MAX_FILES
-        ? { files: git.files.slice(0, MAX_FILES), fileCount: git.files.length }
-        : git.files && { files: git.files })
-    }
-  } : {};
+  const lines: string[] = [];
 
-  const response = {
-    summary: `${getFishEmoji()} Checkpoint saved: ${description}`,
-    success: true,
-    checkpoint: {
-      id: checkpoint.id,
-      description: checkpoint.description,
-      timestamp: checkpoint.timestamp,
-      tags: checkpoint.tags || [],
-      workspace: ws,
-      ...gitResponse
-    }
-  };
+  lines.push(`${getFishEmoji()} Checkpoint saved: ${checkpoint.id}`);
+  lines.push(`Time: ${checkpoint.timestamp}`);
+
+  if (git?.branch || git?.commit) {
+    const branch = git.branch || '?';
+    const commit = git.commit || '?';
+    lines.push(`Branch: ${branch} @ ${commit}`);
+  }
+
+  if (tags && tags.length > 0) {
+    lines.push(`Tags: ${tags.join(', ')}`);
+  }
+
+  if (git?.files && git.files.length > 0) {
+    const displayFiles = git.files.slice(0, MAX_FILES);
+    const overflow = git.files.length > MAX_FILES
+      ? ` (+${git.files.length - MAX_FILES} more)`
+      : '';
+    lines.push(`Files: ${displayFiles.join(', ')}${overflow}`);
+  }
 
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(response)
+        text: lines.join('\n')
       }
     ]
   };

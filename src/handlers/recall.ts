@@ -6,6 +6,7 @@ import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
+import type { Checkpoint, Plan, WorkspaceSummary } from '../types.js';
 
 /**
  * Resolve the effective workspace path (same logic as recall.ts)
@@ -17,12 +18,51 @@ function resolveWorkspacePath(workspace?: string): string {
 }
 
 /**
+ * Format a single checkpoint as a markdown section
+ */
+function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): string {
+  const lines: string[] = [];
+
+  // H3 header: ### 2026-02-16 15:30 checkpoint_abc12345
+  const ts = checkpoint.timestamp;
+  const dateTime = ts.replace('T', ' ').replace(/:\d{2}\.\d{3}Z$/, '');
+  lines.push(`### ${dateTime} ${checkpoint.id}`);
+
+  if (checkpoint.tags && checkpoint.tags.length > 0) {
+    lines.push(`Tags: ${checkpoint.tags.join(', ')}`);
+  }
+
+  if ((checkpoint as any).workspace) {
+    lines.push(`Workspace: ${(checkpoint as any).workspace}`);
+  }
+
+  lines.push(checkpoint.description);
+
+  return lines.join('\n');
+}
+
+/**
+ * Format active plan as a markdown section
+ */
+function formatActivePlan(plan: Plan): string {
+  const lines: string[] = [];
+  lines.push(`## Active Plan: ${plan.title} (${plan.status})`);
+  lines.push(`Updated: ${plan.updated}`);
+  if (plan.tags && plan.tags.length > 0) {
+    lines.push(`Tags: ${plan.tags.join(', ')}`);
+  }
+  lines.push('');
+  lines.push(plan.content);
+  return lines.join('\n');
+}
+
+/**
  * Handle recall tool calls
  */
 export async function handleRecall(args: any) {
   const result = await recallFunc(args);
 
-  // Capture diagnostic info for debugging
+  // Capture diagnostic info
   const resolvedPath = resolveWorkspacePath(args.workspace);
   const memoriesDir = resolvedPath !== '(cross-project)' ? getMemoriesDir(resolvedPath) : null;
   let memoriesExists = false;
@@ -35,44 +75,62 @@ export async function handleRecall(args: any) {
     }
   }
 
-  // Build human-friendly summary
+  // Build readable markdown response
   const count = result.checkpoints.length;
   const planText = result.activePlan ? ' + active plan' : '';
   const fish = getFishEmoji();
-  const summary = count === 0
-    ? `${fish} No checkpoints found`
-    : `${fish} Recalled ${count} checkpoint${count === 1 ? '' : 's'}${planText}`;
 
-  // Return structured JSON for AI agent consumption with human-friendly summary
-  const response: any = {
-    summary,
-    checkpoints: result.checkpoints,
-    query: {
-      workspace: args.workspace || 'current',
-      resolvedPath,
-      memoriesDir,
-      memoriesExists,
-      ...(args.days !== undefined && { days: args.days }),
-      ...(args.since && { since: args.since }),
-      ...(args.from && { from: args.from }),
-      ...(args.to && { to: args.to }),
-      ...(args.search && { search: args.search })
-    }
-  };
+  const lines: string[] = [];
 
-  if (result.activePlan) {
-    response.activePlan = result.activePlan;
+  // Header line
+  if (count === 0) {
+    lines.push(`${fish} No checkpoints found${planText}`);
+  } else {
+    lines.push(`${fish} Recalled ${count} checkpoint${count === 1 ? '' : 's'}${planText}`);
   }
 
+  // Diagnostics
+  lines.push(`Workspace: ${resolvedPath}`);
+  if (memoriesDir) {
+    lines.push(`Memories: ${memoriesDir} (${memoriesExists ? 'found' : 'not found'})`);
+  }
+
+  // Active plan section
+  if (result.activePlan) {
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push(formatActivePlan(result.activePlan));
+  }
+
+  // Workspace summaries for cross-project recall
   if (result.workspaces && result.workspaces.length > 0) {
-    response.workspaces = result.workspaces;
+    lines.push('');
+    lines.push('## Workspaces');
+    for (const ws of result.workspaces) {
+      lines.push(`- **${ws.name}** (${ws.path}): ${ws.checkpointCount} checkpoints${ws.lastActivity ? `, last: ${ws.lastActivity}` : ''}`);
+    }
+  }
+
+  // Checkpoints section
+  if (count > 0) {
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push('## Checkpoints');
+    lines.push('');
+
+    for (const checkpoint of result.checkpoints) {
+      lines.push(formatCheckpoint(checkpoint));
+      lines.push('');
+    }
   }
 
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify(response)
+        text: lines.join('\n').trimEnd()
       }
     ]
   };

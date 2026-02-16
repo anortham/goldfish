@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe('Tool handlers', () => {
   describe('checkpoint tool', () => {
-    it('saves checkpoint and returns confirmation', async () => {
+    it('saves checkpoint and returns readable markdown', async () => {
       // Import the handler function
       const { handleCheckpoint } = await import('../src/server');
 
@@ -35,12 +35,11 @@ describe('Tool handlers', () => {
       expect(result.content).toBeDefined();
       expect(result.content[0]!.type).toBe('text');
 
-      // Response should be JSON
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.success).toBe(true);
-      expect(parsed.checkpoint.id).toMatch(/^checkpoint_/);
-      expect(parsed.checkpoint.description).toBe('Test checkpoint');
-      expect(parsed.checkpoint.tags).toEqual(['test']);
+      const text = result.content[0]!.text;
+      // Should be readable markdown, not JSON
+      expect(text).not.toStartWith('{');
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Checkpoint saved: checkpoint_/);
+      expect(text).toContain('Tags: test');
     });
 
     it('includes git context in response', async () => {
@@ -51,12 +50,12 @@ describe('Tool handlers', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.success).toBe(true);
-      expect(parsed.checkpoint.description).toBe('With git context');
-      // Git context may or may not be present (nested format)
-      if (parsed.checkpoint.git?.branch) {
-        expect(typeof parsed.checkpoint.git.branch).toBe('string');
+      const text = result.content[0]!.text;
+      expect(text).not.toStartWith('{');
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Checkpoint saved:/);
+      // Git context may or may not be present
+      if (text.includes('Branch:')) {
+        expect(text).toMatch(/Branch: .+ @ [a-f0-9]+/);
       }
     });
 
@@ -85,7 +84,7 @@ describe('Tool handlers', () => {
       });
     });
 
-    it('returns formatted recall results', async () => {
+    it('returns readable recall results', async () => {
       const { handleRecall } = await import('../src/server');
 
       const result = await handleRecall({
@@ -95,14 +94,12 @@ describe('Tool handlers', () => {
       expect(result.content).toBeDefined();
       expect(result.content[0]!.type).toBe('text');
 
-      // Response should be JSON
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.checkpoints).toBeInstanceOf(Array);
-      expect(parsed.checkpoints.length).toBeGreaterThanOrEqual(2);
-
-      const descriptions = parsed.checkpoints.map((c: any) => c.description);
-      expect(descriptions).toContain('First checkpoint');
-      expect(descriptions).toContain('Second checkpoint');
+      const text = result.content[0]!.text;
+      // Should be readable markdown, not JSON
+      expect(text).not.toStartWith('{');
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Recalled \d+ checkpoints?/);
+      expect(text).toContain('First checkpoint');
+      expect(text).toContain('Second checkpoint');
     });
 
     it('includes active plan when present', async () => {
@@ -120,10 +117,9 @@ describe('Tool handlers', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.activePlan).toBeDefined();
-      expect(parsed.activePlan.title).toBe('Test Plan');
-      expect(parsed.activePlan.content).toBe('Plan content');
+      const text = result.content[0]!.text;
+      expect(text).toContain('## Active Plan: Test Plan');
+      expect(text).toContain('Plan content');
     });
 
     it('formats cross-workspace results', async () => {
@@ -135,9 +131,10 @@ describe('Tool handlers', () => {
       });
 
       expect(result.content[0]!.type).toBe('text');
-      const parsed = JSON.parse(result.content[0]!.text);
-      // Cross-workspace returns results from all registered projects
-      expect(parsed.checkpoints).toBeInstanceOf(Array);
+      const text = result.content[0]!.text;
+      // Should be readable markdown, not JSON
+      expect(text).not.toStartWith('{');
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
     });
 
     it('applies search filter', async () => {
@@ -154,7 +151,7 @@ describe('Tool handlers', () => {
   });
 
   describe('plan tool', () => {
-    it('saves plan and returns confirmation', async () => {
+    it('saves plan and returns readable confirmation', async () => {
       const { handlePlan } = await import('../src/server');
 
       const result = await handlePlan({
@@ -166,10 +163,9 @@ describe('Tool handlers', () => {
 
       expect(result.content[0]!.type).toBe('text');
 
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.success).toBe(true);
-      expect(parsed.plan.title).toBe('Test Plan');
-      expect(parsed.plan.content).toBe('Plan content');
+      const text = result.content[0]!.text;
+      expect(text).not.toStartWith('{');
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
     });
 
     it('gets plan by ID', async () => {
@@ -188,9 +184,9 @@ describe('Tool handlers', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.plan.title).toBe('Test Plan');
-      expect(parsed.plan.content).toBe('Content');
+      const text = result.content[0]!.text;
+      expect(text).toContain('# Test Plan');
+      expect(text).toContain('Content');
     });
 
     it('lists all plans', async () => {
@@ -215,13 +211,11 @@ describe('Tool handlers', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.plans).toBeInstanceOf(Array);
-      expect(parsed.count).toBeGreaterThanOrEqual(2);
-
-      const titles = parsed.plans.map((p: any) => p.title);
-      expect(titles).toContain('Plan 1');
-      expect(titles).toContain('Plan 2');
+      const text = result.content[0]!.text;
+      expect(text).not.toStartWith('{');
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found/);
+      expect(text).toContain('Plan 1');
+      expect(text).toContain('Plan 2');
     });
 
     it('activates plan', async () => {
@@ -240,9 +234,8 @@ describe('Tool handlers', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.success).toBe(true);
-      expect(parsed.action).toBe('activate');
+      const text = result.content[0]!.text;
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan activated: test-plan/);
     });
 
     it('updates plan', async () => {
@@ -262,9 +255,8 @@ describe('Tool handlers', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
-      expect(parsed.success).toBe(true);
-      expect(parsed.action).toBe('update');
+      const text = result.content[0]!.text;
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan updated: test-plan/);
     });
 
     it('handles invalid action gracefully', async () => {
@@ -467,7 +459,8 @@ describe('Error handling', () => {
     });
 
     expect(result.content[0]!.type).toBe('text');
-    const parsed = JSON.parse(result.content[0]!.text);
-    expect(parsed.checkpoints).toEqual([]);
+    const text = result.content[0]!.text;
+    // Should be readable markdown with "No checkpoints found"
+    expect(text).toMatch(/No checkpoints found/);
   });
 });

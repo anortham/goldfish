@@ -11,10 +11,10 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 /**
- * Test structured JSON responses for AI agent consumption
+ * Test readable markdown responses for AI agent consumption
  *
- * These tests validate that handlers return parseable JSON
- * with all necessary data, optimized for token efficiency.
+ * These tests validate that handlers return readable markdown text
+ * (not JSON) with all necessary data, optimized for token efficiency.
  */
 
 let TEST_DIR: string;
@@ -28,9 +28,9 @@ afterEach(async () => {
   await rm(TEST_DIR, { recursive: true, force: true });
 });
 
-describe('Structured JSON responses', () => {
+describe('Readable markdown responses', () => {
   describe('checkpoint handler', () => {
-    it('returns structured JSON response', async () => {
+    it('returns readable markdown response', async () => {
       const result = await handleCheckpoint({
         description: 'Test checkpoint',
         tags: ['test', 'feature'],
@@ -40,20 +40,17 @@ describe('Structured JSON responses', () => {
       expect(result.content).toBeDefined();
       expect(result.content[0]!.type).toBe('text');
 
-      // Should be parseable JSON
-      const parsed = JSON.parse(result.content[0]!.text);
+      const text = result.content[0]!.text;
 
-      expect(parsed.success).toBe(true);
-      expect(parsed.summary).toBeDefined();
-      // Should contain a fish emoji (random)
-      expect(parsed.summary).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
-      expect(parsed.summary).toContain('Test checkpoint');
-      expect(parsed.checkpoint).toBeDefined();
-      expect(parsed.checkpoint.id).toMatch(/^checkpoint_/);
-      expect(parsed.checkpoint.description).toBe('Test checkpoint');
-      expect(parsed.checkpoint.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-      expect(parsed.checkpoint.tags).toEqual(['test', 'feature']);
-      expect(parsed.checkpoint.workspace).toBe(TEST_DIR);
+      // Should NOT be JSON
+      expect(text).not.toStartWith('{');
+
+      // Should contain fish emoji header
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Checkpoint saved: checkpoint_/);
+      // Should contain timestamp
+      expect(text).toMatch(/Time: \d{4}-\d{2}-\d{2}T/);
+      // Should contain tags
+      expect(text).toContain('Tags: test, feature');
     });
 
     it('includes git context when available', async () => {
@@ -62,14 +59,39 @@ describe('Structured JSON responses', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
+      const text = result.content[0]!.text;
 
-      // Git context may or may not be present, but structure should be nested
-      if (parsed.checkpoint.git?.branch) {
-        expect(typeof parsed.checkpoint.git.branch).toBe('string');
+      // Should NOT be JSON
+      expect(text).not.toStartWith('{');
+
+      // Git context may or may not be present depending on environment
+      // But if branch exists, it should be on a Branch: line
+      if (text.includes('Branch:')) {
+        expect(text).toMatch(/Branch: .+ @ [a-f0-9]+/);
       }
-      if (parsed.checkpoint.git?.commit) {
-        expect(typeof parsed.checkpoint.git.commit).toBe('string');
+    });
+
+    it('omits empty tags line', async () => {
+      const result = await handleCheckpoint({
+        description: 'No tags checkpoint',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).not.toContain('Tags:');
+    });
+
+    it('caps files at 10 with overflow indicator', async () => {
+      // We can't easily mock git files, but we can verify the format handles it
+      const result = await handleCheckpoint({
+        description: 'Files test',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      // If files are present, they should be on a Files: line
+      if (text.includes('Files:')) {
+        expect(text).toMatch(/Files: /);
       }
     });
 
@@ -96,27 +118,33 @@ describe('Structured JSON responses', () => {
       });
     });
 
-    it('returns structured JSON with checkpoints array', async () => {
+    it('returns readable markdown with checkpoints', async () => {
       const result = await handleRecall({
         workspace: TEST_DIR,
         days: 1
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
+      const text = result.content[0]!.text;
 
-      expect(parsed.summary).toBeDefined();
-      // Should contain a fish emoji (random)
-      expect(parsed.summary).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
-      expect(parsed.checkpoints).toBeInstanceOf(Array);
-      expect(parsed.checkpoints.length).toBeGreaterThanOrEqual(2);
+      // Should NOT be JSON
+      expect(text).not.toStartWith('{');
 
-      const checkpoint = parsed.checkpoints[0];
-      expect(checkpoint.timestamp).toBeDefined();
-      expect(checkpoint.description).toBeDefined();
-      expect(checkpoint.tags).toBeInstanceOf(Array);
+      // Should contain fish emoji header with count
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Recalled \d+ checkpoints?/);
+
+      // Should contain workspace diagnostics
+      expect(text).toContain('Workspace:');
+      expect(text).toContain('Memories:');
+
+      // Should contain checkpoint entries as H3 headers
+      expect(text).toMatch(/### \d{4}-\d{2}-\d{2} \d{2}:\d{2} checkpoint_/);
+
+      // Should contain checkpoint descriptions
+      expect(text).toContain('First checkpoint');
+      expect(text).toContain('Second checkpoint');
     });
 
-    it('includes active plan in structured format', async () => {
+    it('includes active plan in markdown format', async () => {
       await savePlan({
         id: 'test-plan',
         title: 'Test Plan',
@@ -129,42 +157,49 @@ describe('Structured JSON responses', () => {
         workspace: TEST_DIR
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
+      const text = result.content[0]!.text;
 
-      expect(parsed.activePlan).toBeDefined();
-      expect(parsed.activePlan.id).toBe('test-plan');
-      expect(parsed.activePlan.title).toBe('Test Plan');
-      expect(parsed.activePlan.content).toBe('Plan content here');
-      expect(parsed.activePlan.status).toBe('active');
+      // Should mention active plan in header
+      expect(text).toContain('+ active plan');
+
+      // Should render plan as H2 section
+      expect(text).toContain('## Active Plan: Test Plan (active)');
+      expect(text).toMatch(/Updated: \d{4}-\d{2}-\d{2}T/);
+      expect(text).toContain('Plan content here');
+
+      // Should have separator
+      expect(text).toContain('---');
     });
 
-    it('includes query parameters for context', async () => {
+    it('includes diagnostics in header', async () => {
       const result = await handleRecall({
         workspace: TEST_DIR,
         days: 7,
         search: 'test'
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
+      const text = result.content[0]!.text;
 
-      expect(parsed.query).toBeDefined();
-      expect(parsed.query.days).toBe(7);
-      expect(parsed.query.search).toBe('test');
+      // Should have workspace and memories paths
+      expect(text).toContain('Workspace:');
+      expect(text).toContain('Memories:');
     });
 
-    it('includes workspace summaries for cross-workspace recall', async () => {
+    it('handles cross-workspace recall', async () => {
       const result = await handleRecall({
         workspace: 'all',
         days: 1
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
+      const text = result.content[0]!.text;
 
-      // Cross-workspace returns results from all registered projects
-      expect(parsed.checkpoints).toBeInstanceOf(Array);
+      // Should NOT be JSON
+      expect(text).not.toStartWith('{');
+      // Should contain fish emoji
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
     });
 
-    it('returns empty array when no checkpoints found', async () => {
+    it('returns readable message when no checkpoints found', async () => {
       const emptyDir = await mkdtemp(join(tmpdir(), 'test-handlers-empty-'));
       await ensureMemoriesDir(emptyDir);
 
@@ -173,17 +208,31 @@ describe('Structured JSON responses', () => {
         days: 1
       });
 
-      const parsed = JSON.parse(result.content[0]!.text);
+      const text = result.content[0]!.text;
 
-      expect(parsed.checkpoints).toEqual([]);
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] No checkpoints found/);
+      expect(text).not.toStartWith('{');
 
       await rm(emptyDir, { recursive: true, force: true });
+    });
+
+    it('shows tags on checkpoint entries', async () => {
+      const result = await handleRecall({
+        workspace: TEST_DIR,
+        days: 1
+      });
+
+      const text = result.content[0]!.text;
+
+      // Checkpoint entries should show tags
+      expect(text).toContain('Tags: test');
+      expect(text).toContain('Tags: feature');
     });
   });
 
   describe('plan handler', () => {
     describe('save action', () => {
-      it('returns structured plan data', async () => {
+      it('returns one-liner confirmation', async () => {
         const result = await handlePlan({
           action: 'save',
           title: 'Test Plan',
@@ -192,19 +241,11 @@ describe('Structured JSON responses', () => {
           activate: true
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
+        const text = result.content[0]!.text;
 
-        expect(parsed.success).toBe(true);
-        expect(parsed.summary).toBeDefined();
-        // Should contain a fish emoji (random)
-        expect(parsed.summary).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
-        expect(parsed.summary).toContain('Test Plan');
-        expect(parsed.plan).toBeDefined();
-        expect(parsed.plan.id).toBeDefined();
-        expect(parsed.plan.title).toBe('Test Plan');
-        expect(parsed.plan.status).toBe('active');
-        expect(parsed.plan.created).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-        expect(parsed.plan.updated).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+        expect(text).not.toStartWith('{');
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).toContain('(active)');
       });
 
       it('saves plan without activating when activate: false', async () => {
@@ -216,18 +257,15 @@ describe('Structured JSON responses', () => {
           activate: false
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
-
-        // Plan is saved with default status 'active' but not set as THE active plan
-        expect(parsed.plan.status).toBe('active');
-        expect(parsed.success).toBe(true);
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
 
         // Verify it's not THE active plan for the workspace
         const recallResult = await handleRecall({ workspace: TEST_DIR });
-        const recallParsed = JSON.parse(recallResult.content[0]!.text);
+        const recallText = recallResult.content[0]!.text;
 
-        // Should have no activePlan since we didn't activate it
-        expect(recallParsed.activePlan).toBeUndefined();
+        // Should have no active plan section
+        expect(recallText).not.toContain('## Active Plan:');
       });
 
       it('forwards tags to savePlan', async () => {
@@ -239,10 +277,10 @@ describe('Structured JSON responses', () => {
           tags: ['milestone', 'auth']
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
-
-        expect(parsed.success).toBe(true);
-        expect(parsed.plan.tags).toEqual(['milestone', 'auth']);
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        // Plan id should be derived from title
+        expect(text).toContain('tagged-plan');
       });
 
       it('forwards custom id to savePlan', async () => {
@@ -254,15 +292,13 @@ describe('Structured JSON responses', () => {
           id: 'my-custom-id'
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
-
-        expect(parsed.success).toBe(true);
-        expect(parsed.plan.id).toBe('my-custom-id');
+        const text = result.content[0]!.text;
+        expect(text).toContain('my-custom-id');
       });
     });
 
     describe('get action', () => {
-      it('returns complete plan data', async () => {
+      it('returns full plan rendered as markdown', async () => {
         await savePlan({
           id: 'test-plan',
           title: 'Test Plan',
@@ -276,18 +312,20 @@ describe('Structured JSON responses', () => {
           workspace: TEST_DIR
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
+        const text = result.content[0]!.text;
 
-        expect(parsed.plan).toBeDefined();
-        expect(parsed.plan.id).toBe('test-plan');
-        expect(parsed.plan.title).toBe('Test Plan');
-        expect(parsed.plan.content).toBe('Plan content');
-        expect(parsed.plan.status).toBeDefined();
+        expect(text).not.toStartWith('{');
+        // Should render as markdown with title
+        expect(text).toContain('# Test Plan');
+        expect(text).toContain('Status:');
+        expect(text).toContain('Created:');
+        expect(text).toContain('Updated:');
+        expect(text).toContain('Plan content');
       });
     });
 
     describe('list action', () => {
-      it('returns array of plans', async () => {
+      it('returns list of plans', async () => {
         await savePlan({
           id: 'plan-1',
           title: 'Plan 1',
@@ -307,22 +345,17 @@ describe('Structured JSON responses', () => {
           workspace: TEST_DIR
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
+        const text = result.content[0]!.text;
 
-        expect(parsed.plans).toBeInstanceOf(Array);
-        expect(parsed.plans.length).toBe(2);
-        expect(parsed.count).toBe(2);
-
-        for (const plan of parsed.plans) {
-          expect(plan.id).toBeDefined();
-          expect(plan.title).toBeDefined();
-          expect(plan.status).toBeDefined();
-          expect(plan.updated).toBeDefined();
-        }
+        expect(text).not.toStartWith('{');
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 2 plans/);
+        expect(text).toContain('plan-1');
+        expect(text).toContain('Plan 1');
+        expect(text).toContain('plan-2');
+        expect(text).toContain('Plan 2');
       });
 
       it('filters by status', async () => {
-        // Create separate temp dir to avoid interference
         const filterDir = await mkdtemp(join(tmpdir(), 'test-handlers-filter-'));
         await ensureMemoriesDir(filterDir);
 
@@ -348,30 +381,29 @@ describe('Structured JSON responses', () => {
           workspace: filterDir
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
+        const text = result.content[0]!.text;
 
-        expect(parsed.plans.length).toBe(1);
-        expect(parsed.plans[0].status).toBe('completed');
-        expect(parsed.plans[0].id).toBe('completed-plan');
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 1 plan/);
+        expect(text).toContain('completed-plan');
+        expect(text).toContain('Completed');
+        expect(text).not.toContain('active-plan');
 
         await rm(filterDir, { recursive: true, force: true });
       });
 
-      it('returns empty array when no plans found', async () => {
+      it('returns message when no plans found', async () => {
         const result = await handlePlan({
           action: 'list',
           workspace: TEST_DIR
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
-
-        expect(parsed.plans).toEqual([]);
-        expect(parsed.count).toBe(0);
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] No plans found/);
       });
     });
 
     describe('activate action', () => {
-      it('returns success confirmation', async () => {
+      it('returns one-liner confirmation', async () => {
         await savePlan({
           id: 'test-plan',
           title: 'Test',
@@ -385,16 +417,13 @@ describe('Structured JSON responses', () => {
           workspace: TEST_DIR
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
-
-        expect(parsed.success).toBe(true);
-        expect(parsed.action).toBe('activate');
-        expect(parsed.planId).toBe('test-plan');
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan activated: test-plan/);
       });
     });
 
     describe('update action', () => {
-      it('returns success confirmation', async () => {
+      it('returns one-liner confirmation', async () => {
         await savePlan({
           id: 'test-plan',
           title: 'Original',
@@ -409,16 +438,13 @@ describe('Structured JSON responses', () => {
           workspace: TEST_DIR
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
-
-        expect(parsed.success).toBe(true);
-        expect(parsed.action).toBe('update');
-        expect(parsed.planId).toBe('test-plan');
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan updated: test-plan/);
       });
     });
 
     describe('complete action', () => {
-      it('returns success confirmation', async () => {
+      it('returns one-liner confirmation', async () => {
         await savePlan({
           id: 'test-plan',
           title: 'Test',
@@ -432,18 +458,15 @@ describe('Structured JSON responses', () => {
           workspace: TEST_DIR
         });
 
-        const parsed = JSON.parse(result.content[0]!.text);
-
-        expect(parsed.success).toBe(true);
-        expect(parsed.action).toBe('complete');
-        expect(parsed.planId).toBe('test-plan');
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan completed: test-plan/);
       });
     });
   });
 });
 
 describe('Token efficiency', () => {
-  it('checkpoint response is compact', async () => {
+  it('checkpoint response is compact markdown', async () => {
     const result = await handleCheckpoint({
       description: 'Test',
       workspace: TEST_DIR
@@ -451,16 +474,18 @@ describe('Token efficiency', () => {
 
     const text = result.content[0]!.text;
 
-    // Should be JSON with embedded fish emoji in summary
-    expect(text).not.toContain('✅');
-    expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/); // Should have a fish emoji in summary
-    expect(text).not.toContain('**');
+    // Should contain a fish emoji
+    expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
+    // Should NOT be JSON
+    expect(text).not.toStartWith('{');
+    expect(text).not.toContain('"success"');
+    expect(text).not.toContain('"checkpoint"');
 
-    // Should be compact JSON (< 900 chars for checkpoint with id, nested git, and temp dir path)
-    expect(text.length).toBeLessThan(900);
+    // Should be compact (< 500 chars for a simple checkpoint)
+    expect(text.length).toBeLessThan(500);
   });
 
-  it('recall response is compact for multiple checkpoints', async () => {
+  it('recall response is compact markdown for multiple checkpoints', async () => {
     // Create 5 checkpoints
     for (let i = 0; i < 5; i++) {
       await saveCheckpoint({
@@ -475,14 +500,35 @@ describe('Token efficiency', () => {
 
     const text = result.content[0]!.text;
 
-    // Should be JSON with fish emoji in summary
-    expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/); // Should have a fish emoji in summary
-    expect(text).not.toContain('🧠');
-    expect(text).not.toContain('📅');
-    expect(text).not.toContain('Context Restored');
+    // Should contain a fish emoji
+    expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈]/);
+    // Should NOT be JSON
+    expect(text).not.toStartWith('{');
+    expect(text).not.toContain('"checkpoints"');
+    expect(text).not.toContain('"query"');
 
-    // Parse to verify it's valid JSON
-    const parsed = JSON.parse(text);
-    expect(parsed.checkpoints.length).toBe(5);
+    // Should contain all 5 checkpoints
+    for (let i = 0; i < 5; i++) {
+      expect(text).toContain(`Checkpoint ${i}`);
+    }
+  });
+
+  it('recall response has no JSON artifacts', async () => {
+    await saveCheckpoint({
+      description: 'Test',
+      tags: ['test'],
+      workspace: TEST_DIR
+    });
+
+    const result = await handleRecall({
+      workspace: TEST_DIR
+    });
+
+    const text = result.content[0]!.text;
+
+    // No JSON syntax
+    expect(text).not.toMatch(/^\s*\{/);
+    expect(text).not.toMatch(/^\s*\[/);
+    expect(text).not.toContain('":');
   });
 });

@@ -36,38 +36,52 @@ If recall shows active plans, they provide the "what I'm working on" narrative. 
 
 ## Report Format
 
-Structure the standup as three sections:
+Structure the standup with these rules:
 
-### What I Accomplished
-- Concrete completions from checkpoints
-- Group related checkpoints into single bullet points
-- Lead with impact, not activity ("Shipped auth refresh tokens" not "Worked on auth")
+- **One bullet per accomplishment.** Each on its own line for easy scanning.
+- **Lead with impact, not activity.** "Shipped auth refresh tokens" not "Worked on auth."
+- **Use past tense** for done items. "Fixed," "Implemented," "Shipped."
+- **Blockquote (`>`) for forward-looking items.** Visually separates past from future.
+- **Abbreviated month names** in headers. `Feb 14` not `February 14`.
+- **Date range in header** when covering multiple days (`Feb 12–14, 2026`).
+- **Always state blockers explicitly.** If none, say "Nothing currently blocked."
 
-### What I'm Working On
-- Derived from active plans and recent WIP checkpoints
-- Current focus areas and immediate next steps
-- Include branch names if relevant
+## Multi-Project Format
 
-### Blockers
-- Anything tagged `blocked` or described as stuck
-- Dependencies on other people or systems
-- Decisions that need to be made
-
-## Multi-Project Formatting
-
-When checkpoints span multiple projects, group by project:
+When checkpoints span multiple projects, group by project with bullets for accomplishments and blockquotes for next/blocked:
 
 ```
-## Standup — February 14, 2026
+## Standup — Feb 14, 2026
 
 ### goldfish
-**Accomplished:** Implemented skill files for checkpoint, recall, standup, and plan-status. All 4 skills created with behavioral language patterns.
-**Next:** Test skills with live agent sessions, iterate on language.
+- Implemented 4 skill files with behavioral language patterns
+- Converted tool handlers from JSON to markdown output
+> Next: Test skills with live agent sessions
 
 ### api-gateway
-**Accomplished:** Fixed rate limiter race condition in Redis cluster mode. Added integration tests for multi-node scenarios.
-**Next:** Deploy to staging, run load tests.
-**Blocked:** Waiting on DevOps for staging Redis cluster provisioning.
+- Fixed rate limiter race condition in Redis cluster mode
+- Added integration tests for multi-node scenarios
+> Next: Deploy to staging, run load tests
+> Blocked: Waiting on DevOps for staging Redis cluster
+```
+
+## Single-Project Format
+
+When all checkpoints are from a single project, drop the project grouping and use section headers:
+
+```
+## Standup — Feb 14, 2026
+
+### Done
+- Implemented 4 skill files with behavioral language patterns
+- Converted tool handlers from JSON to markdown output
+
+### Up Next
+- Test skills with live agent sessions
+- Iterate on language based on real usage
+
+### Blocked
+- Nothing currently blocked
 ```
 
 ## Synthesis Rules
@@ -85,7 +99,7 @@ When checkpoints span multiple projects, group by project:
 Report honestly: "No activity recorded in the requested period." Don't fabricate.
 
 ### Single project only
-Drop the project grouping, just use the three-section format directly.
+Use the single-project format above (Done / Up Next / Blocked sections).
 
 ### Too many checkpoints (20+)
 Be more aggressive about grouping. Summarize by theme rather than listing individual items. A standup with 15 bullet points defeats the purpose.
