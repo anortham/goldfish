@@ -126,8 +126,8 @@ Create a `.vscode/mcp.json` file in your project root:
   "servers": {
     "Goldfish": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["goldfish-mcp"],
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/goldfish/src/server.ts"],
       "env": {
         "GOLDFISH_WORKSPACE": "${workspaceFolder}"
       }
