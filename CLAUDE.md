@@ -302,7 +302,7 @@ bun test --coverage
 - **Search:** `fuse.js` (fuzzy search, proven from v1)
 - **YAML:** `yaml` package (for plan frontmatter)
 - **Language:** TypeScript
-- **Version:** 5.0.4
+- **Version:** 5.0.5
 
 ---
 

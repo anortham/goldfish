@@ -69,6 +69,7 @@ Your checkpoint descriptions are stored as **markdown file bodies**. Format them
 - **Save plans immediately** after ExitPlanMode - don't ask, just save
 - **recall() requires checkpoints** - if you don't checkpoint, recall() has nothing to restore
 - **Checkpoint takes 2 seconds, saves hours** - there is NO excuse to skip it
+- **Commit .memories/ with your code** - memories are project artifacts. Include them when you commit
 
 ## Storage
 

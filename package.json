@@ -1,6 +1,6 @@
 {
   "name": "goldfish",
-  "version": "5.0.4",
+  "version": "5.0.5",
   "description": "Claude Code plugin — persistent developer memory with checkpoints, recall, plans, and standups",
   "type": "module",
   "main": "src/server.ts",

@@ -18,7 +18,7 @@ If you find yourself writing implementation code before tests, STOP. Delete it a
 
 ## Core Philosophy
 
-This is **iteration #5** of a developer memory system, now at **v5.0.4**. We've learned hard lessons:
+This is **iteration #5** of a developer memory system, now at **v5.0.5**. We've learned hard lessons:
 
 ### What We've Tried Before
 1. **Original Goldfish (TS)**: JSON files, good concepts, critical bugs (race conditions, date handling)
@@ -428,7 +428,7 @@ You're doing it right when:
 
 ## Remember
 
-**This is iteration #5, now at v5.0.4. We've made mistakes before.**
+**This is iteration #5, now at v5.0.5. We've made mistakes before.**
 
 The difference this time: **radical simplicity** and **evidence-based feature development**.
 
