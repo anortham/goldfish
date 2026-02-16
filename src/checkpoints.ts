@@ -9,7 +9,7 @@ import { join } from 'path';
 import { readFile, writeFile, readdir, rename, mkdir } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Checkpoint, CheckpointInput } from './types';
-import { getMemoriesDir, ensureMemoriesDir } from './workspace';
+import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
 import { getGitContext } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
@@ -176,7 +176,7 @@ export function parseJsonCheckpoint(content: string): Checkpoint {
  * Uses atomic write-then-rename to prevent corruption
  */
 export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint> {
-  const projectPath = input.workspace || process.cwd();
+  const projectPath = resolveWorkspace(input.workspace);
   await ensureMemoriesDir(projectPath);
 
   // Create checkpoint with current timestamp

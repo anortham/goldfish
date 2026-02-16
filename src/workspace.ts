@@ -63,16 +63,16 @@ export function resolveWorkspace(explicit?: string): string {
 
 /**
  * Get the .memories/ directory path for a project.
- * Falls back to process.cwd() if no projectPath is provided.
+ * Falls back to resolveWorkspace() if no projectPath is provided.
  */
 export function getMemoriesDir(projectPath?: string): string {
-  const base = projectPath ?? process.cwd();
+  const base = projectPath ?? resolveWorkspace();
   return join(base, '.memories');
 }
 
 /**
  * Get the .memories/plans/ directory path for a project.
- * Falls back to process.cwd() if no projectPath is provided.
+ * Falls back to resolveWorkspace() if no projectPath is provided.
  */
 export function getPlansDir(projectPath?: string): string {
   return join(getMemoriesDir(projectPath), 'plans');
@@ -80,7 +80,7 @@ export function getPlansDir(projectPath?: string): string {
 
 /**
  * Ensure .memories/ and .memories/plans/ directories exist for a project.
- * Falls back to process.cwd() if no projectPath is provided.
+ * Falls back to resolveWorkspace() if no projectPath is provided.
  */
 export async function ensureMemoriesDir(projectPath?: string): Promise<void> {
   const plansDir = getPlansDir(projectPath);

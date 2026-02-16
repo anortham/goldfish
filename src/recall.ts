@@ -10,6 +10,7 @@ import type { Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from '
 import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
+import { resolveWorkspace } from './workspace';
 
 /**
  * Parse human-friendly time spans or ISO timestamps
@@ -211,9 +212,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
 
   // Single workspace recall
   if (workspace !== 'all') {
-    const projectPath = workspace === 'current'
-      ? process.cwd()
-      : workspace;
+    const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
     const { checkpoints, activePlan } = await recallFromWorkspace(projectPath, options);
 

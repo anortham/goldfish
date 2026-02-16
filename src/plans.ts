@@ -11,7 +11,7 @@ import { join } from 'path';
 import { readFile, writeFile, readdir, unlink, rename } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Plan, PlanInput, PlanUpdate } from './types';
-import { getMemoriesDir, getPlansDir, ensureMemoriesDir } from './workspace';
+import { getMemoriesDir, getPlansDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
 import { withLock } from './lock';
 
 /**
@@ -97,7 +97,7 @@ function generatePlanId(title: string): string {
  * Save a new plan
  */
 export async function savePlan(input: PlanInput): Promise<Plan> {
-  const projectPath = input.workspace || process.cwd();
+  const projectPath = resolveWorkspace(input.workspace);
   await ensureMemoriesDir(projectPath);
 
   const now = new Date().toISOString();
