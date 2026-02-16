@@ -25,4 +25,5 @@
 - Is the PreCompact hook reliable enough? Does Claude actually checkpoint before compaction?
 - Does the SessionStart hook fire consistently? Any startup delay issues?
 - Is the ExitPlanMode → plan save hook working as expected?
-- Should skills be more or less prescriptive?
+- Should skills be more or less prescriptive? 
+- JSON output from the tools makes no sense. We are burning extra tokens. We need readable output.

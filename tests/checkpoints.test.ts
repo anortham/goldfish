@@ -4,6 +4,7 @@ import {
   getCheckpointsForDay,
   getCheckpointsForDateRange,
   parseCheckpointFile,
+  parseJsonCheckpoint,
   formatCheckpoint,
   generateCheckpointId,
   getCheckpointFilename
@@ -272,6 +273,242 @@ And trailing newlines.
 
     // Description should be trimmed
     expect(checkpoint.description).toBe('Some description with leading spaces.\n\nAnd trailing newlines.');
+  });
+
+  // ─── Old Julie MD format (Unix timestamps, files_changed, type) ──────
+
+  it('parses old Julie MD format with Unix timestamp', () => {
+    const content = `---
+git:
+  branch: main
+  commit: 5d11ef5
+  dirty: true
+  files_changed:
+  - src/handler.rs
+  - src/tools/mod.rs
+id: checkpoint_6990afbd_476027
+tags:
+- memory-removal
+- cleanup
+timestamp: 1771089853
+type: checkpoint
+---
+
+## Memory Tools Removal — Complete
+
+Removed 3 MCP tools, moving to Goldfish.
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.id).toBe('checkpoint_6990afbd_476027');
+    // Unix timestamp 1771089853 = 2026-02-15T06:04:13.000Z
+    expect(checkpoint.timestamp).toMatch(/^2026-02-1\dT/);
+    expect(new Date(checkpoint.timestamp).getTime()).toBe(1771089853 * 1000);
+    expect(checkpoint.tags).toEqual(['memory-removal', 'cleanup']);
+    // files_changed should be mapped to files
+    expect(checkpoint.git).toEqual({
+      branch: 'main',
+      commit: '5d11ef5',
+      files: ['src/handler.rs', 'src/tools/mod.rs']
+    });
+    // dirty and type should be dropped
+    expect((checkpoint.git as any)?.dirty).toBeUndefined();
+    expect((checkpoint as any).type).toBeUndefined();
+    expect(checkpoint.description).toContain('Memory Tools Removal');
+  });
+
+  it('parses old Julie MD format with millisecond timestamp and camelCase filesChanged', () => {
+    const content = `---
+id: mem_b2e2166f5c477f2c
+timestamp: 1770580174333
+tags:
+  - milestone
+git:
+  branch: main
+  commit: d273c52
+  dirty: true
+  filesChanged:
+    - src/handler.rs
+---
+
+## Round 5 Complete
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.id).toBe('mem_b2e2166f5c477f2c');
+    // Millisecond timestamp (> 1e10) should be treated as ms, not seconds
+    expect(new Date(checkpoint.timestamp).getTime()).toBe(1770580174333);
+    expect(checkpoint.git!.files).toEqual(['src/handler.rs']);
+    expect((checkpoint.git as any)?.filesChanged).toBeUndefined();
+    expect((checkpoint.git as any)?.dirty).toBeUndefined();
+  });
+
+  it('parses old Julie MD format with decision type', () => {
+    const content = `---
+git:
+  branch: main
+  commit: 5d11ef5
+  dirty: true
+  files_changed:
+  - JULIE_AGENT_INSTRUCTIONS.md
+id: decision_6990ab06_9f4cac
+tags:
+- architectural-decision
+timestamp: 1771088646
+type: decision
+---
+
+## Architectural Decision: Julie/Goldfish Separation
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    // Non-standard ID should be preserved as-is
+    expect(checkpoint.id).toBe('decision_6990ab06_9f4cac');
+    // Unix timestamp converted to ISO
+    expect(new Date(checkpoint.timestamp).getTime()).toBe(1771088646 * 1000);
+    expect(checkpoint.tags).toEqual(['architectural-decision']);
+    expect(checkpoint.git!.files).toEqual(['JULIE_AGENT_INSTRUCTIONS.md']);
+    expect(checkpoint.description).toContain('Architectural Decision');
+  });
+
+  // ─── CRLF handling ──────────────────────────────────────────────────
+
+  it('handles CRLF line endings (Windows git checkout)', () => {
+    // Simulate content that passed through git with core.autocrlf=true
+    const content = "---\r\nid: checkpoint_crlf0001\r\ntimestamp: \"2026-02-14T21:31:02.718Z\"\r\ntags:\r\n  - windows\r\ngit:\r\n  branch: main\r\n  commit: a1b2c3d\r\nsummary: CRLF checkpoint\r\n---\r\n\r\nThis checkpoint has Windows line endings.\r\n";
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.id).toBe('checkpoint_crlf0001');
+    expect(checkpoint.timestamp).toBe('2026-02-14T21:31:02.718Z');
+    expect(checkpoint.tags).toEqual(['windows']);
+    expect(checkpoint.git).toEqual({ branch: 'main', commit: 'a1b2c3d' });
+    expect(checkpoint.summary).toBe('CRLF checkpoint');
+    expect(checkpoint.description).toBe('This checkpoint has Windows line endings.');
+  });
+
+  it('handles mixed LF/CRLF line endings', () => {
+    // Some lines CRLF, some LF (can happen with manual edits)
+    const content = "---\r\nid: checkpoint_mixed01\ntimestamp: \"2026-02-14T10:00:00.000Z\"\r\n---\r\n\nMixed endings.\n";
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.id).toBe('checkpoint_mixed01');
+    expect(checkpoint.timestamp).toBe('2026-02-14T10:00:00.000Z');
+    expect(checkpoint.description).toBe('Mixed endings.');
+  });
+});
+
+// ─── parseJsonCheckpoint (old Julie JSON format) ────────────────────
+
+describe('parseJsonCheckpoint', () => {
+  it('parses old Julie JSON format with all fields', () => {
+    const content = JSON.stringify({
+      id: 'checkpoint_691f37ff_869822',
+      timestamp: 1763653631,
+      type: 'checkpoint',
+      git: {
+        branch: 'main',
+        commit: '05c1036',
+        dirty: true
+      },
+      description: 'Investigated TOON format and fixed parentheses bug.',
+      tags: ['toon', 'planning']
+    });
+
+    const checkpoint = parseJsonCheckpoint(content);
+
+    expect(checkpoint.id).toBe('checkpoint_691f37ff_869822');
+    // Unix timestamp 1763653631 converted to ISO
+    expect(new Date(checkpoint.timestamp).getTime()).toBe(1763653631 * 1000);
+    expect(checkpoint.description).toBe('Investigated TOON format and fixed parentheses bug.');
+    expect(checkpoint.tags).toEqual(['toon', 'planning']);
+    expect(checkpoint.git).toEqual({
+      branch: 'main',
+      commit: '05c1036'
+    });
+    // dirty and type should be dropped
+    expect((checkpoint.git as any)?.dirty).toBeUndefined();
+    expect((checkpoint as any).type).toBeUndefined();
+  });
+
+  it('parses JSON checkpoint with minimal fields', () => {
+    const content = JSON.stringify({
+      id: 'checkpoint_abcd1234_ef5678',
+      timestamp: 1763700000,
+      description: 'Simple checkpoint'
+    });
+
+    const checkpoint = parseJsonCheckpoint(content);
+
+    expect(checkpoint.id).toBe('checkpoint_abcd1234_ef5678');
+    expect(new Date(checkpoint.timestamp).getTime()).toBe(1763700000 * 1000);
+    expect(checkpoint.description).toBe('Simple checkpoint');
+    expect(checkpoint.tags).toBeUndefined();
+    expect(checkpoint.git).toBeUndefined();
+  });
+
+  it('handles JSON checkpoint with files_changed in git', () => {
+    const content = JSON.stringify({
+      id: 'checkpoint_fc000000_aabbcc',
+      timestamp: 1763700000,
+      git: {
+        branch: 'feature',
+        commit: 'abc1234',
+        dirty: false,
+        files_changed: ['src/foo.rs', 'src/bar.rs']
+      },
+      description: 'With files_changed'
+    });
+
+    const checkpoint = parseJsonCheckpoint(content);
+
+    expect(checkpoint.git!.files).toEqual(['src/foo.rs', 'src/bar.rs']);
+    expect((checkpoint.git as any)?.files_changed).toBeUndefined();
+    expect((checkpoint.git as any)?.dirty).toBeUndefined();
+  });
+
+  it('throws on invalid JSON', () => {
+    expect(() => parseJsonCheckpoint('not json')).toThrow();
+  });
+});
+
+// ─── getCheckpointsForDay (legacy format support) ───────────────────
+
+describe('getCheckpointsForDay legacy formats', () => {
+  it('reads .json files alongside .md files', async () => {
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, '2025-11-20');
+    await mkdir(dateDir, { recursive: true });
+
+    // Write a .json checkpoint (old Julie format)
+    const jsonContent = JSON.stringify({
+      id: 'checkpoint_json0001_aabb',
+      timestamp: 1763654400,
+      description: 'Old JSON checkpoint',
+      tags: ['legacy']
+    });
+    await writeFile(join(dateDir, '120000_json.json'), jsonContent, 'utf-8');
+
+    // Write a .md checkpoint (current format)
+    const mdContent = `---
+id: checkpoint_md000001
+timestamp: "2025-11-20T15:00:00.000Z"
+---
+
+Current MD checkpoint
+`;
+    await writeFile(join(dateDir, '150000_md00.md'), mdContent, 'utf-8');
+
+    const checkpoints = await getCheckpointsForDay(tempDir, '2025-11-20');
+
+    expect(checkpoints).toHaveLength(2);
+    const descriptions = checkpoints.map(c => c.description);
+    expect(descriptions).toContain('Old JSON checkpoint');
+    expect(descriptions).toContain('Current MD checkpoint');
   });
 });
 

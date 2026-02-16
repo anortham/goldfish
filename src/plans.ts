@@ -35,8 +35,11 @@ export function formatPlanFile(plan: Plan): string {
  * Parse a plan markdown file (YAML frontmatter + content)
  */
 export function parsePlanFile(content: string): Plan {
+  // Normalize CRLF → LF (Windows git checkout with core.autocrlf=true)
+  const normalized = content.replace(/\r\n/g, '\n');
+
   // Extract frontmatter
-  const match = content.match(/^---\n([\s\S]+?)\n---\n\n([\s\S]*)$/);
+  const match = normalized.match(/^---\n([\s\S]+?)\n---\n\n([\s\S]*)$/);
 
   if (!match) {
     throw new Error('Invalid plan file: missing YAML frontmatter');

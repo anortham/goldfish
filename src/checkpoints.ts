@@ -79,11 +79,42 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
 }
 
 /**
+ * Convert a legacy timestamp (Unix seconds or milliseconds) to ISO 8601.
+ * Heuristic: values > 1e10 are milliseconds, otherwise seconds.
+ * (Unix seconds won't exceed 1e10 until year 2286.)
+ */
+function normalizeTimestamp(raw: unknown): string {
+  if (typeof raw === 'number') {
+    const ms = raw > 1e10 ? raw : raw * 1000;
+    return new Date(ms).toISOString();
+  }
+  return String(raw);
+}
+
+/**
+ * Normalize a legacy git context object to the current GitContext shape.
+ * Handles: files_changed (snake_case), filesChanged (camelCase), dirty field.
+ */
+function normalizeGit(rawGit: Record<string, unknown>): Checkpoint['git'] | undefined {
+  const git: NonNullable<Checkpoint['git']> = {};
+  if (rawGit.branch) git.branch = String(rawGit.branch);
+  if (rawGit.commit) git.commit = String(rawGit.commit);
+  const files = rawGit.files ?? rawGit.files_changed ?? rawGit.filesChanged;
+  if (Array.isArray(files) && files.length > 0) {
+    git.files = files.map(String);
+  }
+  return Object.keys(git).length > 0 ? git : undefined;
+}
+
+/**
  * Parse a single checkpoint from a YAML frontmatter markdown file
  */
 export function parseCheckpointFile(content: string): Checkpoint {
+  // Normalize CRLF → LF (Windows git checkout with core.autocrlf=true)
+  const normalized = content.replace(/\r\n/g, '\n');
+
   // Split on frontmatter delimiters
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) {
     throw new Error('Invalid checkpoint file: no YAML frontmatter found');
   }
@@ -91,23 +122,47 @@ export function parseCheckpointFile(content: string): Checkpoint {
   const yamlContent = match[1]!;
   const body = match[2]!.trim();
 
-  const frontmatter = parseYaml(yamlContent) as {
-    id: string;
-    timestamp: string;
-    tags?: string[];
-    git?: { branch?: string; commit?: string; files?: string[] };
-    summary?: string;
-  };
+  const frontmatter = parseYaml(yamlContent) as Record<string, unknown>;
+
+  const timestamp = normalizeTimestamp(frontmatter.timestamp);
+  const rawGit = frontmatter.git as Record<string, unknown> | undefined;
+  const git = rawGit ? normalizeGit(rawGit) : undefined;
 
   const checkpoint: Checkpoint = {
-    id: frontmatter.id,
-    timestamp: frontmatter.timestamp,
+    id: String(frontmatter.id),
+    timestamp,
     description: body
   };
 
-  if (frontmatter.tags) checkpoint.tags = frontmatter.tags;
-  if (frontmatter.git) checkpoint.git = frontmatter.git;
-  if (frontmatter.summary) checkpoint.summary = frontmatter.summary;
+  const tags = frontmatter.tags as string[] | undefined;
+  if (tags) checkpoint.tags = tags;
+  if (git) checkpoint.git = git;
+  if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
+
+  return checkpoint;
+}
+
+/**
+ * Parse a checkpoint from an old Julie JSON format file.
+ * Handles: Unix timestamps (seconds), dirty field, type field, files_changed.
+ */
+export function parseJsonCheckpoint(content: string): Checkpoint {
+  const raw = JSON.parse(content) as Record<string, unknown>;
+
+  const timestamp = normalizeTimestamp(raw.timestamp);
+
+  const checkpoint: Checkpoint = {
+    id: String(raw.id),
+    timestamp,
+    description: String(raw.description ?? '')
+  };
+
+  const tags = raw.tags as string[] | undefined;
+  if (tags && tags.length > 0) checkpoint.tags = tags;
+
+  const rawGit = raw.git as Record<string, unknown> | undefined;
+  const git = rawGit ? normalizeGit(rawGit) : undefined;
+  if (git) checkpoint.git = git;
 
   return checkpoint;
 }
@@ -194,8 +249,10 @@ export async function getCheckpointsForDay(
   }
 
   const mdFiles = files.filter(f => f.endsWith('.md')).sort();
+  const jsonFiles = files.filter(f => f.endsWith('.json')).sort();
 
   const checkpoints: Checkpoint[] = [];
+
   for (const file of mdFiles) {
     try {
       const content = await readFile(join(dateDir, file), 'utf-8');
@@ -203,6 +260,17 @@ export async function getCheckpointsForDay(
       checkpoints.push(checkpoint);
     } catch {
       // Skip files that can't be parsed (e.g., corrupted)
+      continue;
+    }
+  }
+
+  // Legacy: read old Julie JSON checkpoint files
+  for (const file of jsonFiles) {
+    try {
+      const content = await readFile(join(dateDir, file), 'utf-8');
+      const checkpoint = parseJsonCheckpoint(content);
+      checkpoints.push(checkpoint);
+    } catch {
       continue;
     }
   }

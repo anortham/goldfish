@@ -143,6 +143,17 @@ Content`;
     const content = 'Just content, no frontmatter';
     expect(() => parsePlanFile(content)).toThrow();
   });
+
+  it('handles CRLF line endings (Windows git checkout)', () => {
+    const content = "---\r\nid: crlf-plan\r\ntitle: CRLF Plan\r\nstatus: active\r\ncreated: \"2026-02-14T10:00:00.000Z\"\r\nupdated: \"2026-02-14T10:00:00.000Z\"\r\ntags:\r\n  - windows\r\n---\r\n\r\nPlan with Windows line endings.\r\n";
+
+    const plan = parsePlanFile(content);
+
+    expect(plan.id).toBe('crlf-plan');
+    expect(plan.title).toBe('CRLF Plan');
+    expect(plan.status).toBe('active');
+    expect(plan.content).toBe('Plan with Windows line endings.');
+  });
 });
 
 describe('Plan storage', () => {

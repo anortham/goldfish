@@ -2,14 +2,38 @@
  * Recall tool handler
  */
 
+import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
+import { getMemoriesDir } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
+
+/**
+ * Resolve the effective workspace path (same logic as recall.ts)
+ */
+function resolveWorkspacePath(workspace?: string): string {
+  if (!workspace || workspace === 'current') return process.cwd();
+  if (workspace === 'all') return '(cross-project)';
+  return workspace;
+}
 
 /**
  * Handle recall tool calls
  */
 export async function handleRecall(args: any) {
   const result = await recallFunc(args);
+
+  // Capture diagnostic info for debugging
+  const resolvedPath = resolveWorkspacePath(args.workspace);
+  const memoriesDir = resolvedPath !== '(cross-project)' ? getMemoriesDir(resolvedPath) : null;
+  let memoriesExists = false;
+  if (memoriesDir) {
+    try {
+      const stats = await stat(memoriesDir);
+      memoriesExists = stats.isDirectory();
+    } catch {
+      // doesn't exist
+    }
+  }
 
   // Build human-friendly summary
   const count = result.checkpoints.length;
@@ -25,6 +49,9 @@ export async function handleRecall(args: any) {
     checkpoints: result.checkpoints,
     query: {
       workspace: args.workspace || 'current',
+      resolvedPath,
+      memoriesDir,
+      memoriesExists,
       ...(args.days !== undefined && { days: args.days }),
       ...(args.since && { since: args.since }),
       ...(args.from && { from: args.from }),
