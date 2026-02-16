@@ -4,6 +4,7 @@
 
 import { savePlan, getPlan, listPlans, setActivePlan, updatePlan } from '../plans.js';
 import { getFishEmoji } from '../emoji.js';
+import { resolveWorkspace } from '../workspace.js';
 import type { Plan } from '../types.js';
 
 /**
@@ -49,7 +50,7 @@ function textResponse(text: string) {
  */
 export async function handlePlan(args: any) {
   const { action, workspace: wsArg } = args;
-  const workspace = wsArg || process.cwd();
+  const workspace = resolveWorkspace(wsArg);
   const fish = getFishEmoji();
 
   switch (action) {

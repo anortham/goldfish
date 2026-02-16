@@ -4,7 +4,7 @@
 
 import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
-import { getMemoriesDir } from '../workspace.js';
+import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
 import type { Checkpoint, Plan, WorkspaceSummary } from '../types.js';
 
@@ -12,9 +12,8 @@ import type { Checkpoint, Plan, WorkspaceSummary } from '../types.js';
  * Resolve the effective workspace path (same logic as recall.ts)
  */
 function resolveWorkspacePath(workspace?: string): string {
-  if (!workspace || workspace === 'current') return process.cwd();
   if (workspace === 'all') return '(cross-project)';
-  return workspace;
+  return resolveWorkspace(workspace);
 }
 
 /**

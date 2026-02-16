@@ -4,6 +4,7 @@
 
 import { saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
+import { resolveWorkspace } from '../workspace.js';
 
 /**
  * Handle checkpoint tool calls
@@ -15,7 +16,7 @@ export async function handleCheckpoint(args: any) {
     throw new Error('Description is required');
   }
 
-  const ws = workspace || process.cwd();
+  const ws = resolveWorkspace(workspace);
   const checkpoint = await saveCheckpoint({
     description,
     tags,
