@@ -53,7 +53,7 @@ Goldfish is a **Claude Code plugin** with:
 
 - **`.claude-plugin/plugin.json`** - Plugin manifest for auto-discovery
 - **`.mcp.json`** - MCP server auto-registration
-- **`skills/`** - 4 Claude Code skills (slash commands)
+- **`skills/`** - 5 Claude Code skills (slash commands)
 - **`hooks/`** - 3 Claude Code hooks (lifecycle automation)
 
 ### Core Modules
@@ -197,7 +197,7 @@ git add tests/checkpoints.test.ts src/checkpoints.ts
 git commit -m "Add checkpoint storage with atomic writes"
 ```
 
-**Current test status: 260 tests, all passing.**
+**Current test status: 265 tests, all passing.**
 
 ---
 
@@ -303,7 +303,7 @@ bun test --coverage
 - **Search:** `fuse.js` (fuzzy search, proven from v1)
 - **YAML:** `yaml` package (for plan frontmatter)
 - **Language:** TypeScript
-- **Version:** 5.0.7
+- **Version:** 5.1.0
 
 ---
 

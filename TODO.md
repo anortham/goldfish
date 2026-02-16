@@ -1,4 +1,4 @@
-# Goldfish v5.0.0 — Status
+# Goldfish — Status
 
 ## Done (Revival Complete)
 
@@ -45,6 +45,15 @@
 - [x] `normalizeTimestamp` returns garbage for `null`/`undefined` input (`checkpoints.ts:86-92`)
 - [x] Lock timeout test is a no-op placeholder (`lock.test.ts:121-127`)
 - [x] No BOM handling in frontmatter parser — Windows edge case (`checkpoints.ts:117`)
+
+## v5.1.0 — Skills Refresh + Workspace Resolution (2026-02-16)
+
+- [x] `GOLDFISH_WORKSPACE` env var for VS Code / GitHub Copilot workspace resolution
+- [x] `resolveWorkspace()` centralized resolver replacing 7 `process.cwd()` fallbacks
+- [x] New `/plan` skill — behavioral guide for plan tool lifecycle
+- [x] Updated `/standup` skill — dual-source plan awareness (`.memories/plans/` + `docs/plans/`)
+- [x] Updated `/plan-status` skill — dual-source plan awareness with source attribution
+- [x] VS Code `.vscode/mcp.json` setup documented in README
 
 ## What's Next
 

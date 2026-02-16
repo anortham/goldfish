@@ -265,7 +265,7 @@ We achieve this through:
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
 
-**Total: 260 tests passing | ~2,094 lines of production code | 3 runtime dependencies**
+**Total: 265 tests passing | ~2,094 lines of production code | 3 runtime dependencies**
 
 ---
 

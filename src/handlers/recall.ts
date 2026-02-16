@@ -9,7 +9,7 @@ import { getFishEmoji } from '../emoji.js';
 import type { Checkpoint, Plan, WorkspaceSummary } from '../types.js';
 
 /**
- * Resolve the effective workspace path (same logic as recall.ts)
+ * Resolve the effective workspace path, handling the 'all' special case
  */
 function resolveWorkspacePath(workspace?: string): string {
   if (workspace === 'all') return '(cross-project)';

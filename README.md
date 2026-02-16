@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, and sta
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Data lives in `.memories/` (git-committable) with a lightweight cross-project registry at `~/.goldfish/registry.json`.
 
-**Version 5.0.7** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 5.1.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -17,7 +17,7 @@ AI coding sessions have a memory problem:
 - Switching projects loses context
 - No way to answer "what was I working on yesterday?"
 
-Goldfish solves this with three MCP tools (checkpoint, recall, plan), four skills, and three hooks that make memory automatic and transparent.
+Goldfish solves this with three MCP tools (checkpoint, recall, plan), five skills, and three hooks that make memory automatic and transparent.
 
 ---
 
@@ -27,7 +27,7 @@ Goldfish solves this with three MCP tools (checkpoint, recall, plan), four skill
 
 ### Option 1: Install from GitHub (Recommended)
 
-This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/standup`, `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction, auto-save plans).
+This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/plan`, `/standup`, `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction, auto-save plans).
 
 ```bash
 # Add the Goldfish repository as a plugin marketplace
@@ -110,7 +110,7 @@ For Claude Code specifically, add this to your project's `.mcp.json` or `~/.clau
 }
 ```
 
-**What you get with standalone MCP:** The 3 core tools (`checkpoint`, `recall`, `plan`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
+**What you get with standalone MCP:** The 3 core tools (`checkpoint`, `recall`, `plan`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/plan`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
 
 For standalone MCP usage, you'll want to instruct your agent to:
 - Call `recall()` at session start
@@ -216,6 +216,7 @@ Skills are invocable via `/skill-name` in Claude Code. They provide guided workf
 | `/checkpoint` | Save a checkpoint with rich description and tags |
 | `/recall` | Restore context from recent checkpoints and active plan |
 | `/standup` | Generate a cross-project standup report |
+| `/plan` | Create and manage persistent plans for multi-session work |
 | `/plan-status` | Assess progress against the active plan |
 
 Skills live in the `skills/` directory, each with a `SKILL.md` file containing behavioral instructions.
@@ -353,6 +354,7 @@ goldfish/
     checkpoint/SKILL.md   # /checkpoint skill
     recall/SKILL.md       # /recall skill
     standup/SKILL.md      # /standup skill
+    plan/SKILL.md         # /plan skill
     plan-status/SKILL.md  # /plan-status skill
   src/
     server.ts             # MCP server entry point
@@ -369,7 +371,7 @@ goldfish/
     summary.ts            # Auto-summary generation
     emoji.ts              # Emoji utilities
     handlers/             # Tool handler implementations
-  tests/                  # Test files (260 tests)
+  tests/                  # Test files (265 tests)
 ```
 
 ---
@@ -379,7 +381,7 @@ goldfish/
 **This is a TDD project. Tests are written before implementation. No exceptions.**
 
 ```bash
-# Run all tests (260 tests)
+# Run all tests (265 tests)
 bun test
 
 # Watch mode (recommended during development)
@@ -397,7 +399,7 @@ bun run typecheck
 
 ### Stats
 
-- **260 tests**, all passing
+- **265 tests**, all passing
 - **~2,070 lines** of production code
 - **3 dependencies:** `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`
 
