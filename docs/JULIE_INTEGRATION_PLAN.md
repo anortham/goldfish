@@ -145,7 +145,7 @@ CREATE TABLE embeddings (
 -- Workspace metadata
 CREATE TABLE workspaces (
   workspace TEXT PRIMARY KEY,           -- 'my-project'
-  full_path TEXT NOT NULL,              -- '/Users/murphy/projects/my-project'
+  full_path TEXT NOT NULL,              -- '/Users/user/projects/my-project'
   last_synced TEXT NOT NULL,            -- ISO 8601 UTC
   memory_count INTEGER DEFAULT 0
 );
@@ -337,7 +337,7 @@ async function syncWorkspace(workspace: string) {
   console.log(`Syncing workspace: ${workspace}`);
 
   // 1. Get workspace path
-  const workspacePath = getWorkspacePath(workspace);  // e.g., /Users/murphy/projects/my-project
+  const workspacePath = getWorkspacePath(workspace);  // e.g., /Users/user/projects/my-project
   const memoriesDir = join(workspacePath, '.goldfish/memories');
 
   // 2. Check if .goldfish/memories exists

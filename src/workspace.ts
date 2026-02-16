@@ -12,7 +12,7 @@ import { mkdir } from 'fs/promises';
  * Normalize a workspace identifier (path or name) to a simple name
  *
  * Examples:
- *   /Users/murphy/source/goldfish → goldfish
+ *   /Users/user/source/goldfish → goldfish
  *   C:\source\goldfish → goldfish
  *   @coa/goldfish-mcp → coa-goldfish-mcp
  *   My Project! → my-project-

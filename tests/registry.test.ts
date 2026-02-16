@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { join } from 'path';
+import { join, isAbsolute } from 'path';
 import { rm, mkdir, writeFile, readFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import {
@@ -27,7 +27,7 @@ describe('Registry path', () => {
     const path = getRegistryPath();
     expect(path).toMatch(/\.goldfish[/\\]registry\.json$/);
     // Should be an absolute path starting from home
-    expect(path.startsWith('/')).toBe(true);
+    expect(isAbsolute(path)).toBe(true);
   });
 });
 

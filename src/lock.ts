@@ -38,7 +38,7 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
         }
       };
     } catch (error: any) {
-      if (error.code === 'EEXIST') {
+      if (error.code === 'EEXIST' || error.code === 'EPERM') {
         // Lock file exists - check if it's stale
         try {
           const existingLock = JSON.parse(await Bun.file(lockPath).text());

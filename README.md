@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, and sta
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Data lives in `.memories/` (git-committable) with a lightweight cross-project registry at `~/.goldfish/registry.json`.
 
-**Version 5.0.1** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 5.0.2** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -25,9 +25,28 @@ Goldfish solves this with three MCP tools (checkpoint, recall, plan), four skill
 
 **Prerequisites:** [Bun](https://bun.sh) runtime (v1.0+)
 
-### Option 1: Install as a Claude Code Plugin (Recommended)
+### Option 1: Install from GitHub (Recommended)
 
 This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/standup`, `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction, auto-save plans).
+
+```bash
+# Add the Goldfish repository as a plugin marketplace
+/plugin marketplace add anortham/goldfish
+
+# Install the plugin (user scope, available across all projects)
+/plugin install goldfish@goldfish
+```
+
+You can also scope the installation to a specific project:
+
+```bash
+# Project scope (shared with team via version control)
+/plugin install goldfish@goldfish --scope project
+```
+
+### Option 2: Install from a Local Clone
+
+If you prefer to clone the repo yourself (useful for development or contributing):
 
 ```bash
 # Clone the repository
@@ -55,7 +74,7 @@ Once the plugin is loaded, Goldfish works automatically:
 
 No configuration needed beyond plugin installation.
 
-### Option 2: Use as a Standalone MCP Server (Any MCP Client)
+### Option 3: Use as a Standalone MCP Server (Any MCP Client)
 
 Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server. It works with any MCP-compatible client -- not just Claude Code.
 

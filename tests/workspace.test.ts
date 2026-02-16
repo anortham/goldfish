@@ -6,18 +6,19 @@ import {
   ensureMemoriesDir,
 } from '../src/workspace';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { rm, stat } from 'fs/promises';
 
 describe('Workspace normalization', () => {
   it('normalizes full Unix path to simple name', () => {
-    expect(normalizeWorkspace('/Users/murphy/source/goldfish'))
+    expect(normalizeWorkspace('/Users/user/source/goldfish'))
       .toBe('goldfish');
   });
 
   it('normalizes full Windows path to simple name', () => {
     expect(normalizeWorkspace('C:\\source\\goldfish'))
       .toBe('goldfish');
-    expect(normalizeWorkspace('C:\\Users\\murphy\\source\\goldfish'))
+    expect(normalizeWorkspace('C:\\Users\\user\\source\\goldfish'))
       .toBe('goldfish');
   });
 
@@ -71,7 +72,7 @@ describe('Project-level .memories/ storage', () => {
   const tmpDirs: string[] = [];
 
   function makeTmpDir(): string {
-    const dir = `/tmp/test-goldfish-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const dir = join(tmpdir(), `test-goldfish-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     tmpDirs.push(dir);
     return dir;
   }
@@ -90,8 +91,8 @@ describe('Project-level .memories/ storage', () => {
     });
 
     it('returns {projectPath}/.memories/ when a path is provided', () => {
-      expect(getMemoriesDir('/some/path')).toBe('/some/path/.memories');
-      expect(getMemoriesDir('/Users/murphy/source/goldfish')).toBe('/Users/murphy/source/goldfish/.memories');
+      expect(getMemoriesDir('/some/path')).toBe(join('/some/path', '.memories'));
+      expect(getMemoriesDir('/Users/user/source/goldfish')).toBe(join('/Users/user/source/goldfish', '.memories'));
     });
   });
 
@@ -102,8 +103,8 @@ describe('Project-level .memories/ storage', () => {
     });
 
     it('returns {projectPath}/.memories/plans/ when a path is provided', () => {
-      expect(getPlansDir('/some/path')).toBe('/some/path/.memories/plans');
-      expect(getPlansDir('/Users/murphy/source/goldfish')).toBe('/Users/murphy/source/goldfish/.memories/plans');
+      expect(getPlansDir('/some/path')).toBe(join('/some/path', '.memories', 'plans'));
+      expect(getPlansDir('/Users/user/source/goldfish')).toBe(join('/Users/user/source/goldfish', '.memories', 'plans'));
     });
   });
 

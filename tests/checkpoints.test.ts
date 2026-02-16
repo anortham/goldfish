@@ -12,12 +12,13 @@ import type { Checkpoint, CheckpointInput } from '../src/types';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { listRegisteredProjects, unregisterProject } from '../src/registry';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { rm, readdir, readFile, writeFile, mkdir } from 'fs/promises';
 
 let tempDir: string;
 
 beforeEach(async () => {
-  tempDir = `/tmp/test-checkpoints-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  tempDir = join(tmpdir(), `test-checkpoints-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await ensureMemoriesDir(tempDir);
 });
 

@@ -105,11 +105,11 @@ That's it. Just the plan ID. Simple.
 ```json
 {
   "projects": {
-    "/Users/murphy/source/goldfish": {
+    "/Users/user/source/goldfish": {
       "name": "goldfish",
       "lastSeen": "2026-02-14T10:30:00.000Z"
     },
-    "/Users/murphy/source/other-project": {
+    "/Users/user/source/other-project": {
       "name": "other-project",
       "lastSeen": "2026-02-13T15:00:00.000Z"
     }

@@ -16,7 +16,7 @@
   "author": {
     "name": "Alan Northam"
   },
-  "repository": "https://github.com/murphy/goldfish",
+  "repository": "https://github.com/anortham/goldfish",
   "license": "MIT",
   "keywords": ["memory", "checkpoints", "recall", "standup", "developer-tools"]
 }
@@ -153,7 +153,7 @@ goldfish/
 ## Testing
 
 ### Manual testing with `claude --plugin-dir`
-1. `claude --plugin-dir /Users/murphy/source/goldfish`
+1. `claude --plugin-dir /Users/user/source/goldfish`
 2. Verify MCP server starts (goldfish tools available)
 3. Test `/goldfish:recall` skill invocation
 4. Test `/goldfish:checkpoint` skill invocation

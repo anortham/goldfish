@@ -12,17 +12,17 @@
 {
   "projects": [
     {
-      "path": "/Users/murphy/source/goldfish",
+      "path": "/Users/user/source/goldfish",
       "name": "goldfish",
       "registered": "2026-02-14T09:30:42.123Z"
     },
     {
-      "path": "/Users/murphy/source/julie",
+      "path": "/Users/user/source/julie",
       "name": "julie",
       "registered": "2026-02-14T10:15:00.000Z"
     },
     {
-      "path": "/Users/murphy/source/miller",
+      "path": "/Users/user/source/miller",
       "name": "miller",
       "registered": "2026-02-14T11:00:00.000Z"
     }

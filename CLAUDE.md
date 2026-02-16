@@ -153,7 +153,7 @@ const localDate = new Date().toLocaleDateString();
 ### 3. Workspace Normalization
 
 ```typescript
-// /Users/murphy/source/goldfish → goldfish
+// /Users/user/source/goldfish → goldfish
 // /home/dev/@org/project → org-project
 function normalizeWorkspace(path: string): string {
   let name = path.replace(/^.*[/\\]/, '');
@@ -302,7 +302,7 @@ bun test --coverage
 - **Search:** `fuse.js` (fuzzy search, proven from v1)
 - **YAML:** `yaml` package (for plan frontmatter)
 - **Language:** TypeScript
-- **Version:** 5.0.1
+- **Version:** 5.0.2
 
 ---
 

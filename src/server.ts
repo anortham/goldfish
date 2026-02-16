@@ -28,7 +28,7 @@ export async function startServer() {
   const server = new Server(
     {
       name: 'goldfish',
-      version: '5.0.1'
+      version: '5.0.2'
     },
     {
       capabilities: {
