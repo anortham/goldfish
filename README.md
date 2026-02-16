@@ -117,6 +117,29 @@ For standalone MCP usage, you'll want to instruct your agent to:
 - Call `checkpoint()` after completing work
 - Call `plan()` to save and manage long-running plans
 
+### VS Code with GitHub Copilot
+
+Create a `.vscode/mcp.json` file in your project root:
+
+```json
+{
+  "servers": {
+    "Goldfish": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["goldfish-mcp"],
+      "env": {
+        "GOLDFISH_WORKSPACE": "${workspaceFolder}"
+      }
+    }
+  }
+}
+```
+
+The `GOLDFISH_WORKSPACE` environment variable tells Goldfish where your project root is. VS Code automatically substitutes `${workspaceFolder}` with the actual path.
+
+Without this, Goldfish may create its `.memories/` directory in the wrong location since VS Code's MCP integration doesn't pass `cwd` the way Claude Code does.
+
 ---
 
 ## How It Works
