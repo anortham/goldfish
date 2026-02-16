@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import {
   normalizeWorkspace,
+  resolveWorkspace,
   getMemoriesDir,
   getPlansDir,
   ensureMemoriesDir,
@@ -137,5 +138,39 @@ describe('Project-level .memories/ storage', () => {
       const dir = getMemoriesDir();
       expect(dir).toBe(join(process.cwd(), '.memories'));
     });
+  });
+});
+
+describe('resolveWorkspace', () => {
+  const originalEnv = process.env.GOLDFISH_WORKSPACE;
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.GOLDFISH_WORKSPACE;
+    else process.env.GOLDFISH_WORKSPACE = originalEnv;
+  });
+
+  it('returns explicit path when provided', () => {
+    process.env.GOLDFISH_WORKSPACE = '/env/path';
+    expect(resolveWorkspace('/explicit/path')).toBe('/explicit/path');
+  });
+
+  it('returns GOLDFISH_WORKSPACE when no explicit path', () => {
+    process.env.GOLDFISH_WORKSPACE = '/env/path';
+    expect(resolveWorkspace()).toBe('/env/path');
+  });
+
+  it('treats "current" same as undefined', () => {
+    process.env.GOLDFISH_WORKSPACE = '/env/path';
+    expect(resolveWorkspace('current')).toBe('/env/path');
+  });
+
+  it('falls back to cwd when no env var', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    expect(resolveWorkspace()).toBe(process.cwd());
+  });
+
+  it('ignores empty string GOLDFISH_WORKSPACE', () => {
+    process.env.GOLDFISH_WORKSPACE = '';
+    expect(resolveWorkspace()).toBe(process.cwd());
   });
 });

@@ -48,6 +48,17 @@ export function normalizeWorkspace(pathOrName: string): string {
   return name;
 }
 
+/**
+ * Resolve the effective workspace path.
+ * Priority: explicit arg > GOLDFISH_WORKSPACE env var > process.cwd()
+ */
+export function resolveWorkspace(explicit?: string): string {
+  if (explicit && explicit !== 'current') return explicit;
+  const fromEnv = process.env.GOLDFISH_WORKSPACE;
+  if (fromEnv) return fromEnv;
+  return process.cwd();
+}
+
 // ─── Project-level .memories/ storage ────────────────────────────────
 
 /**
