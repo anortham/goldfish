@@ -8,7 +8,7 @@ allowed-tools: mcp__goldfish__recall, mcp__goldfish__plan
 
 ## What This Does
 
-Generates a concise standup report by recalling checkpoints across all workspaces. Think daily standup meeting format — what happened, what's next, what's stuck.
+Generates a concise standup report by recalling checkpoints across all workspaces and reviewing active plans from multiple sources. Covers what happened, what's next, and what's stuck.
 
 ## How to Generate a Standup
 
@@ -28,11 +28,26 @@ For a custom range:
 mcp__goldfish__recall({ workspace: "all", from: "2026-02-10", to: "2026-02-14" })
 ```
 
-### Step 2: Get active plans for context
+### Step 2: Gather plans from ALL sources
 
-If recall shows active plans, they provide the "what I'm working on" narrative. Plans give strategic context that raw checkpoints don't.
+Plans may exist in two locations per project. Check BOTH:
 
-### Step 3: Synthesize the Report
+**Source 1: Goldfish plans** — already included in recall output if an active plan exists.
+
+**Source 2: Project plan docs** — scan `docs/plans/*.md` in each project that appeared in the recall results. Read files modified in the last 14 days (skip older ones — they're likely completed). Look at the `**Status:**` field in the header of each file.
+
+### Step 3: Assess plan status from evidence
+
+Do NOT blindly trust the Status field in plan docs. Cross-reference against checkpoints:
+
+- **Status says "Approved" + checkpoints show all tasks done** → effectively complete, note as done
+- **Status says "Approved" + checkpoints show partial progress** → in progress, report remaining items
+- **Status says "Approved" + no checkpoint activity** → upcoming work, report as planned
+- **Status says "Complete"** → trust it, skip or mention briefly as done
+
+For Goldfish plans (from recall), use the plan's status field directly — it's managed by the agent via the plan tool.
+
+### Step 4: Synthesize the report
 
 ## Report Format
 
@@ -48,7 +63,7 @@ Structure the standup with these rules:
 
 ## Multi-Project Format
 
-When checkpoints span multiple projects, group by project with bullets for accomplishments and blockquotes for next/blocked:
+When checkpoints span multiple projects, group by project with bullets for accomplishments, blockquotes for next/blocked, and plan references:
 
 ```
 ## Standup — Feb 14, 2026
@@ -57,6 +72,7 @@ When checkpoints span multiple projects, group by project with bullets for accom
 - Implemented 4 skill files with behavioral language patterns
 - Converted tool handlers from JSON to markdown output
 > Next: Test skills with live agent sessions
+> Plan: v5.1 skills refresh — 2/4 tasks complete (docs/plans/2026-02-16-v5.1-implementation.md)
 
 ### api-gateway
 - Fixed rate limiter race condition in Redis cluster mode
@@ -78,7 +94,7 @@ When all checkpoints are from a single project, drop the project grouping and us
 
 ### Up Next
 - Test skills with live agent sessions
-- Iterate on language based on real usage
+- v5.1 skills refresh: workspace env var implementation (2/4 tasks complete)
 
 ### Blocked
 - Nothing currently blocked
@@ -92,6 +108,7 @@ When all checkpoints are from a single project, drop the project grouping and us
 - **Skip noise.** Minor refactors, formatting changes, and config tweaks don't need individual mentions unless they were the main work.
 - **Use past tense for accomplishments.** "Shipped," "Fixed," "Implemented" — not "Working on" for done items.
 - **Surface decisions.** If a checkpoint captured an architectural decision, mention it briefly — the team may need to know.
+- **Include plan progress.** When active plans exist, include a brief progress summary (e.g., "3/5 tasks complete") in the Up Next section.
 
 ## Handling Edge Cases
 
@@ -104,9 +121,17 @@ Use the single-project format above (Done / Up Next / Blocked sections).
 ### Too many checkpoints (20+)
 Be more aggressive about grouping. Summarize by theme rather than listing individual items. A standup with 15 bullet points defeats the purpose.
 
+### No plans found
+That's fine — just skip the plan progress lines. Not every project has active plans.
+
+### Plans in docs/plans/ but no Goldfish plan
+Include them in the forward-looking section. Plans don't need to be in Goldfish to be useful for standup.
+
 ## Critical Rules
 
 - **Do NOT ask the user what to include.** Recall gives you everything. Synthesize it yourself.
 - **Do NOT fabricate activity.** Only report what checkpoints actually show.
 - **Keep it standup-length.** If your report is more than a screenful, you're being too verbose.
 - **Include dates** when covering multi-day ranges so the reader knows the timeline.
+- **Check BOTH plan sources.** `.memories/plans/` (via recall) AND `docs/plans/` (via file reading). Missing one source means an incomplete forward-looking view.
+- **Infer plan status from evidence.** Don't trust stale Status headers — verify against checkpoint activity.
