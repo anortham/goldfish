@@ -8,6 +8,44 @@
 - [x] Phase 4: Claude Code plugin structure (skills, hooks, .mcp.json)
 - [x] Phase 5: Documentation update
 
+## v5.0.7 — Code Review Fixes (2026-02-16)
+
+### Code Fixes (MAJOR)
+
+- [x] Cross-workspace `limit: 0` fetches 99999 per project then discards — short-circuit early (`recall.ts:235-241`)
+- [x] Negative `limit` accidentally returns everything — clamp to 0 or reject (`recall.ts:280-284`)
+- [x] Stale `getDateRange` docstring says "default: 2" for days — no default anymore (`recall.ts:87`)
+
+### Code Fixes (MINOR)
+
+- [x] Redundant `as any` cast — type already includes `workspace` (`handlers/recall.ts:35-37`)
+- [x] `full: true` doesn't render git metadata in markdown output (`handlers/recall.ts`)
+- [x] Timestamp formatting regex won't match without milliseconds — use `(\.\d+)?` (`handlers/recall.ts:28`)
+- [x] `normalizeWorkspace` docstring shows wrong output `my-project-` should be `my-project` (`workspace.ts:18`)
+
+### Documentation Propagation
+
+- [x] README line 149: `recall()` comment says "Last 2 days, 10 checkpoints" — should be "Last 5 checkpoints, no date window"
+- [x] README line 420: troubleshooting says "Default recall looks back 2 days" — stale
+- [x] README lines 275-286: standup example uses old format, doesn't match updated skill
+- [x] README lines 346, 363: test count says 231, actual is 253
+- [x] `skills/recall/SKILL.md:95`: says `Default limit: 10` — actual default is 5
+- [x] CLAUDE.md: `RecallOptions` missing `limit` field in type definition
+- [x] CLAUDE.md line 199: test count says 231
+- [x] CONTRIBUTING.md: `RecallOptions` missing `limit`, `since` description is stale
+- [x] `docs/IMPLEMENTATION.md:106-118`: registry format shows old key-value map, should be array
+- [x] `docs/IMPLEMENTATION.md:261`: test count says 223
+- [x] `docs/IMPLEMENTATION.md`: no mention of last-N recall mode
+
+### Nits (Low Priority)
+
+- [x] Plan frontmatter regex requires double newline, checkpoint parser only requires single (`plans.ts:42`)
+- [x] `deletePlan` reads `.active-plan` outside the lock — TOCTOU race, theoretical (`plans.ts:265-282`)
+- [x] `activePlan?: Plan` type but `getActivePlan` can return `null` (`types.ts:62`)
+- [x] `normalizeTimestamp` returns garbage for `null`/`undefined` input (`checkpoints.ts:86-92`)
+- [x] Lock timeout test is a no-op placeholder (`lock.test.ts:121-127`)
+- [x] No BOM handling in frontmatter parser — Windows edge case (`checkpoints.ts:117`)
+
 ## What's Next
 
 ### From Real Usage
@@ -25,5 +63,5 @@
 - Is the PreCompact hook reliable enough? Does Claude actually checkpoint before compaction?
 - Does the SessionStart hook fire consistently? Any startup delay issues?
 - Is the ExitPlanMode → plan save hook working as expected?
-- Should skills be more or less prescriptive? 
-- JSON output from the tools makes no sense. We are burning extra tokens. We need readable output.
+- Should skills be more or less prescriptive?
+- [x] ~~JSON output from the tools makes no sense. We are burning extra tokens. We need readable output.~~ (Fixed in v5.0.4)

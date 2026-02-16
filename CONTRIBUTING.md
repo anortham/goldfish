@@ -18,7 +18,7 @@ If you find yourself writing implementation code before tests, STOP. Delete it a
 
 ## Core Philosophy
 
-This is **iteration #5** of a developer memory system, now at **v5.0.6**. We've learned hard lessons:
+This is **iteration #5** of a developer memory system, now at **v5.0.7**. We've learned hard lessons:
 
 ### What We've Tried Before
 1. **Original Goldfish (TS)**: JSON files, good concepts, critical bugs (race conditions, date handling)
@@ -187,12 +187,13 @@ interface Plan {
 
 interface RecallOptions {
   workspace?: string;     // 'current' | 'all' | specific path
-  days?: number;
+  limit?: number;         // Max checkpoints (default: 5). When no date params, uses last-N mode
+  days?: number;          // Look back N days (enables date-window mode)
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
-  search?: string;        // Fuzzy search query
-  since?: string;         // ISO 8601 UTC
-  full?: boolean;         // Include full checkpoint bodies
+  since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
+  search?: string;        // Fuzzy search query (fuse.js)
+  full?: boolean;         // Include full descriptions + git metadata (default: false)
 }
 ```
 
@@ -428,7 +429,7 @@ You're doing it right when:
 
 ## Remember
 
-**This is iteration #5, now at v5.0.6. We've made mistakes before.**
+**This is iteration #5, now at v5.0.7. We've made mistakes before.**
 
 The difference this time: **radical simplicity** and **evidence-based feature development**.
 

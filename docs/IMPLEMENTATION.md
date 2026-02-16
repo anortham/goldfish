@@ -104,16 +104,18 @@ That's it. Just the plan ID. Simple.
 
 ```json
 {
-  "projects": {
-    "/Users/user/source/goldfish": {
+  "projects": [
+    {
+      "path": "/Users/user/source/goldfish",
       "name": "goldfish",
-      "lastSeen": "2026-02-14T10:30:00.000Z"
+      "registered": "2026-02-14T10:30:00.000Z"
     },
-    "/Users/user/source/other-project": {
+    {
+      "path": "/Users/user/source/other-project",
       "name": "other-project",
-      "lastSeen": "2026-02-13T15:00:00.000Z"
+      "registered": "2026-02-13T15:00:00.000Z"
     }
-  }
+  ]
 }
 ```
 
@@ -184,6 +186,11 @@ You NEVER need to ask permission. Just checkpoint.
 ```
 
 ### Recall Tool
+
+**Dual-mode recall (v5.0.6+):**
+- **Last-N mode** (default): When no date parameters are provided, returns the last `limit` checkpoints (default: 5) regardless of age. No date window.
+- **Date-window mode**: When `days`, `since`, `from`, or `to` is provided, filters checkpoints to that date range.
+
 ```
 MANDATORY at session start. Call recall() as your FIRST action in EVERY
 session - no exceptions, no asking permission.
@@ -258,7 +265,7 @@ We achieve this through:
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
 
-**Total: 223 tests passing | ~2,094 lines of production code | 3 runtime dependencies**
+**Total: 260 tests passing | ~2,094 lines of production code | 3 runtime dependencies**
 
 ---
 

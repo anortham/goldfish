@@ -401,6 +401,34 @@ type: decision
     expect(checkpoint.timestamp).toBe('2026-02-14T10:00:00.000Z');
     expect(checkpoint.description).toBe('Mixed endings.');
   });
+
+  it('strips BOM from checkpoint files (Windows Notepad)', () => {
+    const content = `\uFEFF---
+id: checkpoint_bom00001
+timestamp: "2026-02-14T10:00:00.000Z"
+---
+
+Checkpoint with BOM.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.id).toBe('checkpoint_bom00001');
+    expect(checkpoint.description).toBe('Checkpoint with BOM.');
+  });
+
+  it('handles null/undefined timestamp in legacy data gracefully', () => {
+    // When timestamp field is missing or null in YAML, it comes through as null
+    const content = `---
+id: checkpoint_nullts001
+timestamp: null
+---
+
+Missing timestamp.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.id).toBe('checkpoint_nullts001');
+    // Should produce a valid ISO string, not "null"
+    expect(checkpoint.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
 });
 
 // ─── parseJsonCheckpoint (old Julie JSON format) ────────────────────

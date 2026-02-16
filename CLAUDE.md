@@ -107,12 +107,13 @@ interface Plan {
 
 interface RecallOptions {
   workspace?: string;     // 'current' | 'all' | specific path
-  days?: number;
+  limit?: number;         // Max checkpoints (default: 5). When no date params, uses last-N mode
+  days?: number;          // Look back N days (enables date-window mode)
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
-  since?: string;         // Relative time (e.g., "2h", "3d")
+  since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
   search?: string;        // Fuzzy search query (fuse.js)
-  full?: boolean;         // Include full checkpoint bodies
+  full?: boolean;         // Include full descriptions + git metadata (default: false)
 }
 
 interface RegisteredProject {
@@ -196,7 +197,7 @@ git add tests/checkpoints.test.ts src/checkpoints.ts
 git commit -m "Add checkpoint storage with atomic writes"
 ```
 
-**Current test status: 231 tests, all passing.**
+**Current test status: 260 tests, all passing.**
 
 ---
 
@@ -302,7 +303,7 @@ bun test --coverage
 - **Search:** `fuse.js` (fuzzy search, proven from v1)
 - **YAML:** `yaml` package (for plan frontmatter)
 - **Language:** TypeScript
-- **Version:** 5.0.6
+- **Version:** 5.0.7
 
 ---
 

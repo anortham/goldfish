@@ -25,15 +25,25 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
 
   // H3 header: ### 2026-02-16 15:30 checkpoint_abc12345
   const ts = checkpoint.timestamp;
-  const dateTime = ts.replace('T', ' ').replace(/:\d{2}\.\d{3}Z$/, '');
+  const dateTime = ts.replace('T', ' ').replace(/:\d{2}(\.\d+)?Z$/, '');
   lines.push(`### ${dateTime} ${checkpoint.id}`);
 
   if (checkpoint.tags && checkpoint.tags.length > 0) {
     lines.push(`Tags: ${checkpoint.tags.join(', ')}`);
   }
 
-  if ((checkpoint as any).workspace) {
-    lines.push(`Workspace: ${(checkpoint as any).workspace}`);
+  if (checkpoint.workspace) {
+    lines.push(`Workspace: ${checkpoint.workspace}`);
+  }
+
+  if (checkpoint.git) {
+    const gitParts: string[] = [];
+    if (checkpoint.git.branch) gitParts.push(`branch: ${checkpoint.git.branch}`);
+    if (checkpoint.git.commit) gitParts.push(`commit: ${checkpoint.git.commit}`);
+    if (gitParts.length > 0) lines.push(`Git: ${gitParts.join(', ')}`);
+    if (checkpoint.git.files && checkpoint.git.files.length > 0) {
+      lines.push(`Files: ${checkpoint.git.files.join(', ')}`);
+    }
   }
 
   lines.push(checkpoint.description);

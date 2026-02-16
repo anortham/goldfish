@@ -138,6 +138,41 @@ describe('Register project', () => {
     const paths = registry.projects.map(p => p.path).sort();
     expect(paths).toEqual(projects.sort());
   });
+
+  it('stores paths with forward slashes (cross-platform normalization)', async () => {
+    const projectPath = join(TEST_DIR, 'slash-test');
+    await mkdir(projectPath, { recursive: true });
+
+    await registerProject(projectPath, GOLDFISH_DIR);
+
+    const registry = await getRegistry(GOLDFISH_DIR);
+    // Stored path should use forward slashes only (no backslashes)
+    expect(registry.projects[0].path).not.toContain('\\');
+  });
+
+  it('deduplicates paths with mixed separators', async () => {
+    const projectPath = join(TEST_DIR, 'dedup-test');
+    await mkdir(projectPath, { recursive: true });
+
+    // Pre-populate registry with a backslash version of the path
+    // (simulates a Windows-created entry being read on any OS)
+    const backslashPath = projectPath.replace(/\//g, '\\');
+    const seedRegistry = {
+      projects: [{
+        path: backslashPath,
+        name: 'dedup-test',
+        registered: new Date().toISOString()
+      }]
+    };
+    await writeFile(join(GOLDFISH_DIR, 'registry.json'), JSON.stringify(seedRegistry), 'utf-8');
+
+    // Register with forward slashes — should detect the existing backslash entry
+    await registerProject(projectPath, GOLDFISH_DIR);
+
+    const registry = await getRegistry(GOLDFISH_DIR);
+    // Should still be a single entry, not duplicated
+    expect(registry.projects).toHaveLength(1);
+  });
 });
 
 describe('Unregister project', () => {

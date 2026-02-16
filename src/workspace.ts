@@ -15,7 +15,7 @@ import { mkdir } from 'fs/promises';
  *   /Users/user/source/goldfish → goldfish
  *   C:\source\goldfish → goldfish
  *   @coa/goldfish-mcp → coa-goldfish-mcp
- *   My Project! → my-project-
+ *   My Project! → my-project
  */
 export function normalizeWorkspace(pathOrName: string): string {
   // Extract base directory/package name

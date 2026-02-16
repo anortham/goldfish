@@ -88,7 +88,11 @@ function normalizeTimestamp(raw: unknown): string {
     const ms = raw > 1e10 ? raw : raw * 1000;
     return new Date(ms).toISOString();
   }
-  return String(raw);
+  if (typeof raw === 'string' && raw.length > 0) {
+    return raw;
+  }
+  // Fallback for null, undefined, or empty string — use current time
+  return new Date().toISOString();
 }
 
 /**
@@ -110,8 +114,8 @@ function normalizeGit(rawGit: Record<string, unknown>): Checkpoint['git'] | unde
  * Parse a single checkpoint from a YAML frontmatter markdown file
  */
 export function parseCheckpointFile(content: string): Checkpoint {
-  // Normalize CRLF → LF (Windows git checkout with core.autocrlf=true)
-  const normalized = content.replace(/\r\n/g, '\n');
+  // Strip BOM and normalize CRLF → LF (Windows git checkout / Notepad)
+  const normalized = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 
   // Split on frontmatter delimiters
   const match = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);

@@ -13,6 +13,15 @@ import { normalizeWorkspace } from './workspace';
 import type { Registry, RegisteredProject } from './types';
 
 /**
+ * Normalize a path to forward slashes for consistent cross-platform storage.
+ * Windows `resolve()` returns backslashes; we normalize to `/` so registry
+ * entries are portable and comparable regardless of OS.
+ */
+function normalizePath(p: string): string {
+  return resolve(p).replace(/\\/g, '/');
+}
+
+/**
  * Returns the default registry file path: ~/.goldfish/registry.json
  */
 export function getRegistryPath(): string {
@@ -52,7 +61,7 @@ export async function getRegistry(registryDir?: string): Promise<Registry> {
  */
 export async function registerProject(projectPath: string, registryDir?: string): Promise<void> {
   const dir = registryDir ?? join(homedir(), '.goldfish');
-  const absolutePath = resolve(projectPath);
+  const absolutePath = normalizePath(projectPath);
   const filePath = join(dir, 'registry.json');
 
   // Ensure directory exists before acquiring lock (lock file needs the dir)
@@ -62,8 +71,8 @@ export async function registerProject(projectPath: string, registryDir?: string)
     // Read current registry (inside lock to prevent races)
     const registry = await getRegistry(dir);
 
-    // Check for existing entry (idempotent)
-    const exists = registry.projects.some(p => p.path === absolutePath);
+    // Check for existing entry (idempotent, normalize stored paths for comparison)
+    const exists = registry.projects.some(p => p.path.replace(/\\/g, '/') === absolutePath);
     if (exists) {
       return;
     }
@@ -90,13 +99,13 @@ export async function registerProject(projectPath: string, registryDir?: string)
  */
 export async function unregisterProject(projectPath: string, registryDir?: string): Promise<void> {
   const dir = registryDir ?? join(homedir(), '.goldfish');
-  const absolutePath = resolve(projectPath);
+  const absolutePath = normalizePath(projectPath);
   const filePath = join(dir, 'registry.json');
 
   await withLock(filePath, async () => {
     const registry = await getRegistry(dir);
 
-    const filtered = registry.projects.filter(p => p.path !== absolutePath);
+    const filtered = registry.projects.filter(p => p.path.replace(/\\/g, '/') !== absolutePath);
 
     // Only write if something changed
     if (filtered.length !== registry.projects.length) {

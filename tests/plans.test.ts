@@ -154,6 +154,39 @@ Content`;
     expect(plan.status).toBe('active');
     expect(plan.content).toBe('Plan with Windows line endings.');
   });
+
+  it('parses plan with single newline between frontmatter and body', () => {
+    const content = `---
+id: single-newline
+title: Single Newline
+status: active
+created: "2026-02-14T10:00:00.000Z"
+updated: "2026-02-14T10:00:00.000Z"
+tags: []
+---
+Content with single newline separator.`;
+
+    const plan = parsePlanFile(content);
+    expect(plan.id).toBe('single-newline');
+    expect(plan.content).toBe('Content with single newline separator.');
+  });
+
+  it('strips BOM from plan files (Windows Notepad)', () => {
+    const content = `\uFEFF---
+id: bom-plan
+title: BOM Plan
+status: active
+created: "2026-02-14T10:00:00.000Z"
+updated: "2026-02-14T10:00:00.000Z"
+tags: []
+---
+
+Plan with BOM.`;
+
+    const plan = parsePlanFile(content);
+    expect(plan.id).toBe('bom-plan');
+    expect(plan.content).toBe('Plan with BOM.');
+  });
 });
 
 describe('Plan storage', () => {
@@ -575,5 +608,23 @@ describe('Plan deletion', () => {
     await expect(
       deletePlan(TEST_DIR, 'nonexistent')
     ).rejects.toThrow();
+  });
+
+  it('does not clear active plan if a different plan was activated after read', async () => {
+    // Set test-plan as active, then create another plan
+    await setActivePlan(TEST_DIR, 'test-plan');
+    await savePlan({
+      id: 'other-plan',
+      title: 'Other Plan',
+      content: 'Content',
+      workspace: TEST_DIR
+    });
+    // Switch active to other-plan, then delete test-plan
+    await setActivePlan(TEST_DIR, 'other-plan');
+    await deletePlan(TEST_DIR, 'test-plan');
+
+    // other-plan should still be active (not cleared by deleting test-plan)
+    const activePlan = await getActivePlan(TEST_DIR);
+    expect(activePlan?.id).toBe('other-plan');
   });
 });

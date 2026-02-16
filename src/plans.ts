@@ -35,11 +35,11 @@ export function formatPlanFile(plan: Plan): string {
  * Parse a plan markdown file (YAML frontmatter + content)
  */
 export function parsePlanFile(content: string): Plan {
-  // Normalize CRLF → LF (Windows git checkout with core.autocrlf=true)
-  const normalized = content.replace(/\r\n/g, '\n');
+  // Strip BOM and normalize CRLF → LF (Windows git checkout / Notepad)
+  const normalized = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 
-  // Extract frontmatter
-  const match = normalized.match(/^---\n([\s\S]+?)\n---\n\n([\s\S]*)$/);
+  // Extract frontmatter (accept single or double newline after closing ---)
+  const match = normalized.match(/^---\n([\s\S]+?)\n---\n\n?([\s\S]*)$/);
 
   if (!match) {
     throw new Error('Invalid plan file: missing YAML frontmatter');
@@ -56,6 +56,10 @@ export function parsePlanFile(content: string): Plan {
       updated: string;
       tags: string[];
     };
+
+    if (!frontmatter || typeof frontmatter !== 'object' || !frontmatter.id) {
+      throw new Error('missing required fields');
+    }
 
     return {
       id: frontmatter.id,
@@ -262,16 +266,6 @@ export async function deletePlan(projectPath: string, id: string): Promise<void>
   const planPath = join(getPlansDir(projectPath), `${id}.md`);
   const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
-  let shouldClearActive = false;
-  try {
-    const activePlanId = (await readFile(activePlanPath, 'utf-8')).trim();
-    shouldClearActive = activePlanId === id;
-  } catch (error: any) {
-    if (error.code && error.code !== 'ENOENT') {
-      throw error;
-    }
-  }
-
   await withLock(planPath, async () => {
     const plan = await getPlan(projectPath, id);
     if (!plan) {
@@ -279,13 +273,15 @@ export async function deletePlan(projectPath: string, id: string): Promise<void>
     }
 
     await unlink(planPath);
-  });
 
-  if (shouldClearActive) {
+    // Check and clear active plan inside the lock to avoid TOCTOU race
     try {
-      await unlink(activePlanPath);
+      const activePlanId = (await readFile(activePlanPath, 'utf-8')).trim();
+      if (activePlanId === id) {
+        await unlink(activePlanPath);
+      }
     } catch {
-      // Ignore if file doesn't exist
+      // No active plan file — nothing to clear
     }
-  }
+  });
 }

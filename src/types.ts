@@ -58,7 +58,7 @@ export interface RecallOptions {
 
 export interface RecallResult {
   checkpoints: Checkpoint[];
-  activePlan?: Plan;
+  activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
 }
 

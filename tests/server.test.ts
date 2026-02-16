@@ -455,7 +455,7 @@ describe('Error handling', () => {
 
     // Non-existent path should return empty results, not error
     const result = await handleRecall({
-      workspace: '/tmp/nonexistent-workspace-xyz-' + Date.now()
+      workspace: join(tmpdir(), 'nonexistent-workspace-xyz-' + Date.now())
     });
 
     expect(result.content[0]!.type).toBe('text');

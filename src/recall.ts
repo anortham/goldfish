@@ -84,7 +84,7 @@ export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Che
  * 2. since (human-friendly or ISO)
  * 3. from alone (from that point to now)
  * 4. to alone (7 days before to that point)
- * 5. days (last N days, default: 2)
+ * 5. days (last N days, only when explicitly set)
  */
 function getDateRange(options: RecallOptions): { from: string; to: string } {
   const now = new Date();
@@ -179,12 +179,8 @@ async function recallFromWorkspace(
     );
   }
 
-  const limit = options.limit !== undefined ? options.limit : 5;
-  if (limit > 0) {
-    checkpoints = checkpoints.slice(0, limit);
-  } else if (limit === 0) {
-    checkpoints = [];  // Return empty array (plan only)
-  }
+  const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
+  checkpoints = limit > 0 ? checkpoints.slice(0, limit) : [];
 
   // Strip metadata fields based on full flag
   checkpoints = checkpoints.map(checkpoint => {
@@ -230,15 +226,21 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   // Cross-workspace recall via registry
   const projects = await listRegisteredProjects(options._registryDir);
 
+  // Apply global limit (default: 5, clamp negative to 0)
+  const globalLimit = Math.max(0, options.limit !== undefined ? options.limit : 5);
+
+  // Short-circuit: limit=0 means plan-only, skip all project I/O
+  if (globalLimit === 0) {
+    return { checkpoints: [], workspaces: [] };
+  }
+
   // Fetch from all registered projects in parallel.
   // Per-project limit = global limit (each project may contribute all top results).
-  const globalLimit = options.limit !== undefined ? options.limit : 5;
-  const perProjectLimit = globalLimit > 0 ? globalLimit : undefined;
   const projectResults = await Promise.all(
     projects.map(async (project) => {
       const { checkpoints } = await recallFromWorkspace(project.path, {
         ...options,
-        limit: perProjectLimit ?? 99999
+        limit: globalLimit
       });
       return { project, checkpoints };
     })
@@ -275,16 +277,8 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  // Apply limit to combined results
-  const limit = options.limit !== undefined ? options.limit : 5;
-  const limitedCheckpoints = limit > 0
-    ? allCheckpoints.slice(0, limit)
-    : limit === 0
-      ? []
-      : allCheckpoints;
-
   return {
-    checkpoints: limitedCheckpoints,
+    checkpoints: allCheckpoints.slice(0, globalLimit),
     workspaces: workspaceSummaries
   };
 }

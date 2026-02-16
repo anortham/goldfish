@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, and sta
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Data lives in `.memories/` (git-committable) with a lightweight cross-project registry at `~/.goldfish/registry.json`.
 
-**Version 5.0.6** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 5.0.7** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -146,7 +146,7 @@ Claude: [auto-recalls checkpoint, picks up where it left off]
 Every session starts with recall (automatic via `SessionStart` hook). Returns recent checkpoints, active plan, and optional cross-project summaries.
 
 ```
-recall()                                    # Last 2 days, 10 checkpoints
+recall()                                    # Last 5 checkpoints, no date window
 recall({ since: "2h" })                     # Last 2 hours
 recall({ search: "auth bug" })              # Fuzzy search
 recall({ days: 7, limit: 20, full: true })  # Extended history with metadata
@@ -277,12 +277,15 @@ The `/standup` skill aggregates work across all registered projects:
 ## Standup -- February 14, 2026
 
 ### goldfish
-**Accomplished:** Rewrote README for v5.0.0, added skill and hook documentation.
-**Next:** Test plugin installation flow end-to-end.
+- Rewrote README for v5.0.0, added skill and hook documentation
+- Added 4 skills and 3 hooks for Claude Code plugin
+
+> **Next:** Test plugin installation flow end-to-end
 
 ### api-gateway
-**Accomplished:** Fixed rate limiter race condition in Redis cluster mode.
-**Blocked:** Waiting on DevOps for staging Redis cluster provisioning.
+- Fixed rate limiter race condition in Redis cluster mode
+
+> **Blocked:** Waiting on DevOps for staging Redis cluster provisioning
 ```
 
 Cross-project recall uses `~/.goldfish/registry.json` to discover projects, then reads each project's `.memories/` directory.
@@ -343,7 +346,7 @@ goldfish/
     summary.ts            # Auto-summary generation
     emoji.ts              # Emoji utilities
     handlers/             # Tool handler implementations
-  tests/                  # Test files (231 tests)
+  tests/                  # Test files (260 tests)
 ```
 
 ---
@@ -353,7 +356,7 @@ goldfish/
 **This is a TDD project. Tests are written before implementation. No exceptions.**
 
 ```bash
-# Run all tests (231 tests)
+# Run all tests (260 tests)
 bun test
 
 # Watch mode (recommended during development)
@@ -371,7 +374,7 @@ bun run typecheck
 
 ### Stats
 
-- **231 tests**, all passing
+- **260 tests**, all passing
 - **~2,070 lines** of production code
 - **3 dependencies:** `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`
 
@@ -417,7 +420,7 @@ Benchmarked on Apple Silicon (M-series).
 ### Recall returns nothing
 
 1. Checkpoints are per-project: each project has its own `.memories/` directory
-2. Default recall looks back 2 days -- try `recall({ days: 7 })` for more history
+2. Default recall returns last 5 checkpoints regardless of age -- try `recall({ days: 7 })` for date-windowed history
 3. Verify checkpoints exist: `ls .memories/` in your project root
 
 ### Cross-project recall is empty

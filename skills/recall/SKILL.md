@@ -92,7 +92,7 @@ Present a concise summary: "Based on your recent work, you were [doing X] on [pr
 - **Continue work immediately.** After recall, do not ask "should I continue?" Just proceed based on restored context.
 - **Never skip recall to save time.** It takes 2 seconds and prevents 20 minutes of confused fumbling.
 - **Use search for targeted recall.** If you know roughly what you're looking for, `search` with fuse.js fuzzy matching is faster than scanning everything.
-- **Keep context lean.** Default `limit: 10` exists for a reason. Only increase when you genuinely need deeper history.
+- **Keep context lean.** Default `limit: 5` exists for a reason. Only increase when you genuinely need deeper history.
 
 ## After Recall
 
