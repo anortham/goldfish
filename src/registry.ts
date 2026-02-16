@@ -7,7 +7,7 @@
 
 import { join, resolve } from 'path';
 import { homedir } from 'os';
-import { mkdir, writeFile, rename, stat } from 'fs/promises';
+import { mkdir, writeFile, stat } from 'fs/promises';
 import { withLock } from './lock';
 import { normalizeWorkspace } from './workspace';
 import type { Registry, RegisteredProject } from './types';
@@ -76,10 +76,8 @@ export async function registerProject(projectPath: string, registryDir?: string)
     };
     registry.projects.push(entry);
 
-    // Atomic write
-    const tmpPath = `${filePath}.tmp`;
-    await writeFile(tmpPath, JSON.stringify(registry, null, 2), 'utf-8');
-    await rename(tmpPath, filePath);
+    // Direct write (lock provides exclusivity; avoids Windows rename ENOENT issues)
+    await writeFile(filePath, JSON.stringify(registry, null, 2), 'utf-8');
   });
 }
 
@@ -104,9 +102,7 @@ export async function unregisterProject(projectPath: string, registryDir?: strin
     if (filtered.length !== registry.projects.length) {
       registry.projects = filtered;
 
-      const tmpPath = `${filePath}.tmp`;
-      await writeFile(tmpPath, JSON.stringify(registry, null, 2), 'utf-8');
-      await rename(tmpPath, filePath);
+      await writeFile(filePath, JSON.stringify(registry, null, 2), 'utf-8');
     }
   });
 }

@@ -7,7 +7,7 @@
 
 import Fuse from 'fuse.js';
 import type { Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from './types';
-import { getCheckpointsForDateRange } from './checkpoints';
+import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
 
@@ -115,8 +115,8 @@ function getDateRange(options: RecallOptions): { from: string; to: string } {
     return { from: weekBefore.toISOString(), to: options.to };
   }
 
-  // 5. Default: use 'days' parameter (default: 2 days)
-  const days = options.days || 2;
+  // 5. Explicit 'days' parameter (only reached when hasDateParams guards the call)
+  const days = options.days!;
   const fromDate = new Date(now.getTime() - days * 86400000);
 
   return {
@@ -126,16 +126,31 @@ function getDateRange(options: RecallOptions): { from: string; to: string } {
 }
 
 /**
+ * Check if any date-related parameters were explicitly provided.
+ * When none are set, recall uses "last N checkpoints" mode instead of a date window.
+ */
+function hasDateParams(options: RecallOptions): boolean {
+  return !!(options.since || options.days || options.from || options.to);
+}
+
+/**
  * Recall checkpoints from a single workspace
  */
 async function recallFromWorkspace(
   workspace: string,
   options: RecallOptions
 ): Promise<{ checkpoints: Checkpoint[]; activePlan: any }> {
-  const { from, to } = getDateRange(options);
-
-  // Get checkpoints in date range
-  let checkpoints = await getCheckpointsForDateRange(workspace, from, to);
+  // When no date params: load all checkpoints (newest first), limited by `limit`.
+  // When date params: use date-range filtering as before.
+  let checkpoints: Checkpoint[];
+  if (hasDateParams(options)) {
+    const { from, to } = getDateRange(options);
+    checkpoints = await getCheckpointsForDateRange(workspace, from, to);
+  } else {
+    // Pass limit for early termination (but not when searching — need all for fuse.js)
+    const earlyLimit = options.search ? undefined : (options.limit !== undefined ? options.limit : 5);
+    checkpoints = await getAllCheckpoints(workspace, earlyLimit);
+  }
 
   // Apply fuzzy search filter if provided
   if (options.search) {
@@ -164,7 +179,7 @@ async function recallFromWorkspace(
     );
   }
 
-  const limit = options.limit !== undefined ? options.limit : 10;
+  const limit = options.limit !== undefined ? options.limit : 5;
   if (limit > 0) {
     checkpoints = checkpoints.slice(0, limit);
   } else if (limit === 0) {
@@ -215,11 +230,16 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   // Cross-workspace recall via registry
   const projects = await listRegisteredProjects(options._registryDir);
 
-  // Fetch from all registered projects in parallel
+  // Fetch from all registered projects in parallel.
+  // Per-project limit = global limit (each project may contribute all top results).
+  const globalLimit = options.limit !== undefined ? options.limit : 5;
+  const perProjectLimit = globalLimit > 0 ? globalLimit : undefined;
   const projectResults = await Promise.all(
     projects.map(async (project) => {
-      // Use a high limit per project, we'll apply global limit after merging
-      const { checkpoints } = await recallFromWorkspace(project.path, { ...options, limit: 99999 });
+      const { checkpoints } = await recallFromWorkspace(project.path, {
+        ...options,
+        limit: perProjectLimit ?? 99999
+      });
       return { project, checkpoints };
     })
   );
@@ -256,7 +276,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   );
 
   // Apply limit to combined results
-  const limit = options.limit !== undefined ? options.limit : 10;
+  const limit = options.limit !== undefined ? options.limit : 5;
   const limitedCheckpoints = limit > 0
     ? allCheckpoints.slice(0, limit)
     : limit === 0

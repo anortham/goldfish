@@ -47,11 +47,11 @@ export interface PlanUpdate {
 export interface RecallOptions {
   workspace?: string;     // 'current' | 'all' | specific path
   since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
-  days?: number;          // Look back N days (default: 2)
+  days?: number;          // Look back N days (no default — only used when explicitly set)
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
   search?: string;        // Fuzzy search query
-  limit?: number;         // Max checkpoints to return (default: 10)
+  limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   _registryDir?: string;  // Internal: override registry dir for test isolation
 }

@@ -14,7 +14,7 @@ You MUST call `mcp__goldfish__recall` as your FIRST action in every session. No 
 mcp__goldfish__recall({})
 ```
 
-That's it. Default parameters (last 2 days, 10 checkpoints) cover 90% of cases.
+That's it. Default parameters (last 5 checkpoints, no date window) cover 90% of cases.
 
 ## When to Recall
 

@@ -93,24 +93,24 @@ After recall(), continue work IMMEDIATELY:
 The recalled context is complete and accurate. Trust it.
 
 This tool provides:
-- Recent checkpoints (default: last 2 days)
+- Recent checkpoints (default: last 5, no date window)
 - Active plan (if one exists)
 - Fuzzy search across descriptions and tags
 - Cross-workspace aggregation (for standup reports)
 
 Key parameters (all optional):
-- limit: Max checkpoints to return (default: 10, prevents context bloat)
+- limit: Max checkpoints to return (default: 5, prevents context bloat)
 - since: Human-friendly time span ("2h", "30m", "3d") or ISO timestamp (takes priority over days)
-- days: How far back to look in days (default: 2)
+- days: How far back to look in days (only used when explicitly set)
 - from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
 - search: Fuzzy search query (searches descriptions, tags, branches, files)
 - full: Return full descriptions + all metadata including files, git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 
 Examples:
-- recall() - last 2 days, max 10 checkpoints (lean context)
-- recall({ limit: 5 }) - last 2 days, only 5 most recent
-- recall({ since: "2h" }) - last 2 hours, max 10 checkpoints
+- recall() - last 5 checkpoints regardless of age (lean context)
+- recall({ limit: 10 }) - last 10 checkpoints
+- recall({ since: "2h" }) - last 2 hours, max 5 checkpoints
 - recall({ days: 7, limit: 20 }) - last 7 days, max 20 checkpoints
 - recall({ search: "auth", full: true }) - search with full details
 - recall({ limit: 0 }) - plan only, no checkpoints
@@ -121,7 +121,7 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
         properties: {
           limit: {
             type: 'number',
-            description: 'Maximum number of checkpoints to return (default: 10). Use lower values for leaner context. Set to 0 to return plan only.'
+            description: 'Maximum number of checkpoints to return (default: 5). Use lower values for leaner context. Set to 0 to return plan only.'
           },
           since: {
             type: 'string',
@@ -129,7 +129,7 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
           },
           days: {
             type: 'number',
-            description: 'Number of days to look back (default: 2). Ignored if since is provided.'
+            description: 'Number of days to look back. When set, enables date-window mode instead of last-N mode. Ignored if since is provided.'
           },
           from: {
             type: 'string',

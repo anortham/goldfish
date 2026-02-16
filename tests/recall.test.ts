@@ -607,12 +607,12 @@ describe('recall with limit parameter', () => {
     expect(result.checkpoints).toHaveLength(5);
   });
 
-  it('defaults to 10 checkpoints when no limit specified', async () => {
+  it('defaults to 5 checkpoints when no limit specified', async () => {
     const result = await recall({
       workspace: TEST_DIR_A
     });
 
-    expect(result.checkpoints).toHaveLength(10);
+    expect(result.checkpoints).toHaveLength(5);
   });
 
   it('returns most recent checkpoints first when limited', async () => {
@@ -836,7 +836,7 @@ describe('recall with since parameter', () => {
     expect(result.checkpoints.length).toBeGreaterThan(0);
   });
 
-  it('uses default (2 days) when neither since nor days provided', async () => {
+  it('uses last-N mode (no date window) when neither since nor days provided', async () => {
     await saveCheckpoint({
       description: 'Test',
       workspace: TEST_DIR_A
@@ -870,5 +870,81 @@ describe('recall with since parameter', () => {
 
     expect(result.checkpoints.length).toBeGreaterThan(0);
     expect(result.checkpoints[0]!.description).toContain('Authentication');
+  });
+});
+
+describe('Default recall uses last-N mode (no date window)', () => {
+  it('finds old checkpoints when no date params specified', async () => {
+    // Manually create a checkpoint file in an old date directory
+    const { mkdir, writeFile } = await import('fs/promises');
+    const memoriesDir = join(TEST_DIR_A, '.memories', '2020-01-15');
+    await mkdir(memoriesDir, { recursive: true });
+
+    const oldCheckpoint = [
+      '---',
+      'id: checkpoint_old12345',
+      'timestamp: "2020-01-15T10:30:00.000Z"',
+      'tags:',
+      '  - ancient',
+      '---',
+      '',
+      'Work from years ago'
+    ].join('\n');
+    await writeFile(join(memoriesDir, '103000_old1.md'), oldCheckpoint, 'utf-8');
+
+    // Default recall (no date params) should find it
+    const result = await recall({ workspace: TEST_DIR_A });
+    const descriptions = result.checkpoints.map(c => c.description);
+    expect(descriptions).toContain('Work from years ago');
+  });
+
+  it('does NOT find old checkpoints when days param limits the range', async () => {
+    const { mkdir, writeFile } = await import('fs/promises');
+    const memoriesDir = join(TEST_DIR_A, '.memories', '2020-01-15');
+    await mkdir(memoriesDir, { recursive: true });
+
+    const oldCheckpoint = [
+      '---',
+      'id: checkpoint_old12345',
+      'timestamp: "2020-01-15T10:30:00.000Z"',
+      'tags:',
+      '  - ancient',
+      '---',
+      '',
+      'Work from years ago'
+    ].join('\n');
+    await writeFile(join(memoriesDir, '103000_old1.md'), oldCheckpoint, 'utf-8');
+
+    // With explicit days param, should NOT find the old checkpoint
+    const result = await recall({ workspace: TEST_DIR_A, days: 7 });
+    const descriptions = result.checkpoints.map(c => c.description);
+    expect(descriptions).not.toContain('Work from years ago');
+  });
+
+  it('returns newest checkpoints first in last-N mode', async () => {
+    // Create checkpoints with different dates
+    const { mkdir, writeFile } = await import('fs/promises');
+
+    const dates = ['2024-06-01', '2024-09-15', '2025-01-10'];
+    for (const date of dates) {
+      const dir = join(TEST_DIR_A, '.memories', date);
+      await mkdir(dir, { recursive: true });
+      const content = [
+        '---',
+        `id: checkpoint_${date.replace(/-/g, '')}`,
+        `timestamp: "${date}T12:00:00.000Z"`,
+        '---',
+        '',
+        `Work from ${date}`
+      ].join('\n');
+      await writeFile(join(dir, '120000_test.md'), content, 'utf-8');
+    }
+
+    const result = await recall({ workspace: TEST_DIR_A, limit: 3 });
+
+    // Should be newest first
+    expect(result.checkpoints[0]!.description).toBe('Work from 2025-01-10');
+    expect(result.checkpoints[1]!.description).toBe('Work from 2024-09-15');
+    expect(result.checkpoints[2]!.description).toBe('Work from 2024-06-01');
   });
 });

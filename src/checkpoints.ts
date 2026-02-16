@@ -282,6 +282,48 @@ export async function getCheckpointsForDay(
 }
 
 /**
+ * Get all checkpoints across all date directories (no time filter).
+ * Used for default recall when no date parameters are specified.
+ * Scans directories newest-first and stops early when limit is reached.
+ *
+ * @param projectPath - Path to the project directory
+ * @param limit - Optional max checkpoints to collect (stops scanning after enough)
+ */
+export async function getAllCheckpoints(
+  projectPath: string,
+  limit?: number
+): Promise<Checkpoint[]> {
+  const memoriesDir = getMemoriesDir(projectPath);
+
+  let entries: string[];
+  try {
+    entries = await readdir(memoriesDir);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  const dateDirs = entries.filter(e => datePattern.test(e)).sort().reverse();
+
+  const allCheckpoints: Checkpoint[] = [];
+  for (const dir of dateDirs) {
+    const checkpoints = await getCheckpointsForDay(projectPath, dir);
+    allCheckpoints.push(...checkpoints);
+    // Early termination: stop scanning older directories once we have enough
+    if (limit && allCheckpoints.length >= limit) break;
+  }
+
+  // Sort newest first, then slice to limit
+  const sorted = allCheckpoints.sort((a, b) =>
+    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+  return limit ? sorted.slice(0, limit) : sorted;
+}
+
+/**
  * Get all checkpoints across a date range (inclusive)
  *
  * @param projectPath - Path to the project directory

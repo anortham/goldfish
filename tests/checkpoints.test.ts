@@ -3,6 +3,7 @@ import {
   saveCheckpoint,
   getCheckpointsForDay,
   getCheckpointsForDateRange,
+  getAllCheckpoints,
   parseCheckpointFile,
   parseJsonCheckpoint,
   formatCheckpoint,
@@ -902,6 +903,68 @@ Work on day ${day}
       '2020-01-01',
       '2020-01-31'
     );
+    expect(checkpoints).toEqual([]);
+  });
+});
+
+// ─── getAllCheckpoints ────────────────────────────────────────────────
+
+describe('getAllCheckpoints', () => {
+  it('returns all checkpoints across date directories', async () => {
+    const memoriesDir = getMemoriesDir(tempDir);
+
+    const dates = ['2024-03-01', '2024-06-15', '2025-01-10'];
+    for (const date of dates) {
+      const dir = join(memoriesDir, date);
+      await mkdir(dir, { recursive: true });
+      const content = `---\nid: checkpoint_${date.replace(/-/g, '')}\ntimestamp: "${date}T12:00:00.000Z"\n---\n\nWork from ${date}\n`;
+      await writeFile(join(dir, '120000_test.md'), content, 'utf-8');
+    }
+
+    const checkpoints = await getAllCheckpoints(tempDir);
+    expect(checkpoints).toHaveLength(3);
+    // Newest first
+    expect(checkpoints[0]!.description).toBe('Work from 2025-01-10');
+    expect(checkpoints[2]!.description).toBe('Work from 2024-03-01');
+  });
+
+  it('stops scanning once limit is reached', async () => {
+    const memoriesDir = getMemoriesDir(tempDir);
+
+    // Create 5 date dirs with 2 checkpoints each = 10 total
+    for (let i = 1; i <= 5; i++) {
+      const date = `2025-0${i}-01`;
+      const dir = join(memoriesDir, date);
+      await mkdir(dir, { recursive: true });
+      for (let j = 1; j <= 2; j++) {
+        const content = `---\nid: checkpoint_m${i}c${j}\ntimestamp: "${date}T${10 + j}:00:00.000Z"\n---\n\nMonth ${i} checkpoint ${j}\n`;
+        await writeFile(join(dir, `${10 + j}0000_m${i}c${j}.md`), content, 'utf-8');
+      }
+    }
+
+    const limited = await getAllCheckpoints(tempDir, 3);
+    expect(limited).toHaveLength(3);
+    // Should be the 3 newest (from May and April dirs)
+    expect(limited[0]!.description).toBe('Month 5 checkpoint 2');
+    expect(limited[1]!.description).toBe('Month 5 checkpoint 1');
+    expect(limited[2]!.description).toBe('Month 4 checkpoint 2');
+  });
+
+  it('returns all when limit exceeds total count', async () => {
+    const memoriesDir = getMemoriesDir(tempDir);
+
+    const dir = join(memoriesDir, '2025-01-01');
+    await mkdir(dir, { recursive: true });
+    const content = `---\nid: checkpoint_only1\ntimestamp: "2025-01-01T12:00:00.000Z"\n---\n\nOnly checkpoint\n`;
+    await writeFile(join(dir, '120000_only.md'), content, 'utf-8');
+
+    const checkpoints = await getAllCheckpoints(tempDir, 100);
+    expect(checkpoints).toHaveLength(1);
+  });
+
+  it('returns empty for project with no memories', async () => {
+    const emptyDir = join(tmpdir(), `test-empty-${Date.now()}`);
+    const checkpoints = await getAllCheckpoints(emptyDir);
     expect(checkpoints).toEqual([]);
   });
 });
