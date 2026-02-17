@@ -1012,7 +1012,7 @@ describe('Auto-registration', () => {
 
     // Our test dir should be registered
     const projects = await listRegisteredProjects();
-    const registered = projects.find(p => p.path === tempDir);
+    const registered = projects.find(p => p.path === tempDir.replace(/\\/g, '/'));
     // ensureMemoriesDir was called in beforeEach, so .memories/ exists
     expect(registered).toBeDefined();
     expect(registered!.name).toBeTruthy();
