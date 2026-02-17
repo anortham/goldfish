@@ -69,7 +69,7 @@ describe('Register project', () => {
 
     const registry = await getRegistry(GOLDFISH_DIR);
     expect(registry.projects).toHaveLength(1);
-    expect(registry.projects[0].path).toBe(projectPath);
+    expect(registry.projects[0].path).toBe(projectPath.replace(/\\/g, '/'));
     expect(registry.projects[0].name).toBe('my-project');
     // Timestamp should be a valid ISO 8601 string
     expect(new Date(registry.projects[0].registered).toISOString()).toBe(registry.projects[0].registered);
@@ -107,7 +107,7 @@ describe('Register project', () => {
     const registry = await getRegistry(GOLDFISH_DIR);
     // Should be resolved to absolute path without ..
     expect(registry.projects[0].path).not.toContain('..');
-    expect(registry.projects[0].path).toBe(join(TEST_DIR, 'my-project'));
+    expect(registry.projects[0].path).toBe(join(TEST_DIR, 'my-project').replace(/\\/g, '/'));
   });
 
   it('creates goldfish directory if needed', async () => {
@@ -134,9 +134,10 @@ describe('Register project', () => {
     const registry = await getRegistry(GOLDFISH_DIR);
     expect(registry.projects).toHaveLength(5);
 
-    // Each project should appear exactly once
+    // Each project should appear exactly once (normalize paths for cross-platform comparison)
     const paths = registry.projects.map(p => p.path).sort();
-    expect(paths).toEqual(projects.sort());
+    const expectedPaths = projects.map(p => p.replace(/\\/g, '/')).sort();
+    expect(paths).toEqual(expectedPaths);
   });
 
   it('stores paths with forward slashes (cross-platform normalization)', async () => {
@@ -197,10 +198,10 @@ describe('Unregister project', () => {
     // Try to unregister a different project - should not throw
     await unregisterProject(join(TEST_DIR, 'nonexistent'), GOLDFISH_DIR);
 
-    // Original project should still be there
+    // Original project should still be there (normalize for comparison)
     const registry = await getRegistry(GOLDFISH_DIR);
     expect(registry.projects).toHaveLength(1);
-    expect(registry.projects[0].path).toBe(projectPath);
+    expect(registry.projects[0].path).toBe(projectPath.replace(/\\/g, '/'));
   });
 });
 
@@ -218,7 +219,7 @@ describe('List registered projects', () => {
 
     const projects = await listRegisteredProjects(GOLDFISH_DIR);
     expect(projects).toHaveLength(1);
-    expect(projects[0].path).toBe(projectPath);
+    expect(projects[0].path).toBe(projectPath.replace(/\\/g, '/'));
     expect(projects[0].name).toBe('my-project');
   });
 
@@ -233,7 +234,7 @@ describe('List registered projects', () => {
 
     const projects = await listRegisteredProjects(GOLDFISH_DIR);
     expect(projects).toHaveLength(1);
-    expect(projects[0].path).toBe(validProject);
+    expect(projects[0].path).toBe(validProject.replace(/\\/g, '/'));
   });
 
   it('sorts by name', async () => {
