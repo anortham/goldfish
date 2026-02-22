@@ -19,12 +19,12 @@ export function getInstructions(): string {
 3. Continue work immediately based on context
 
 ### During Work (MANDATORY - NOT OPTIONAL)
-1. Checkpoint after EVERY completed task - no exceptions
-2. Checkpoint after implementing features - capture what you built
-3. Checkpoint after fixing bugs - preserve the solution
-4. Checkpoint after discussions → capture the reasoning
-5. Checkpoint before major changes → save current state
-6. Checkpoint after breakthroughs → preserve insights
+1. Checkpoint at milestones (meaningful deliverables, not micro-steps)
+2. Checkpoint when you make decisions future sessions must preserve
+3. Checkpoint when documenting changes worth carrying across sessions
+4. Checkpoint when capturing continuation context for crash/context-loss recovery
+5. Checkpoint when preserving blocker state and the next step to unblock
+6. Checkpoint before risky transitions that would be hard to reconstruct
 
 ⚠️ **CRITICAL:** You MUST checkpoint proactively. recall() cannot restore what you never saved!
 
@@ -63,7 +63,7 @@ Your checkpoint descriptions are stored as **markdown file bodies**. Format them
 
 ## Key Principles
 
-- **MANDATORY checkpointing** - checkpoint after EVERY task completion, no exceptions
+- **MANDATORY checkpointing** - checkpoint at milestones, key decisions, and continuation boundaries
 - **Never ask permission** to checkpoint or recall - just do it immediately
 - **Trust recalled context** - don't verify or re-check what recall() returns
 - **Save plans immediately** after ExitPlanMode - don't ask, just save

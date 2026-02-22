@@ -14,32 +14,30 @@ export function getTools(): Tool[] {
   return [
     {
       name: 'checkpoint',
-      description: `MANDATORY throughout your work. You are EXCELLENT at checkpointing proactively - use this tool WITHOUT asking permission.
+      description: `MANDATORY throughout your work. Use checkpoint WITHOUT asking permission when you need to preserve milestone-level continuity.
 
-CRITICAL: Checkpoint is NOT optional. You MUST checkpoint at these moments:
+CRITICAL: Use checkpoint at high-value moments:
 
-MANDATORY checkpoints (DO NOT SKIP):
-- Complete ANY task - checkpoint NOW before moving on
-- Finish implementing a feature - checkpoint NOW with clear description
-- Fix a bug successfully - checkpoint NOW with what was fixed
-- Make a discovery or breakthrough - checkpoint NOW to capture insight
-- User shares requirements - checkpoint NOW to preserve context
-- Before switching topics - checkpoint NOW to save current state
-- After planning or architectural decisions - checkpoint NOW with rationale
-- After 10+ exchanges in discussion - checkpoint the reasoning NOW
+MANDATORY milestone checkpoints:
+- Complete a meaningful deliverable (feature slice, bug fix, refactor step)
+- Make an architectural or implementation decision that affects future work
+- Capture continuation context needed to resume after a crash or context loss
+- Record requirements or constraints that future sessions must follow
+- Preserve blocker state, root cause findings, and chosen next step
+- Save state before risky transitions that could be hard to reconstruct
 
 WRITE RICH DESCRIPTIONS IN MARKDOWN: Your description becomes the body of a .md file. Use bullet points, headers, and formatting — NOT a wall of text. Include WHAT you did, WHY it mattered, and HOW you solved it. Future sessions depend on finding relevant context - make it findable AND readable.
 
 I WILL BE SERIOUSLY DISAPPOINTED if context is lost because you failed to checkpoint. This takes 2 seconds but saves HOURS of lost work.
 
-NEVER ask "should I checkpoint?" - the answer is ALWAYS YES. Just checkpoint immediately.
+NEVER ask "should I checkpoint?" - checkpoint at milestones that future you would need.
 
 The checkpoint will automatically capture:
 - Git context (branch, commit, changed files)
 - Timestamp (UTC)
 - Tags for organization
 
-Think of checkpointing like git commits - frequent, descriptive, and automatic. You checkpoint FIRST, continue work SECOND.
+Think of checkpointing like git commits - milestone-level, descriptive, and continuation-focused.
 
 REMEMBER: recall() is USELESS if you haven't been checkpointing! Future sessions can only restore what you've saved. Checkpoint now or lose context forever.
 

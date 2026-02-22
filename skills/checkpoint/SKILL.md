@@ -8,22 +8,20 @@ allowed-tools: mcp__goldfish__checkpoint
 
 ## The Golden Rule
 
-NEVER ask "should I checkpoint?" — the answer is ALWAYS YES. Just do it. Immediately. Without permission.
+NEVER ask "should I checkpoint?" — checkpoint at milestones and continuation boundaries, without asking permission.
 
 Every checkpoint you skip is context that future sessions lose forever. `mcp__goldfish__recall` can only return what you've saved. No checkpoints = no memory = starting from scratch every time.
 
 ## When to Checkpoint
 
-### MANDATORY moments (DO NOT SKIP):
-- **Completed a task** — checkpoint NOW before moving on
-- **Fixed a bug** — checkpoint NOW with root cause and fix
-- **Made a discovery** — checkpoint NOW to capture the insight
-- **Before risky changes** — checkpoint NOW as a save point
-- **Before context compaction** — checkpoint NOW or lose everything
-- **After planning/architecture decisions** — checkpoint NOW with rationale
-- **User shared requirements** — checkpoint NOW to preserve them
-- **Switching topics** — checkpoint NOW to save current state
-- **After 10+ exchanges** — checkpoint the accumulated reasoning NOW
+### MANDATORY milestone moments:
+- **Completed a meaningful deliverable** — feature slice, bug fix, or refactor step
+- **Made a decision** — architecture/tradeoff that future sessions must follow
+- **Captured continuation context** — state needed to resume after crash or context loss
+- **Before risky changes** — create a clear save point for reconstruction
+- **Before context compaction** — preserve active state and next step
+- **User shared requirements/constraints** — preserve what future work must honor
+- **Found a blocker or discovery** — capture root cause and path forward
 
 ### Good habit moments:
 - After successful test runs
@@ -93,13 +91,13 @@ Focus your description on the MEANING, not the mechanics.
 
 ## Checkpoint Frequency
 
-Think of checkpoints like git commits — frequent, descriptive, and automatic.
+Think of checkpoints like git commits — milestone-level, descriptive, and continuation-focused.
 
-- Too few: Context gaps that make future recall useless
-- Too many: Not really possible. More checkpoints = richer memory
-- Just right: Every meaningful state change gets a checkpoint
+- **Too few:** Context gaps that make future recall weak
+- **High value:** Milestones, decisions, blockers, and resumability context
+- **Best quality:** Each checkpoint should help future-you continue confidently
 
-When in doubt, checkpoint. The cost is negligible (under 50ms). The cost of NOT checkpointing is starting over from scratch.
+Checkpoint for continuity quality, not raw quantity.
 
 ## Critical Rules
 
