@@ -433,6 +433,21 @@ describe('Server exports', () => {
     expect(typeof getTools).toBe('function');
     expect(typeof getInstructions).toBe('function');
   });
+
+  it('keeps runtime and plugin versions in sync', async () => {
+    const { SERVER_VERSION } = await import('../src/server');
+
+    const packageJson = JSON.parse(
+      await Bun.file(new URL('../package.json', import.meta.url)).text()
+    ) as { version: string };
+
+    const pluginJson = JSON.parse(
+      await Bun.file(new URL('../.claude-plugin/plugin.json', import.meta.url)).text()
+    ) as { version: string };
+
+    expect(SERVER_VERSION).toBe(packageJson.version);
+    expect(SERVER_VERSION).toBe(pluginJson.version);
+  });
 });
 
 describe('Error handling', () => {

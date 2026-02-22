@@ -18,6 +18,8 @@ import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handlePlan } from './handlers/index.js';
 
+export const SERVER_VERSION = '5.1.0';
+
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan };
 
@@ -28,7 +30,7 @@ export async function startServer() {
   const server = new Server(
     {
       name: 'goldfish',
-      version: '5.0.7'
+      version: SERVER_VERSION
     },
     {
       capabilities: {

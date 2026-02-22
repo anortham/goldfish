@@ -16,10 +16,16 @@ Pulls plans from multiple sources and recent checkpoints, then assesses how actu
 
 **Source 1: Goldfish plans**
 ```
-mcp__goldfish__plan({ action: "get" })
+mcp__goldfish__recall({ limit: 0 })
 ```
 
-This returns the active plan for the current workspace.
+This returns the active Goldfish plan for the current workspace.
+
+If you need a specific plan by ID (not just the active one):
+
+```
+mcp__goldfish__plan({ action: "get", id: "plan-id" })
+```
 
 If no active plan exists, note it but continue — there may still be plans in `docs/plans/`.
 
