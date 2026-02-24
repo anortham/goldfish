@@ -9,6 +9,7 @@ export interface Checkpoint {
   tags?: string[];
   git?: GitContext;        // Git context at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
+  planId?: string;        // ID of active plan when checkpoint was created
 }
 
 export interface CheckpointInput {
