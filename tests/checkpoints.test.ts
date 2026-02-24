@@ -787,6 +787,33 @@ describe('saveCheckpoint', () => {
     expect(files.length).toBe(10);
   });
 
+  it('attaches planId when active plan exists', async () => {
+    // Set up an active plan
+    const { savePlan } = await import('../src/plans');
+    await savePlan({
+      title: 'Test Plan',
+      content: 'Plan content',
+      workspace: tempDir,
+      activate: true
+    });
+
+    const checkpoint = await saveCheckpoint({
+      description: 'Checkpoint during active plan',
+      workspace: tempDir
+    });
+
+    expect(checkpoint.planId).toBe('test-plan');
+  });
+
+  it('omits planId when no active plan exists', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'Checkpoint with no plan',
+      workspace: tempDir
+    });
+
+    expect(checkpoint.planId).toBeUndefined();
+  });
+
   it('saves multiple checkpoints as separate files', async () => {
     await saveCheckpoint({
       description: 'First checkpoint',
