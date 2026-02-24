@@ -128,6 +128,29 @@ describe('formatCheckpoint', () => {
     expect(formatted).toContain('  - css');
   });
 
+  it('includes planId in frontmatter when present', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_abc123',
+      timestamp: '2026-01-15T10:30:00.000Z',
+      description: 'Checkpoint with plan affinity',
+      planId: 'my-feature-plan'
+    };
+
+    const formatted = formatCheckpoint(checkpoint);
+    expect(formatted).toContain('planId: my-feature-plan');
+  });
+
+  it('omits planId from frontmatter when not present', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_abc123',
+      timestamp: '2026-01-15T10:30:00.000Z',
+      description: 'Checkpoint without plan'
+    };
+
+    const formatted = formatCheckpoint(checkpoint);
+    expect(formatted).not.toContain('planId');
+  });
+
   it('includes summary in frontmatter when present', () => {
     const checkpoint: Checkpoint = {
       id: 'checkpoint_33333333',
@@ -413,6 +436,44 @@ Checkpoint with BOM.`;
     const checkpoint = parseCheckpointFile(content);
     expect(checkpoint.id).toBe('checkpoint_bom00001');
     expect(checkpoint.description).toBe('Checkpoint with BOM.');
+  });
+
+  it('parses planId from frontmatter', () => {
+    const content = `---
+id: checkpoint_abc123
+timestamp: "2026-01-15T10:30:00.000Z"
+planId: my-feature-plan
+---
+
+Checkpoint with plan affinity`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.planId).toBe('my-feature-plan');
+  });
+
+  it('omits planId when not in frontmatter', () => {
+    const content = `---
+id: checkpoint_abc123
+timestamp: "2026-01-15T10:30:00.000Z"
+---
+
+Checkpoint without plan`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.planId).toBeUndefined();
+  });
+
+  it('roundtrips planId through format/parse', () => {
+    const original: Checkpoint = {
+      id: 'checkpoint_abc123',
+      timestamp: '2026-01-15T10:30:00.000Z',
+      description: 'Roundtrip test',
+      planId: 'my-plan-id'
+    };
+
+    const formatted = formatCheckpoint(original);
+    const parsed = parseCheckpointFile(formatted);
+    expect(parsed.planId).toBe('my-plan-id');
   });
 
   it('handles null/undefined timestamp in legacy data gracefully', () => {

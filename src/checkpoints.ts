@@ -74,6 +74,10 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
     frontmatter.summary = checkpoint.summary;
   }
 
+  if (checkpoint.planId) {
+    frontmatter.planId = checkpoint.planId;
+  }
+
   const yaml = stringifyYaml(frontmatter).trim();
   return `---\n${yaml}\n---\n\n${checkpoint.description}\n`;
 }
@@ -142,6 +146,7 @@ export function parseCheckpointFile(content: string): Checkpoint {
   if (tags) checkpoint.tags = tags;
   if (git) checkpoint.git = git;
   if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
+  if (frontmatter.planId) checkpoint.planId = String(frontmatter.planId);
 
   return checkpoint;
 }
