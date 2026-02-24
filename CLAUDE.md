@@ -87,6 +87,7 @@ interface Checkpoint {
   tags?: string[];
   git?: GitContext;        // Nested git context
   summary?: string;       // Auto-generated concise summary
+  planId?: string;        // ID of active plan when checkpoint was created
 }
 
 interface GitContext {
@@ -114,6 +115,7 @@ interface RecallOptions {
   since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
   search?: string;        // Fuzzy search query (fuse.js)
   full?: boolean;         // Include full descriptions + git metadata (default: false)
+  planId?: string;        // Filter to checkpoints associated with this plan
 }
 
 interface RegisteredProject {
