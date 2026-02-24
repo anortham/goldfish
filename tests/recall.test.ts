@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { recall, searchCheckpoints, parseSince } from '../src/recall';
 import { saveCheckpoint } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
 import { ensureMemoriesDir } from '../src/workspace';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Checkpoint } from '../src/types';
@@ -923,7 +923,6 @@ describe('Default recall uses last-N mode (no date window)', () => {
 
   it('returns newest checkpoints first in last-N mode', async () => {
     // Create checkpoints with different dates
-    const { mkdir, writeFile } = await import('fs/promises');
 
     const dates = ['2024-06-01', '2024-09-15', '2025-01-10'];
     for (const date of dates) {
@@ -946,5 +945,72 @@ describe('Default recall uses last-N mode (no date window)', () => {
     expect(result.checkpoints[0]!.description).toBe('Work from 2025-01-10');
     expect(result.checkpoints[1]!.description).toBe('Work from 2024-09-15');
     expect(result.checkpoints[2]!.description).toBe('Work from 2024-06-01');
+  });
+});
+
+describe('planId filtering', () => {
+  const PLAN_DIR = join(tmpdir(), `goldfish-test-plan-filter-${Date.now()}`);
+
+  beforeAll(async () => {
+    await mkdir(PLAN_DIR, { recursive: true });
+    process.env.GOLDFISH_WORKSPACE = PLAN_DIR;
+  });
+
+  afterAll(async () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    await rm(PLAN_DIR, { recursive: true, force: true });
+  });
+
+  test('filters checkpoints by planId', async () => {
+    const memoriesDir = join(PLAN_DIR, '.memories');
+    const dateDir = join(memoriesDir, '2026-01-15');
+    await mkdir(dateDir, { recursive: true });
+
+    const cp1 = `---
+id: checkpoint_aaa
+timestamp: "2026-01-15T10:00:00.000Z"
+planId: plan-a
+---
+
+Work on plan A`;
+
+    const cp2 = `---
+id: checkpoint_bbb
+timestamp: "2026-01-15T11:00:00.000Z"
+planId: plan-b
+---
+
+Work on plan B`;
+
+    const cp3 = `---
+id: checkpoint_ccc
+timestamp: "2026-01-15T12:00:00.000Z"
+---
+
+Work without a plan`;
+
+    await writeFile(join(dateDir, '100000_aaa.md'), cp1);
+    await writeFile(join(dateDir, '110000_bbb.md'), cp2);
+    await writeFile(join(dateDir, '120000_ccc.md'), cp3);
+
+    const result = await recall({
+      workspace: PLAN_DIR,
+      planId: 'plan-a',
+      limit: 10,
+      days: 365
+    });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0].id).toBe('checkpoint_aaa');
+  });
+
+  test('returns all checkpoints when planId not specified', async () => {
+    const result = await recall({
+      workspace: PLAN_DIR,
+      limit: 10,
+      days: 365
+    });
+
+    expect(result.checkpoints).toHaveLength(3);
   });
 });

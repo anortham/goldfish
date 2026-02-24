@@ -9,6 +9,7 @@ export interface Checkpoint {
   tags?: string[];
   git?: GitContext;        // Git context at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
+  planId?: string;        // ID of active plan when checkpoint was created
 }
 
 export interface CheckpointInput {
@@ -53,6 +54,7 @@ export interface RecallOptions {
   search?: string;        // Fuzzy search query
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
+  planId?: string;        // Filter to checkpoints associated with this plan
   _registryDir?: string;  // Internal: override registry dir for test isolation
 }
 

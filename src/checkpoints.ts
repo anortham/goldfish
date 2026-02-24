@@ -14,6 +14,7 @@ import { getGitContext } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
+import { getActivePlan } from './plans';
 
 /**
  * Generate a deterministic checkpoint ID from timestamp and description.
@@ -72,6 +73,10 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
 
   if (checkpoint.summary) {
     frontmatter.summary = checkpoint.summary;
+  }
+
+  if (checkpoint.planId) {
+    frontmatter.planId = checkpoint.planId;
   }
 
   const yaml = stringifyYaml(frontmatter).trim();
@@ -142,6 +147,7 @@ export function parseCheckpointFile(content: string): Checkpoint {
   if (tags) checkpoint.tags = tags;
   if (git) checkpoint.git = git;
   if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
+  if (frontmatter.planId) checkpoint.planId = String(frontmatter.planId);
 
   return checkpoint;
 }
@@ -203,6 +209,16 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
   const summary = generateSummary(input.description);
   if (summary) {
     checkpoint.summary = summary;
+  }
+
+  // Attach active plan ID if one exists
+  try {
+    const activePlan = await getActivePlan(projectPath);
+    if (activePlan) {
+      checkpoint.planId = activePlan.id;
+    }
+  } catch {
+    // Silently ignore — plan affinity is best-effort
   }
 
   // Determine file path

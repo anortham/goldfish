@@ -104,6 +104,7 @@ Key parameters (all optional):
 - search: Fuzzy search query (searches descriptions, tags, branches, files)
 - full: Return full descriptions + all metadata including files, git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
+- planId: Filter checkpoints to those created under a specific plan
 
 Examples:
 - recall() - last 5 checkpoints regardless of age (lean context)
@@ -112,6 +113,7 @@ Examples:
 - recall({ days: 7, limit: 20 }) - last 7 days, max 20 checkpoints
 - recall({ search: "auth", full: true }) - search with full details
 - recall({ limit: 0 }) - plan only, no checkpoints
+- recall({ planId: "auth-redesign" }) - checkpoints from a specific plan
 
 Returns: Active plan + chronological checkpoints + optional workspace summaries.`,
       inputSchema: {
@@ -148,6 +150,10 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
           workspace: {
             type: 'string',
             description: 'Workspace scope: "current" (default), "all" (cross-workspace), or specific path. Optional - defaults to current workspace.'
+          },
+          planId: {
+            type: 'string',
+            description: 'Filter to checkpoints created while a specific plan was active. Use to see progress on a particular plan.'
           }
         }
       }

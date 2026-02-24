@@ -95,6 +95,23 @@ describe('Readable markdown responses', () => {
       }
     });
 
+    it('shows planId in checkpoint response when active plan exists', async () => {
+      await savePlan({
+        title: 'Checkpoint Handler Plan',
+        content: 'Content',
+        workspace: TEST_DIR,
+        activate: true
+      });
+
+      const result = await handleCheckpoint({
+        description: 'Checkpoint with plan context',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('Plan: checkpoint-handler-plan');
+    });
+
     it('throws error for missing description', async () => {
       await expect(
         handleCheckpoint({ workspace: TEST_DIR })
@@ -214,6 +231,29 @@ describe('Readable markdown responses', () => {
       expect(text).not.toStartWith('{');
 
       await rm(emptyDir, { recursive: true, force: true });
+    });
+
+    it('shows planId in checkpoint output when present', async () => {
+      await savePlan({
+        title: 'Handler Test Plan',
+        content: 'Content',
+        workspace: TEST_DIR,
+        activate: true
+      });
+
+      await saveCheckpoint({
+        description: 'Checkpoint with plan',
+        workspace: TEST_DIR
+      });
+
+      const result = await handleRecall({
+        workspace: TEST_DIR,
+        full: true,
+        limit: 1
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('Plan: handler-test-plan');
     });
 
     it('shows tags on checkpoint entries', async () => {

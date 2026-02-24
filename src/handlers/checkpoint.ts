@@ -41,6 +41,10 @@ export async function handleCheckpoint(args: any) {
     lines.push(`Tags: ${tags.join(', ')}`);
   }
 
+  if (checkpoint.planId) {
+    lines.push(`Plan: ${checkpoint.planId}`);
+  }
+
   if (git?.files && git.files.length > 0) {
     const displayFiles = git.files.slice(0, MAX_FILES);
     const overflow = git.files.length > MAX_FILES

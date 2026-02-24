@@ -31,6 +31,10 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
     lines.push(`Tags: ${checkpoint.tags.join(', ')}`);
   }
 
+  if (checkpoint.planId) {
+    lines.push(`Plan: ${checkpoint.planId}`);
+  }
+
   if (checkpoint.workspace) {
     lines.push(`Workspace: ${checkpoint.workspace}`);
   }
