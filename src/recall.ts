@@ -158,6 +158,11 @@ async function recallFromWorkspace(
     checkpoints = searchCheckpoints(options.search, checkpoints);
   }
 
+  // Filter by planId if specified
+  if (options.planId) {
+    checkpoints = checkpoints.filter(cp => cp.planId === options.planId);
+  }
+
   // Apply summary filtering (default: return summaries, not full descriptions)
   // BUT: Always return full descriptions for search results (so users see why it matched)
   if (!options.full && !options.search) {

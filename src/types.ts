@@ -54,6 +54,7 @@ export interface RecallOptions {
   search?: string;        // Fuzzy search query
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
+  planId?: string;        // Filter to checkpoints associated with this plan
   _registryDir?: string;  // Internal: override registry dir for test isolation
 }
 
