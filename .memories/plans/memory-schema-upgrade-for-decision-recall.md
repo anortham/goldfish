@@ -1,9 +1,9 @@
 ---
 id: memory-schema-upgrade-for-decision-recall
 title: Memory Schema Upgrade for Decision Recall
-status: active
+status: completed
 created: 2026-02-25T02:00:16.719Z
-updated: 2026-02-25T02:00:16.719Z
+updated: 2026-02-25T02:19:02.178Z
 tags:
   - memory-schema
   - recall-quality
