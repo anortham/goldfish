@@ -329,7 +329,6 @@ describe('Date range filtering', () => {
       workspace: TEST_DIR_A
     });
 
-    const today = new Date().toISOString().split('T')[0]!;
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]!;
 
     // When only 'to' is provided, should look 7 days back from the 'to' date
@@ -373,6 +372,15 @@ describe('Checkpoint search (fuse.js)', () => {
       timestamp: '2025-10-13T12:00:00.000Z',
       description: 'Refactored database connection pooling',
       tags: ['refactor', 'database', 'performance']
+    },
+    {
+      id: 'checkpoint_test0004',
+      timestamp: '2025-10-13T13:00:00.000Z',
+      description: 'Documented migration follow-up',
+      tags: ['decision-record'],
+      decision: 'Adopt CQRS for write-heavy order processing path',
+      impact: 'Reduced lock contention under peak load',
+      symbols: ['OrderCommandHandler.handle']
     }
   ];
 
@@ -380,9 +388,12 @@ describe('Checkpoint search (fuse.js)', () => {
     const results = searchCheckpoints('auth', checkpoints);
 
     expect(results.length).toBeGreaterThan(0);
-    expect(results.every(c =>
+    expect(results.some(c =>
       c.description.toLowerCase().includes('auth') ||
-      c.tags?.some(t => t.includes('auth'))
+      c.tags?.some(t => t.includes('auth')) ||
+      c.context?.toLowerCase().includes('auth') ||
+      c.decision?.toLowerCase().includes('auth') ||
+      c.impact?.toLowerCase().includes('auth')
     )).toBe(true);
   });
 
@@ -410,6 +421,14 @@ describe('Checkpoint search (fuse.js)', () => {
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.description).toContain('Refactored');
+  });
+
+  it('searches across structured decision fields', () => {
+    const results = searchCheckpoints('cqrs', checkpoints);
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]!.decision).toBeDefined();
+    expect(results[0]!.decision!.toLowerCase()).toContain('cqrs');
   });
 });
 
@@ -1001,7 +1020,7 @@ Work without a plan`;
     });
 
     expect(result.checkpoints).toHaveLength(1);
-    expect(result.checkpoints[0].id).toBe('checkpoint_aaa');
+    expect(result.checkpoints[0]!.id).toBe('checkpoint_aaa');
   });
 
   test('returns all checkpoints when planId not specified', async () => {

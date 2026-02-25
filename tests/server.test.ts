@@ -335,6 +335,27 @@ describe('Tool descriptions', () => {
     expect(props.tags.type).toBe('array');
   });
 
+  it('checkpoint tool exposes structured memory schema fields', async () => {
+    const { getTools } = await import('../src/server');
+
+    const tools = getTools();
+    const checkpointTool = tools.find(t => t.name === 'checkpoint');
+    const props = checkpointTool!.inputSchema.properties as Record<string, any>;
+
+    expect(props.type).toBeDefined();
+    expect(props.context).toBeDefined();
+    expect(props.decision).toBeDefined();
+    expect(props.alternatives).toBeDefined();
+    expect(props.impact).toBeDefined();
+    expect(props.evidence).toBeDefined();
+    expect(props.symbols).toBeDefined();
+    expect(props.next).toBeDefined();
+    expect(props.confidence).toBeDefined();
+    expect(props.unknowns).toBeDefined();
+    expect(props.confidence.minimum).toBe(1);
+    expect(props.confidence.maximum).toBe(5);
+  });
+
   it('plan tool documents updates schema with properties', async () => {
     const { getTools } = await import('../src/server');
 

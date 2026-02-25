@@ -165,6 +165,38 @@ describe('formatCheckpoint', () => {
     // Summary is in frontmatter, description is in body
     expect(formatted).toContain('\n\nA very long description');
   });
+
+  it('includes structured memory fields in frontmatter when present', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_struct0001',
+      timestamp: '2026-02-25T09:00:00.000Z',
+      description: 'Structured checkpoint body',
+      type: 'decision',
+      context: 'Authentication middleware race on refresh',
+      decision: 'Move refresh handling to edge middleware',
+      alternatives: ['App-level retries', 'Synchronous token rotation'],
+      impact: 'Eliminates duplicate token writes',
+      evidence: ['tests/auth-refresh.test.ts (12 passing)', 'p95 +3ms benchmark'],
+      symbols: ['AuthMiddleware.handle', 'refreshToken'],
+      next: 'Monitor redis timeout rates in staging',
+      confidence: 4,
+      unknowns: ['Redis failover behavior under burst']
+    };
+
+    const formatted = formatCheckpoint(checkpoint);
+
+    expect(formatted).toContain('type: decision');
+    expect(formatted).toContain('context: Authentication middleware race on refresh');
+    expect(formatted).toContain('decision: Move refresh handling to edge middleware');
+    expect(formatted).toContain('alternatives:');
+    expect(formatted).toContain('  - App-level retries');
+    expect(formatted).toContain('impact: Eliminates duplicate token writes');
+    expect(formatted).toContain('evidence:');
+    expect(formatted).toContain('symbols:');
+    expect(formatted).toContain('next: Monitor redis timeout rates in staging');
+    expect(formatted).toContain('confidence: 4');
+    expect(formatted).toContain('unknowns:');
+  });
 });
 
 // ─── parseCheckpointFile ─────────────────────────────────────────────
@@ -336,9 +368,9 @@ Removed 3 MCP tools, moving to Goldfish.
       commit: '5d11ef5',
       files: ['src/handler.rs', 'src/tools/mod.rs']
     });
-    // dirty and type should be dropped
+    // dirty should be dropped; type should be normalized and preserved
     expect((checkpoint.git as any)?.dirty).toBeUndefined();
-    expect((checkpoint as any).type).toBeUndefined();
+    expect(checkpoint.type).toBe('checkpoint');
     expect(checkpoint.description).toContain('Memory Tools Removal');
   });
 
@@ -489,6 +521,78 @@ Missing timestamp.`;
     expect(checkpoint.id).toBe('checkpoint_nullts001');
     // Should produce a valid ISO string, not "null"
     expect(checkpoint.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('parses structured memory fields from frontmatter', () => {
+    const content = `---
+id: checkpoint_struct1234
+timestamp: "2026-02-25T09:00:00.000Z"
+type: incident
+context: CI started failing after dependency update
+decision: Pin dependency and open upstream issue
+alternatives:
+  - Roll forward immediately
+  - Revert full release train
+impact: Restored green CI with minimal blast radius
+evidence:
+  - bun test tests/ci.test.ts
+  - error logs from GH Actions run 123
+symbols:
+  - buildPipeline
+  - runCiChecks
+next: Remove pin once upstream fix ships
+confidence: 3
+unknowns:
+  - Whether the pin affects production build reproducibility
+---
+
+Structured metadata test checkpoint
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.type).toBe('incident');
+    expect(checkpoint.context).toBe('CI started failing after dependency update');
+    expect(checkpoint.decision).toBe('Pin dependency and open upstream issue');
+    expect(checkpoint.alternatives).toEqual(['Roll forward immediately', 'Revert full release train']);
+    expect(checkpoint.impact).toBe('Restored green CI with minimal blast radius');
+    expect(checkpoint.evidence).toEqual(['bun test tests/ci.test.ts', 'error logs from GH Actions run 123']);
+    expect(checkpoint.symbols).toEqual(['buildPipeline', 'runCiChecks']);
+    expect(checkpoint.next).toBe('Remove pin once upstream fix ships');
+    expect(checkpoint.confidence).toBe(3);
+    expect(checkpoint.unknowns).toEqual(['Whether the pin affects production build reproducibility']);
+  });
+
+  it('roundtrips structured fields through format/parse', () => {
+    const original: Checkpoint = {
+      id: 'checkpoint_roundstruct',
+      timestamp: '2026-02-25T12:00:00.000Z',
+      description: 'Roundtrip structured fields',
+      type: 'learning',
+      context: 'Observed flaky test behavior in parallel runs',
+      decision: 'Serialize flaky suite temporarily',
+      alternatives: ['Increase retries only'],
+      impact: 'Restored deterministic CI signal',
+      evidence: ['ci logs', 'local repro'],
+      symbols: ['runIntegrationSuite'],
+      next: 'Root-cause shared fixture race',
+      confidence: 2,
+      unknowns: ['Whether issue reproduces on arm64 runners']
+    };
+
+    const formatted = formatCheckpoint(original);
+    const parsed = parseCheckpointFile(formatted);
+
+    expect(parsed.type).toBe(original.type);
+    expect(parsed.context).toBe(original.context);
+    expect(parsed.decision).toBe(original.decision);
+    expect(parsed.alternatives).toEqual(original.alternatives);
+    expect(parsed.impact).toBe(original.impact);
+    expect(parsed.evidence).toEqual(original.evidence);
+    expect(parsed.symbols).toEqual(original.symbols);
+    expect(parsed.next).toBe(original.next);
+    expect(parsed.confidence).toBe(original.confidence);
+    expect(parsed.unknowns).toEqual(original.unknowns);
   });
 });
 
@@ -812,6 +916,44 @@ describe('saveCheckpoint', () => {
     });
 
     expect(checkpoint.planId).toBeUndefined();
+  });
+
+  it('persists structured fields when provided to saveCheckpoint', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'Structured save test',
+      workspace: tempDir,
+      type: 'decision',
+      context: 'API contract mismatch between services',
+      decision: 'Version endpoint and deprecate old response shape',
+      alternatives: ['Hotfix parser', 'Keep dual schemas indefinitely'],
+      impact: 'Unblocks web client without silent data loss',
+      evidence: ['tests/contracts.test.ts'],
+      symbols: ['parseContract', 'ApiResponseV2'],
+      next: 'Notify mobile team of deprecation window',
+      confidence: 4,
+      unknowns: ['Legacy clients outside telemetry visibility']
+    });
+
+    expect(checkpoint.type).toBe('decision');
+    expect(checkpoint.context).toBe('API contract mismatch between services');
+    expect(checkpoint.decision).toBe('Version endpoint and deprecate old response shape');
+    expect(checkpoint.alternatives).toEqual(['Hotfix parser', 'Keep dual schemas indefinitely']);
+    expect(checkpoint.impact).toBe('Unblocks web client without silent data loss');
+    expect(checkpoint.evidence).toEqual(['tests/contracts.test.ts']);
+    expect(checkpoint.symbols).toEqual(['parseContract', 'ApiResponseV2']);
+    expect(checkpoint.next).toBe('Notify mobile team of deprecation window');
+    expect(checkpoint.confidence).toBe(4);
+    expect(checkpoint.unknowns).toEqual(['Legacy clients outside telemetry visibility']);
+
+    const today = checkpoint.timestamp.split('T')[0]!;
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, today);
+    const files = await readdir(dateDir);
+    const content = await readFile(join(dateDir, files[0]!), 'utf-8');
+
+    expect(content).toContain('type: decision');
+    expect(content).toContain('context: API contract mismatch between services');
+    expect(content).toContain('confidence: 4');
   });
 
   it('saves multiple checkpoints as separate files', async () => {

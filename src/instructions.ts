@@ -48,6 +48,34 @@ Your checkpoint descriptions are stored as **markdown file bodies**. Format them
 
 **Use markdown:** Headers, bullet points, bold, code spans. These are .md files — make them readable.
 
+### Structured Fields (USE THEM)
+
+Checkpoints support structured fields that dramatically improve recall quality. **Use \`type\` to classify your checkpoint**, then fill in the fields that matter for that type:
+
+**Decision checkpoints** (\`type: "decision"\`):
+- \`decision\` — the chosen approach (one sentence) **← ALWAYS provide**
+- \`alternatives\` — rejected options and why **← ALWAYS provide**
+- \`confidence\` — 1-5 score
+- \`context\` — what problem triggered this decision
+
+**Incident checkpoints** (\`type: "incident"\`):
+- \`context\` — what happened and the trigger **← ALWAYS provide**
+- \`evidence\` — logs, error messages, reproduction steps **← ALWAYS provide**
+- \`unknowns\` — unresolved uncertainties
+- \`next\` — immediate follow-up action
+
+**Learning checkpoints** (\`type: "learning"\`):
+- \`impact\` — what changed as a result of learning this **← ALWAYS provide**
+- \`evidence\` — how you verified the learning
+- \`symbols\` — relevant code symbols
+
+**All checkpoint types** benefit from:
+- \`symbols\` — code symbols touched/affected (powers symbol-based search)
+- \`next\` — concrete next step or open question (powers session continuity)
+- \`impact\` — what unblocked, improved, or changed
+
+Structured fields are searchable. A checkpoint with \`decision: "Use bounded retries"\` is findable by searching "retries" even if the description doesn't mention it.
+
 ### Planning (ExitPlanMode)
 1. When ExitPlanMode is called → save plan within 1 exchange
 2. Use plan({ action: "save", title: "...", content: "...", activate: true })

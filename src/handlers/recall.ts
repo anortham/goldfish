@@ -6,7 +6,7 @@ import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
-import type { Checkpoint, Plan, WorkspaceSummary } from '../types.js';
+import type { Checkpoint, Plan } from '../types.js';
 
 /**
  * Resolve the effective workspace path, handling the 'all' special case
@@ -33,6 +33,34 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
 
   if (checkpoint.planId) {
     lines.push(`Plan: ${checkpoint.planId}`);
+  }
+
+  if (checkpoint.type) {
+    lines.push(`Type: ${checkpoint.type}`);
+  }
+
+  if (checkpoint.context) {
+    lines.push(`Context: ${checkpoint.context}`);
+  }
+
+  if (checkpoint.decision) {
+    lines.push(`Decision: ${checkpoint.decision}`);
+  }
+
+  if (checkpoint.impact) {
+    lines.push(`Impact: ${checkpoint.impact}`);
+  }
+
+  if (checkpoint.symbols && checkpoint.symbols.length > 0) {
+    lines.push(`Symbols: ${checkpoint.symbols.join(', ')}`);
+  }
+
+  if (checkpoint.next) {
+    lines.push(`Next: ${checkpoint.next}`);
+  }
+
+  if (typeof checkpoint.confidence === 'number') {
+    lines.push(`Confidence: ${checkpoint.confidence}/5`);
   }
 
   if (checkpoint.workspace) {

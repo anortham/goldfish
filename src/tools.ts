@@ -39,6 +39,14 @@ The checkpoint will automatically capture:
 
 Think of checkpointing like git commits - milestone-level, descriptive, and continuation-focused.
 
+CLASSIFY YOUR CHECKPOINTS with \`type\` for better recall:
+- \`type: "decision"\` → ALWAYS include \`decision\` + \`alternatives\`
+- \`type: "incident"\` → ALWAYS include \`context\` + \`evidence\`
+- \`type: "learning"\` → ALWAYS include \`impact\`
+- ALL types benefit from \`symbols\`, \`next\`, and \`impact\`
+
+Structured fields are SEARCHABLE. A decision with \`decision: "Use bounded retries"\` is findable even if the description doesn't mention it.
+
 REMEMBER: recall() is USELESS if you haven't been checkpointing! Future sessions can only restore what you've saved. Checkpoint now or lose context forever.
 
 Returns: Confirmation with checkpoint details and captured context.`,
@@ -63,6 +71,53 @@ GOOD (markdown formatted):
 BAD (wall of text): "Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case. This was blocking the auth PR."
 
 BAD (no context): "Fixed auth bug"`
+          },
+          type: {
+            type: 'string',
+            enum: ['checkpoint', 'decision', 'incident', 'learning'],
+            description: 'Optional memory type for stronger retrieval: checkpoint, decision, incident, or learning.'
+          },
+          context: {
+            type: 'string',
+            description: 'Optional context: what problem/state triggered this work.'
+          },
+          decision: {
+            type: 'string',
+            description: 'Optional decision statement: the chosen approach (one sentence).'
+          },
+          alternatives: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional rejected alternatives and why they were not chosen.'
+          },
+          impact: {
+            type: 'string',
+            description: 'Optional impact: what changed, improved, unblocked, or what risk was introduced.'
+          },
+          evidence: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional verification evidence (tests, metrics, logs, PRs, benchmarks).'
+          },
+          symbols: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional symbols touched/affected (e.g., ["AuthMiddleware.handle", "refreshToken"]).'
+          },
+          next: {
+            type: 'string',
+            description: 'Optional concrete next step or open question.'
+          },
+          confidence: {
+            type: 'number',
+            minimum: 1,
+            maximum: 5,
+            description: 'Optional confidence score from 1 (low) to 5 (high).'
+          },
+          unknowns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional unresolved uncertainties or risks.'
           },
           tags: {
             type: 'array',

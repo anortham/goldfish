@@ -6,6 +6,16 @@ export interface Checkpoint {
   id: string;             // checkpoint_{hash} unique identifier
   timestamp: string;      // ISO 8601 UTC
   description: string;    // Markdown body
+  type?: 'checkpoint' | 'decision' | 'incident' | 'learning';
+  context?: string;
+  decision?: string;
+  alternatives?: string[];
+  impact?: string;
+  evidence?: string[];
+  symbols?: string[];     // Key symbols touched/affected
+  next?: string;          // Follow-up action or open question
+  confidence?: number;    // Confidence score (1-5)
+  unknowns?: string[];
   tags?: string[];
   git?: GitContext;        // Git context at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
@@ -14,6 +24,16 @@ export interface Checkpoint {
 
 export interface CheckpointInput {
   description: string;
+  type?: 'checkpoint' | 'decision' | 'incident' | 'learning';
+  context?: string;
+  decision?: string;
+  alternatives?: string[];
+  impact?: string;
+  evidence?: string[];
+  symbols?: string[];
+  next?: string;
+  confidence?: number;
+  unknowns?: string[];
   tags?: string[];
   workspace?: string;     // Defaults to current workspace
 }

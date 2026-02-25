@@ -112,6 +112,74 @@ describe('Readable markdown responses', () => {
       expect(text).toContain('Plan: checkpoint-handler-plan');
     });
 
+    it('warns when decision checkpoint missing decision field', async () => {
+      const result = await handleCheckpoint({
+        description: 'Chose REST over GraphQL',
+        type: 'decision',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('decision');
+      expect(text).toContain('alternatives');
+    });
+
+    it('warns when incident checkpoint missing context and evidence', async () => {
+      const result = await handleCheckpoint({
+        description: 'Production outage from bad deploy',
+        type: 'incident',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('context');
+      expect(text).toContain('evidence');
+    });
+
+    it('warns when learning checkpoint missing impact', async () => {
+      const result = await handleCheckpoint({
+        description: 'Discovered bun test runs 3x faster with --preload',
+        type: 'learning',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('impact');
+    });
+
+    it('does not warn when decision checkpoint has all recommended fields', async () => {
+      const result = await handleCheckpoint({
+        description: 'Chose REST over GraphQL',
+        type: 'decision',
+        decision: 'Use REST for simplicity',
+        alternatives: ['GraphQL - too complex for our needs'],
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).not.toMatch(/💡/);
+    });
+
+    it('does not warn when no type is specified', async () => {
+      const result = await handleCheckpoint({
+        description: 'Generic checkpoint',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).not.toMatch(/💡/);
+    });
+
+    it('rejects invalid confidence values', async () => {
+      await expect(
+        handleCheckpoint({
+          description: 'Invalid confidence checkpoint',
+          confidence: 7,
+          workspace: TEST_DIR
+        })
+      ).rejects.toThrow('confidence must be an integer between 1 and 5');
+    });
+
     it('throws error for missing description', async () => {
       await expect(
         handleCheckpoint({ workspace: TEST_DIR })
@@ -267,6 +335,35 @@ describe('Readable markdown responses', () => {
       // Checkpoint entries should show tags
       expect(text).toContain('Tags: test');
       expect(text).toContain('Tags: feature');
+    });
+
+    it('shows structured fields in checkpoint output when present', async () => {
+      await saveCheckpoint({
+        description: 'Structured recall checkpoint',
+        workspace: TEST_DIR,
+        type: 'decision',
+        context: 'Need to simplify auth retry behavior',
+        decision: 'Use bounded retries with jitter',
+        impact: 'Reduced retry storms in staging',
+        symbols: ['retryAuthRequest'],
+        next: 'Track retry metrics for one week',
+        confidence: 4
+      });
+
+      const result = await handleRecall({
+        workspace: TEST_DIR,
+        full: true,
+        search: 'bounded retries'
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('Type: decision');
+      expect(text).toContain('Context: Need to simplify auth retry behavior');
+      expect(text).toContain('Decision: Use bounded retries with jitter');
+      expect(text).toContain('Impact: Reduced retry storms in staging');
+      expect(text).toContain('Symbols: retryAuthRequest');
+      expect(text).toContain('Next: Track retry metrics for one week');
+      expect(text).toContain('Confidence: 4/5');
     });
   });
 

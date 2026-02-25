@@ -61,6 +61,14 @@ export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Che
   const fuse = new Fuse(checkpoints, {
     keys: [
       { name: 'description', weight: 2 },  // Description is most important
+      { name: 'decision', weight: 1.5 },
+      { name: 'impact', weight: 1.3 },
+      { name: 'context', weight: 1.1 },
+      { name: 'alternatives', weight: 0.8 },
+      { name: 'evidence', weight: 0.7 },
+      { name: 'symbols', weight: 0.7 },
+      { name: 'unknowns', weight: 0.6 },
+      { name: 'next', weight: 0.5 },
       { name: 'tags', weight: 1 },
       { name: 'git.branch', weight: 0.5 },
       { name: 'git.files', weight: 0.3 }

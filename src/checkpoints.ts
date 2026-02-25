@@ -79,6 +79,46 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
     frontmatter.planId = checkpoint.planId;
   }
 
+  if (checkpoint.type) {
+    frontmatter.type = checkpoint.type;
+  }
+
+  if (checkpoint.context) {
+    frontmatter.context = checkpoint.context;
+  }
+
+  if (checkpoint.decision) {
+    frontmatter.decision = checkpoint.decision;
+  }
+
+  if (checkpoint.alternatives && checkpoint.alternatives.length > 0) {
+    frontmatter.alternatives = checkpoint.alternatives;
+  }
+
+  if (checkpoint.impact) {
+    frontmatter.impact = checkpoint.impact;
+  }
+
+  if (checkpoint.evidence && checkpoint.evidence.length > 0) {
+    frontmatter.evidence = checkpoint.evidence;
+  }
+
+  if (checkpoint.symbols && checkpoint.symbols.length > 0) {
+    frontmatter.symbols = checkpoint.symbols;
+  }
+
+  if (checkpoint.next) {
+    frontmatter.next = checkpoint.next;
+  }
+
+  if (typeof checkpoint.confidence === 'number') {
+    frontmatter.confidence = checkpoint.confidence;
+  }
+
+  if (checkpoint.unknowns && checkpoint.unknowns.length > 0) {
+    frontmatter.unknowns = checkpoint.unknowns;
+  }
+
   const yaml = stringifyYaml(frontmatter).trim();
   return `---\n${yaml}\n---\n\n${checkpoint.description}\n`;
 }
@@ -115,6 +155,40 @@ function normalizeGit(rawGit: Record<string, unknown>): Checkpoint['git'] | unde
   return Object.keys(git).length > 0 ? git : undefined;
 }
 
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .map(item => String(item).trim())
+    .filter(item => item.length > 0);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeConfidence(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' && typeof raw !== 'string') {
+    return undefined;
+  }
+
+  const parsed = typeof raw === 'number' ? raw : parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  const rounded = Math.round(parsed);
+  if (rounded < 1 || rounded > 5) {
+    return undefined;
+  }
+
+  return rounded;
+}
+
+function isCheckpointType(value: unknown): value is NonNullable<Checkpoint['type']> {
+  return value === 'checkpoint' || value === 'decision' || value === 'incident' || value === 'learning';
+}
+
 /**
  * Parse a single checkpoint from a YAML frontmatter markdown file
  */
@@ -148,6 +222,21 @@ export function parseCheckpointFile(content: string): Checkpoint {
   if (git) checkpoint.git = git;
   if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
   if (frontmatter.planId) checkpoint.planId = String(frontmatter.planId);
+  if (isCheckpointType(frontmatter.type)) checkpoint.type = frontmatter.type;
+  if (frontmatter.context) checkpoint.context = String(frontmatter.context);
+  if (frontmatter.decision) checkpoint.decision = String(frontmatter.decision);
+  const alternatives = normalizeStringArray(frontmatter.alternatives);
+  if (alternatives) checkpoint.alternatives = alternatives;
+  if (frontmatter.impact) checkpoint.impact = String(frontmatter.impact);
+  const evidence = normalizeStringArray(frontmatter.evidence);
+  if (evidence) checkpoint.evidence = evidence;
+  const symbols = normalizeStringArray(frontmatter.symbols);
+  if (symbols) checkpoint.symbols = symbols;
+  if (frontmatter.next) checkpoint.next = String(frontmatter.next);
+  const confidence = normalizeConfidence(frontmatter.confidence);
+  if (confidence !== undefined) checkpoint.confidence = confidence;
+  const unknowns = normalizeStringArray(frontmatter.unknowns);
+  if (unknowns) checkpoint.unknowns = unknowns;
 
   return checkpoint;
 }
@@ -197,6 +286,18 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
     timestamp,
     description: input.description
   };
+
+  if (input.type) checkpoint.type = input.type;
+  if (input.context) checkpoint.context = input.context;
+  if (input.decision) checkpoint.decision = input.decision;
+  if (input.alternatives && input.alternatives.length > 0) checkpoint.alternatives = input.alternatives;
+  if (input.impact) checkpoint.impact = input.impact;
+  if (input.evidence && input.evidence.length > 0) checkpoint.evidence = input.evidence;
+  if (input.symbols && input.symbols.length > 0) checkpoint.symbols = input.symbols;
+  if (input.next) checkpoint.next = input.next;
+  const confidence = normalizeConfidence(input.confidence);
+  if (confidence !== undefined) checkpoint.confidence = confidence;
+  if (input.unknowns && input.unknowns.length > 0) checkpoint.unknowns = input.unknowns;
 
   if (input.tags) checkpoint.tags = input.tags;
 
