@@ -289,24 +289,22 @@ describe('Tool descriptions', () => {
     }
   });
 
-  it('includes aggressive behavioral language in descriptions', async () => {
+  it('includes appropriate guidance in tool descriptions', async () => {
     const { getTools } = await import('../src/server');
 
     const tools = getTools();
 
     const checkpointTool = tools.find(t => t.name === 'checkpoint');
-    expect(checkpointTool!.description).toContain('MANDATORY');
     expect(checkpointTool!.description).toContain('milestone');
-    expect(checkpointTool!.description).toContain('crash or context loss');
-    expect(checkpointTool!.description).toContain('CRITICAL');
+    expect(checkpointTool!.description).toContain('Do NOT checkpoint');
+    expect(checkpointTool!.description).toContain('WHAT');
 
     const recallTool = tools.find(t => t.name === 'recall');
-    expect(recallTool!.description).toContain('MANDATORY');
-    expect(recallTool!.description).toContain('FIRST action');
+    expect(recallTool!.description).toContain('prior context');
+    expect(recallTool!.description).toContain('user invokes /recall');
 
     const planTool = tools.find(t => t.name === 'plan');
     expect(planTool!.description).toContain('HOURS of planning');
-    expect(planTool!.description).toContain('SERIOUSLY DISAPPOINTED');
     expect(planTool!.description).toContain('NEVER ask permission');
   });
 

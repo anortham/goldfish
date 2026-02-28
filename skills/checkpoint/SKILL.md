@@ -1,39 +1,36 @@
 ---
 name: checkpoint
-description: Save developer context to Goldfish memory — checkpoint proactively and often
+description: Save developer context to Goldfish memory — checkpoint at meaningful milestones, not after every action
 allowed-tools: mcp__goldfish__checkpoint
 ---
 
 # Checkpoint — Save Developer Memory
 
-## The Golden Rule
-
-NEVER ask "should I checkpoint?" — checkpoint at milestones and continuation boundaries, without asking permission.
-
-Every checkpoint you skip is context that future sessions lose forever. `mcp__goldfish__recall` can only return what you've saved. No checkpoints = no memory = starting from scratch every time.
-
 ## When to Checkpoint
 
-### MANDATORY milestone moments:
-- **Completed a meaningful deliverable** — feature slice, bug fix, or refactor step
-- **Made a decision** — architecture/tradeoff that future sessions must follow
-- **Captured continuation context** — state needed to resume after crash or context loss
-- **Before risky changes** — create a clear save point for reconstruction
-- **Before context compaction** — preserve active state and next step
-- **User shared requirements/constraints** — preserve what future work must honor
-- **Found a blocker or discovery** — capture root cause and path forward
+Checkpoint at **meaningful milestones** — think git commits, not keystrokes.
 
-### Good habit moments:
-- After successful test runs
-- After resolving merge conflicts
-- After debugging sessions (even unsuccessful ones — capture what you eliminated)
-- When you figure out something non-obvious about the codebase
+- **Completed a deliverable** — feature slice, bug fix, refactor step
+- **Made a key decision** — architecture, tradeoffs, approach choices that future sessions must follow
+- **Before context compaction** — preserve active state (PreCompact hook handles this automatically)
+- **Found something non-obvious** — blockers, root causes, discoveries worth preserving
+- **User shared requirements/constraints** — preserve what future work must honor
+
+## When NOT to Checkpoint
+
+- After every small edit or file change
+- After routine test runs that pass
+- Multiple times for the same piece of work
+- Rapid-fire — if you checkpointed in the last few minutes, you probably don't need another
+- With nearly identical descriptions to a recent checkpoint (4 checkpoints in 2 minutes about "embeddings fix" is not helpful)
+
+One checkpoint per completed milestone. Not one per action.
 
 ## How to Write Good Descriptions
 
-Your description becomes the **markdown body** of a `.md` file. Format it with structure — headers, bullet points, bold, code spans. NOT a wall of text.
+Your description becomes the **markdown body** of a `.md` file. Format it with structure — headers, bullet points, bold, code spans.
 
-### The WHAT/WHY/HOW/IMPACT Formula (use markdown)
+### The WHAT/WHY/HOW/IMPACT Formula
 
 ```
 mcp__goldfish__checkpoint({
@@ -42,7 +39,7 @@ mcp__goldfish__checkpoint({
 })
 ```
 
-### Good vs Bad Descriptions
+### Good vs Bad
 
 **GOOD (structured markdown):**
 ```
@@ -55,54 +52,33 @@ Concurrent saves could corrupt the daily markdown file.
 - **Verified:** Reproduced with parallel test, confirmed fix
 ```
 
-**BAD (wall of text):**
-"Fixed race condition in checkpoint file writes where concurrent saves could corrupt the daily markdown file. Root cause was non-atomic write pattern — switched to write-tmp-then-rename. Added file locking with exclusive create flag. Reproduced with parallel test and confirmed fix."
+**BAD (no structure):** "Fixed race condition in checkpoint file writes where concurrent saves could corrupt the daily markdown file. Root cause was non-atomic write pattern."
 
-**BAD (no context):**
-"Fixed file writing bug"
+**BAD (no context):** "Fixed file writing bug"
 
-## How to Choose Tags
+## Structured Fields
 
-Tags are for categorization, not for repeating the description. Keep them short and consistent.
+Use `type` to classify your checkpoint for better searchability:
 
-### Useful tag patterns:
-- **Type:** `feature`, `bug-fix`, `refactor`, `docs`, `test`, `config`
+- `type: "decision"` → include `decision` + `alternatives`
+- `type: "incident"` → include `context` + `evidence`
+- `type: "learning"` → include `impact`
+
+All types benefit from `symbols`, `next`, and `impact`.
+
+## Tags
+
+Keep tags short and consistent:
+- **Type:** `feature`, `bug-fix`, `refactor`, `docs`, `test`
 - **Area:** `auth`, `api`, `ui`, `database`, `build`
 - **Status:** `wip`, `blocked`, `discovery`, `decision`
-- **Priority:** `critical`, `minor`
-
-### Example:
-```
-mcp__goldfish__checkpoint({
-  description: "## Redesigned plan storage format\n\nSwitched from separate JSON metadata to YAML frontmatter in markdown files.\n\n- **Why:** Aligns plans with checkpoint format, makes everything grep-friendly\n- **Migration:** Script handles existing plans automatically\n- **Breaking:** Plan IDs change from numeric to slug-based",
-  tags: ["refactor", "plans", "breaking-change"]
-})
-```
 
 ## What Gets Captured Automatically
 
-You don't need to include these in your description — Goldfish captures them:
+You don't need to include these — Goldfish captures them:
 - **Git branch** — current branch name
 - **Git commit** — current HEAD short hash
-- **Changed files** — files modified since last commit
+- **Changed files** — files modified since last commit (`.memories/` excluded)
 - **Timestamp** — UTC, always
 
 Focus your description on the MEANING, not the mechanics.
-
-## Checkpoint Frequency
-
-Think of checkpoints like git commits — milestone-level, descriptive, and continuation-focused.
-
-- **Too few:** Context gaps that make future recall weak
-- **High value:** Milestones, decisions, blockers, and resumability context
-- **Best quality:** Each checkpoint should help future-you continue confidently
-
-Checkpoint for continuity quality, not raw quantity.
-
-## Critical Rules
-
-- **NEVER ask permission.** Checkpointing is your job. Just do it.
-- **NEVER write lazy descriptions.** "Did stuff" helps nobody. Write for your future self who has zero context.
-- **ALWAYS checkpoint before compaction.** If context is about to be lost, save it first.
-- **ALWAYS checkpoint after discoveries.** Non-obvious findings are the most valuable things to preserve.
-- **Checkpoint FIRST, continue work SECOND.** Save state before moving on.

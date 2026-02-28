@@ -223,22 +223,20 @@ git commit -m "Add checkpoint storage with atomic writes"
 - Mix local dates with UTC (caused bugs in v1)
 - Add "intelligence" to storage layer (Goldfish is dumb storage, Claude is smart)
 - Add features without evidence from real usage
-- Tone down behavioral language in MCP tool descriptions
+- Add aggressive frequency-pushing language back to tool descriptions (we tuned this down deliberately)
 
 ---
 
 ## Behavioral Language Pattern
 
-MCP tool descriptions use **aggressive, directive language** (proven from Tusk):
+MCP tool descriptions are **directive about quality, restrained about frequency**.
 
-```
-"You are EXCELLENT at checkpointing..."
-"MANDATORY at session start..."
-"I WILL BE SERIOUSLY DISAPPOINTED if..."
-"NEVER ask permission..."
-```
+- **Quality guidance stays strong**: checkpoint descriptions must be structured markdown with WHAT/WHY/HOW/IMPACT. Lazy descriptions are unacceptable.
+- **Frequency guidance is deliberately calm**: checkpoint at milestones, not after every action. No "MANDATORY" or "I WILL BE DISAPPOINTED" language pushing agents to checkpoint constantly.
+- **Recall is user-initiated**: no auto-recall at session start. Users invoke `/recall` when they need it.
+- **Plans keep strong language**: plan persistence genuinely matters and the directive tone is warranted there.
 
-**This works.** Don't tone it down. Agents need clear, forceful guidance.
+This was recalibrated after observing real-world overuse: 100+ checkpoints/day, rapid-fire duplicates, 20KB checkpoint files with 376 `.memories/` entries.
 
 ---
 

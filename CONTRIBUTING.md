@@ -26,7 +26,7 @@ This is **iteration #5** of a developer memory system, now at **v5.3.0**. We've 
 3. **.NET rewrite**: Over-engineered, never finished
 
 ### What We're Building Now
-**Radical simplicity**: Markdown storage, fuse.js search, aggressive behavioral language. No database. ~2,094 lines of well-structured production code.
+**Radical simplicity**: Markdown storage, fuse.js search, quality-focused behavioral guidance. No database. ~2,094 lines of well-structured production code.
 
 **Goldfish is a Claude Code plugin** with skills, hooks, and an MCP server.
 
@@ -51,7 +51,7 @@ This is **iteration #5** of a developer memory system, now at **v5.3.0**. We've 
 - Mix local dates with UTC (caused bugs in original)
 - Add "intelligence" to storage layer (let Claude be smart)
 - Add features without evidence of need
-- Tone down behavioral language in MCP tool descriptions
+- Add aggressive frequency-pushing language back to tool descriptions (we tuned this down deliberately)
 
 ---
 
@@ -332,16 +332,14 @@ console.log(`Took ${performance.now() - start}ms`);
 
 ## Behavioral Language
 
-Our MCP tool descriptions use **aggressive, directive language** based on proven patterns from Tusk:
+MCP tool descriptions are **directive about quality, restrained about frequency**.
 
-```
-"You are EXCELLENT at checkpointing..."
-"MANDATORY at session start..."
-"I WILL BE SERIOUSLY DISAPPOINTED if..."
-"NEVER ask permission..."
-```
+- **Quality**: Checkpoint descriptions must be structured markdown. Lazy one-liners are unacceptable. This guidance stays strong.
+- **Frequency**: Checkpoint at milestones, not after every action. No "MANDATORY" or guilt-tripping language pushing agents to over-checkpoint.
+- **Recall**: User-initiated via `/recall`. No auto-recall at session start.
+- **Plans**: Keep strong directive language — plan persistence genuinely matters.
 
-This works. Don't tone it down. Agents need clear, forceful guidance to overcome their default permission-seeking behavior.
+This was recalibrated after real-world evidence showed agents over-complying: 100+ checkpoints/day, rapid-fire duplicates within minutes, bloated files. The original aggressive tone solved under-checkpointing but created over-checkpointing.
 
 ---
 
@@ -399,7 +397,7 @@ Keep these docs updated:
 - Using local time instead of UTC
 - Direct file writes (use atomic pattern)
 - Adding features without evidence
-- Toning down behavioral language
+- Re-adding aggressive checkpoint frequency language (tuned down deliberately)
 - Adding database "because it's better"
 - Premature optimization
 

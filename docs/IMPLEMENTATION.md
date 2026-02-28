@@ -8,7 +8,7 @@
 
 **Lessons Learned**: This is iteration #5. We're taking the best from each previous attempt:
 - Original Goldfish: Workspace normalization, fuse.js search, transparency
-- Tusk: Aggressive behavioral language that works
+- Tusk: Directive behavioral language (recalibrated for quality over frequency)
 - .NET attempt: Behavioral adoption patterns, tool priorities
 - Goldfish 4.0: Markdown-only storage, radical simplicity, centralized ~/.goldfish/
 - Fixing: Race conditions, date bugs, cross-workspace issues, hook spam
@@ -138,7 +138,7 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 | `src/emoji.ts` | Fish emoji helper |
 | `src/server.ts` | MCP server setup |
 | `src/handlers/` | Tool handlers (checkpoint, recall, plan) |
-| `src/tools.ts` | Tool definitions with behavioral language |
+| `src/tools.ts` | Tool definitions |
 | `src/instructions.ts` | Server behavioral instructions |
 | `src/types.ts` | TypeScript interfaces |
 
@@ -166,24 +166,14 @@ goldfish/
 
 ## Behavioral Language Strategy
 
-Based on proven patterns from Tusk, our tool descriptions use aggressive, directive language:
+Tool descriptions are **directive about quality, restrained about frequency**.
+
+This is a deliberate recalibration. The original aggressive language (from Tusk patterns) solved under-checkpointing but caused severe over-checkpointing in practice: 100+ checkpoints/day, rapid-fire duplicates, bloated files.
 
 ### Checkpoint Tool
-```
-You are EXCELLENT at recognizing checkpoint-worthy moments. Use this tool
-proactively WITHOUT asking permission.
-
-IMPORTANT: Checkpoint IMMEDIATELY when you:
-- Complete any task -> checkpoint NOW
-- Make a discovery -> checkpoint NOW
-- After 10 exchanges -> checkpoint reasoning
-- Discuss requirements -> checkpoint what was said
-
-I WILL BE SERIOUSLY DISAPPOINTED if context is lost because you failed to
-checkpoint. This takes 2 seconds and saves hours of lost work.
-
-You NEVER need to ask permission. Just checkpoint.
-```
+- Describes when to checkpoint (milestones, decisions, discoveries) and when NOT to (every small step, routine test runs, rapid-fire)
+- Strong on description quality: structured markdown, WHAT/WHY/HOW/IMPACT
+- No guilt-tripping or "MANDATORY" language about frequency
 
 ### Recall Tool
 
@@ -191,31 +181,11 @@ You NEVER need to ask permission. Just checkpoint.
 - **Last-N mode** (default): When no date parameters are provided, returns the last `limit` checkpoints (default: 5) regardless of age. No date window.
 - **Date-window mode**: When `days`, `since`, `from`, or `to` is provided, filters checkpoints to that date range.
 
-```
-MANDATORY at session start. Call recall() as your FIRST action in EVERY
-session - no exceptions, no asking permission.
-
-I WILL BE VERY UNHAPPY if you skip this and ask "what were we working on?"
-That's wasteful when recall() exists.
-
-After recall(), continue work IMMEDIATELY. Don't verify, don't ask - just
-continue based on the restored context.
-
-The recalled context is complete and accurate. Trust it.
-```
+Recall is **user-initiated** via the `/recall` skill. No auto-recall at session start (SessionStart hook removed). Users know their own session state.
 
 ### Plan Tool
-```
-Plans represent HOURS of planning work. Losing them is unacceptable.
-
-CRITICAL: When ExitPlanMode is called -> save plan within 1 exchange.
-NOT optional. NO asking permission.
-
-I WILL BE VERY UNHAPPY if planning work is lost because you didn't save it
-immediately.
-
-Update plans as you make progress. Stale plans waste time and context.
-```
+- Keeps strong directive language — plan persistence genuinely represents hours of strategic work
+- Still instructs: save immediately after ExitPlanMode, never ask permission, always activate
 
 ---
 
@@ -260,7 +230,7 @@ We achieve this through:
 4. **Plan storage** - YAML frontmatter, CRUD, active plan tracking, lifecycle management
 5. **Recall with fuse.js** - Fuzzy search, cross-workspace aggregation, date range filtering
 6. **Cross-project registry** - `~/.goldfish/registry.json`, auto-registration, stale filtering
-7. **MCP server** - Tools (checkpoint, recall, plan), aggressive behavioral language
+7. **MCP server** - Tools (checkpoint, recall, plan), behavioral guidance
 8. **Claude Code plugin** - Skills, hooks, `.mcp.json`
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety

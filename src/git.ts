@@ -7,6 +7,12 @@
 import { spawnSync } from 'bun';
 import type { GitContext } from './types';
 
+/** Maximum number of files to include in git context */
+export const MAX_GIT_FILES = 30;
+
+/** Paths to exclude from git file lists */
+const EXCLUDED_PREFIXES = ['.memories/'];
+
 /**
  * Get current git context (branch, commit, changed files)
  * Returns undefined values if not in a git repository
@@ -56,7 +62,14 @@ export function getGitContext(): GitContext {
       }
     }
 
-    const files = filesSet.size > 0 ? Array.from(filesSet).sort() : undefined;
+    // Filter excluded paths and cap file count
+    for (const file of filesSet) {
+      if (EXCLUDED_PREFIXES.some(prefix => file.startsWith(prefix))) {
+        filesSet.delete(file);
+      }
+    }
+    const sorted = Array.from(filesSet).sort();
+    const files = sorted.length > 0 ? sorted.slice(0, MAX_GIT_FILES) : undefined;
 
     const context: GitContext = {};
     if (branch) context.branch = branch;

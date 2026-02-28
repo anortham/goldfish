@@ -8,14 +8,6 @@
         }]
       }
     ],
-    "SessionStart": [
-      {
-        "hooks": [{
-          "type": "prompt",
-          "prompt": "Use the goldfish recall tool to restore recent work context. Call recall() with default parameters. After receiving results, briefly summarize what you found so the user knows you have context."
-        }]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "ExitPlanMode",

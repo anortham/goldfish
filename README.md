@@ -334,7 +334,7 @@ Key decisions for v5.0.0:
 | Individual checkpoint files | No merge conflicts, no corruption from concurrent writes |
 | Atomic file operations | Write-to-temp then rename prevents corruption on crash |
 | UTC timestamps everywhere | No timezone bugs (learned the hard way in v1) |
-| Aggressive behavioral language | Proven from Tusk: agents need forceful, directive guidance |
+| Quality-focused behavioral language | Directive about checkpoint quality, restrained about frequency |
 | 3 tools, not more | Checkpoint, recall, plan cover all use cases without bloat |
 | Skills over slash commands | Plugin-native, no manual `bun setup` step |
 | Evidence-based features only | Complexity is added only when real usage demands it |

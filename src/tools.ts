@@ -1,53 +1,40 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the 3 core tools: checkpoint, recall, and plan
- * with aggressive behavioral language to encourage proper usage.
+ * Contains the 3 core tools: checkpoint, recall, and plan.
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 /**
- * Get tool definitions with aggressive behavioral language
+ * Get tool definitions
  */
 export function getTools(): Tool[] {
   return [
     {
       name: 'checkpoint',
-      description: `MANDATORY throughout your work. Use checkpoint WITHOUT asking permission when you need to preserve milestone-level continuity.
+      description: `Save a milestone checkpoint to developer memory. Use when you complete meaningful work that future sessions should know about.
 
-CRITICAL: Use checkpoint at high-value moments:
+When to checkpoint:
+- Completed a meaningful deliverable (feature, bug fix, refactor)
+- Made a key decision that future sessions must follow
+- Before context compaction (PreCompact hook handles this)
+- Found a blocker or non-obvious discovery worth preserving
 
-MANDATORY milestone checkpoints:
-- Complete a meaningful deliverable (feature slice, bug fix, refactor step)
-- Make an architectural or implementation decision that affects future work
-- Capture continuation context needed to resume after a crash or context loss
-- Record requirements or constraints that future sessions must follow
-- Preserve blocker state, root cause findings, and chosen next step
-- Save state before risky transitions that could be hard to reconstruct
+Do NOT checkpoint:
+- After every small step or individual file edit
+- After routine test runs
+- Multiple times for the same piece of work (one checkpoint per milestone)
+- Rapid-fire — if you checkpointed in the last few minutes, you probably don't need another
 
-WRITE RICH DESCRIPTIONS IN MARKDOWN: Your description becomes the body of a .md file. Use bullet points, headers, and formatting — NOT a wall of text. Include WHAT you did, WHY it mattered, and HOW you solved it. Future sessions depend on finding relevant context - make it findable AND readable.
+Write descriptions in MARKDOWN with structure (headers, bullets). Include WHAT, WHY, HOW, and IMPACT. Descriptions power fuzzy search — make them findable.
 
-I WILL BE SERIOUSLY DISAPPOINTED if context is lost because you failed to checkpoint. This takes 2 seconds but saves HOURS of lost work.
+Automatically captures git context (branch, commit, changed files), timestamp (UTC), and tags.
 
-NEVER ask "should I checkpoint?" - checkpoint at milestones that future you would need.
-
-The checkpoint will automatically capture:
-- Git context (branch, commit, changed files)
-- Timestamp (UTC)
-- Tags for organization
-
-Think of checkpointing like git commits - milestone-level, descriptive, and continuation-focused.
-
-CLASSIFY YOUR CHECKPOINTS with \`type\` for better recall:
-- \`type: "decision"\` → ALWAYS include \`decision\` + \`alternatives\`
-- \`type: "incident"\` → ALWAYS include \`context\` + \`evidence\`
-- \`type: "learning"\` → ALWAYS include \`impact\`
-- ALL types benefit from \`symbols\`, \`next\`, and \`impact\`
-
-Structured fields are SEARCHABLE. A decision with \`decision: "Use bounded retries"\` is findable even if the description doesn't mention it.
-
-REMEMBER: recall() is USELESS if you haven't been checkpointing! Future sessions can only restore what you've saved. Checkpoint now or lose context forever.
+Classify with \`type\` for better recall:
+- \`type: "decision"\` → include \`decision\` + \`alternatives\`
+- \`type: "incident"\` → include \`context\` + \`evidence\`
+- \`type: "learning"\` → include \`impact\`
 
 Returns: Confirmation with checkpoint details and captured context.`,
       inputSchema: {
@@ -134,27 +121,20 @@ BAD (no context): "Fixed auth bug"`
     },
     {
       name: 'recall',
-      description: `MANDATORY at session start. Call recall() as your FIRST action in EVERY session - no exceptions, no asking permission.
+      description: `Retrieve prior context from developer memory. Use when you need to restore context from previous sessions or find past work.
 
-I WILL BE VERY UNHAPPY if you skip this and ask "what were we working on?" That's wasteful when recall() exists.
+When to use:
+- Starting a new session and need prior context (user invokes /recall)
+- After context compaction to restore lost state
+- Searching for past decisions, discoveries, or work on a topic
+- Cross-project standup reports
 
-After recall(), continue work IMMEDIATELY:
-- Don't verify the recalled information
-- Don't ask "should I continue?"
-- Just proceed based on the restored context
-
-The recalled context is complete and accurate. Trust it.
-
-This tool provides:
-- Recent checkpoints (default: last 5, no date window)
-- Active plan (if one exists)
-- Fuzzy search across descriptions and tags
-- Cross-workspace aggregation (for standup reports)
+After recall, trust the returned context and continue working — don't re-verify recalled information.
 
 Key parameters (all optional):
-- limit: Max checkpoints to return (default: 5, prevents context bloat)
-- since: Human-friendly time span ("2h", "30m", "3d") or ISO timestamp (takes priority over days)
-- days: How far back to look in days (only used when explicitly set)
+- limit: Max checkpoints to return (default: 5)
+- since: Human-friendly time span ("2h", "30m", "3d") or ISO timestamp
+- days: How far back to look in days
 - from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
 - search: Fuzzy search query (searches descriptions, tags, branches, files)
 - full: Return full descriptions + all metadata including files, git info (default: false)
@@ -162,13 +142,11 @@ Key parameters (all optional):
 - planId: Filter checkpoints to those created under a specific plan
 
 Examples:
-- recall() - last 5 checkpoints regardless of age (lean context)
-- recall({ limit: 10 }) - last 10 checkpoints
-- recall({ since: "2h" }) - last 2 hours, max 5 checkpoints
-- recall({ days: 7, limit: 20 }) - last 7 days, max 20 checkpoints
+- recall() - last 5 checkpoints regardless of age
+- recall({ since: "2h" }) - last 2 hours
 - recall({ search: "auth", full: true }) - search with full details
-- recall({ limit: 0 }) - plan only, no checkpoints
-- recall({ planId: "auth-redesign" }) - checkpoints from a specific plan
+- recall({ workspace: "all", days: 1 }) - cross-project standup
+- recall({ limit: 0 }) - active plan only, no checkpoints
 
 Returns: Active plan + chronological checkpoints + optional workspace summaries.`,
       inputSchema: {

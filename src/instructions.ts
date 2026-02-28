@@ -11,93 +11,51 @@
 export function getInstructions(): string {
   return `You are working with Goldfish, a transparent developer memory system.
 
-## Core Workflow
+## Checkpointing
 
-### Session Start (MANDATORY)
-1. Call recall() FIRST - no exceptions
-2. Review active plan (if present)
-3. Continue work immediately based on context
+Checkpoint when you complete **meaningful milestones** — not after every action.
 
-### During Work (MANDATORY - NOT OPTIONAL)
-1. Checkpoint at milestones (meaningful deliverables, not micro-steps)
-2. Checkpoint when you make decisions future sessions must preserve
-3. Checkpoint when documenting changes worth carrying across sessions
-4. Checkpoint when capturing continuation context for crash/context-loss recovery
-5. Checkpoint when preserving blocker state and the next step to unblock
-6. Checkpoint before risky transitions that would be hard to reconstruct
+**When to checkpoint:**
+- Completed a deliverable (feature, bug fix, refactor step)
+- Made a decision that future sessions need to know about
+- Found a non-obvious discovery or blocker worth preserving
+- Before context compaction (the PreCompact hook handles this automatically)
 
-⚠️ **CRITICAL:** You MUST checkpoint proactively. recall() cannot restore what you never saved!
+**Do NOT checkpoint:**
+- After every small edit or routine step
+- After test runs that simply pass
+- Multiple times for the same work — if you just checkpointed, you don't need another
+- With near-identical descriptions to a recent checkpoint
 
-### Writing Effective Checkpoints (MANDATORY)
+Think of checkpoints like git commits: one per logical milestone, not one per keystroke.
 
-Your checkpoint descriptions are stored as **markdown file bodies**. Format them properly with structure — NOT walls of text.
+### Writing Good Checkpoints
 
-**REQUIRED in every checkpoint:**
-- WHAT you accomplished (the change)
-- WHY it mattered (the problem solved)
-- HOW you solved it (key approach/decision)
-- IMPACT what unblocked, what improved, what you learned
+Descriptions are stored as markdown files. Use structure — headers, bullets, bold. Include:
+- **WHAT** — the change or accomplishment
+- **WHY** — the problem solved or goal achieved
+- **HOW** — key approach, decision, or discovery
+- **IMPACT** — what unblocked, improved, or was learned
 
-**GOOD example (markdown formatted):**
-✅ "## Fixed JWT validation bug\\n\\nExpired tokens were accepted due to inverted expiry check in \`validateToken()\`.\\n\\n- **Root cause:** Comparison operator was flipped\\n- **Fix:** Corrected expiry check, added edge-case test coverage\\n- **Impact:** Unblocks the auth PR, prevents token reuse attacks"
-
-**BAD examples:**
-❌ Wall of text with no formatting (hard to scan when recalled)
-❌ "Fixed auth bug" (no context, no how, no why)
-❌ "Updated tests" (what tests? why? what did you learn?)
-
-**Use markdown:** Headers, bullet points, bold, code spans. These are .md files — make them readable.
-
-### Structured Fields (USE THEM)
-
-Checkpoints support structured fields that dramatically improve recall quality. **Use \`type\` to classify your checkpoint**, then fill in the fields that matter for that type:
-
-**Decision checkpoints** (\`type: "decision"\`):
-- \`decision\` — the chosen approach (one sentence) **← ALWAYS provide**
-- \`alternatives\` — rejected options and why **← ALWAYS provide**
-- \`confidence\` — 1-5 score
-- \`context\` — what problem triggered this decision
-
-**Incident checkpoints** (\`type: "incident"\`):
-- \`context\` — what happened and the trigger **← ALWAYS provide**
-- \`evidence\` — logs, error messages, reproduction steps **← ALWAYS provide**
-- \`unknowns\` — unresolved uncertainties
-- \`next\` — immediate follow-up action
-
-**Learning checkpoints** (\`type: "learning"\`):
-- \`impact\` — what changed as a result of learning this **← ALWAYS provide**
-- \`evidence\` — how you verified the learning
-- \`symbols\` — relevant code symbols
-
-**All checkpoint types** benefit from:
-- \`symbols\` — code symbols touched/affected (powers symbol-based search)
-- \`next\` — concrete next step or open question (powers session continuity)
-- \`impact\` — what unblocked, improved, or changed
-
-Structured fields are searchable. A checkpoint with \`decision: "Use bounded retries"\` is findable by searching "retries" even if the description doesn't mention it.
+Use \`type\` to classify: \`"decision"\` (include \`decision\` + \`alternatives\`), \`"incident"\` (include \`context\` + \`evidence\`), \`"learning"\` (include \`impact\`). All types benefit from \`symbols\`, \`next\`, and \`impact\`.
 
 ### Planning (ExitPlanMode)
 1. When ExitPlanMode is called → save plan within 1 exchange
 2. Use plan({ action: "save", title: "...", content: "...", activate: true })
-3. NO asking permission - save immediately
-4. ALWAYS activate the plan so it appears in future recall() responses
+3. Save immediately — don't ask permission
+4. Activate the plan so it appears in future recall() responses
 
-### Recall Tips
-- Use \`full: true\` when you need git metadata (branches, files, commits)
-- Use \`search: "query"\` to find specific past work via fuzzy search
-- Use \`workspace: "all"\` for cross-project standup reports
-- Use \`limit: 0\` to retrieve only the active plan (no checkpoints)
-- Use \`since: "2h"\` for recent context, \`days: 7\` for extended history
+## Recall
 
-## Key Principles
+Recall is **user-initiated** via the /recall command. Use it when you need prior context — don't call it automatically at session start.
 
-- **MANDATORY checkpointing** - checkpoint at milestones, key decisions, and continuation boundaries
-- **Never ask permission** to checkpoint or recall - just do it immediately
-- **Trust recalled context** - don't verify or re-check what recall() returns
-- **Save plans immediately** after ExitPlanMode - don't ask, just save
-- **recall() requires checkpoints** - if you don't checkpoint, recall() has nothing to restore
-- **Checkpoint takes 2 seconds, saves hours** - there is NO excuse to skip it
-- **Commit .memories/ with your code** - memories are project artifacts. Include them when you commit
+**Recall tips:**
+- \`full: true\` for git metadata (branches, files, commits)
+- \`search: "query"\` for fuzzy search across past work
+- \`workspace: "all"\` for cross-project standup reports
+- \`limit: 0\` for active plan only, no checkpoints
+
+Trust recalled context — don't re-verify information from checkpoints.
 
 ## Storage
 
