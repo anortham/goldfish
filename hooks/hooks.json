@@ -1,5 +1,14 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear",
+        "hooks": [{
+          "type": "prompt",
+          "prompt": "Use the goldfish recall tool to restore context from previous sessions. Call recall() with default parameters. If there's an active plan or recent checkpoints, briefly summarize them so the user knows you have context. If nothing is found, continue without comment."
+        }]
+      }
+    ],
     "PreCompact": [
       {
         "hooks": [{

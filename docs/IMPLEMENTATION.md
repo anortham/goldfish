@@ -181,7 +181,7 @@ This is a deliberate recalibration. The original aggressive language (from Tusk 
 - **Last-N mode** (default): When no date parameters are provided, returns the last `limit` checkpoints (default: 5) regardless of age. No date window.
 - **Date-window mode**: When `days`, `since`, `from`, or `to` is provided, filters checkpoints to that date range.
 
-Recall is **user-initiated** via the `/recall` skill. No auto-recall at session start (SessionStart hook removed). Users know their own session state.
+Recall runs **automatically at session start** via the SessionStart hook. Users can also invoke `/recall` manually for targeted queries (search, cross-project, time ranges).
 
 ### Plan Tool
 - Keeps strong directive language — plan persistence genuinely represents hours of strategic work

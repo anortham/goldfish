@@ -336,7 +336,7 @@ MCP tool descriptions are **directive about quality, restrained about frequency*
 
 - **Quality**: Checkpoint descriptions must be structured markdown. Lazy one-liners are unacceptable. This guidance stays strong.
 - **Frequency**: Checkpoint at milestones, not after every action. No "MANDATORY" or guilt-tripping language pushing agents to over-checkpoint.
-- **Recall**: User-initiated via `/recall`. No auto-recall at session start.
+- **Recall**: Runs automatically at session start via the SessionStart hook. Users can also invoke `/recall` for targeted queries.
 - **Plans**: Keep strong directive language — plan persistence genuinely matters.
 
 This was recalibrated after real-world evidence showed agents over-complying: 100+ checkpoints/day, rapid-fire duplicates within minutes, bloated files. The original aggressive tone solved under-checkpointing but created over-checkpointing.

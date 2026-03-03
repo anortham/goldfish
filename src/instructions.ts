@@ -47,7 +47,7 @@ Use \`type\` to classify: \`"decision"\` (include \`decision\` + \`alternatives\
 
 ## Recall
 
-Recall is **user-initiated** via the /recall command. Use it when you need prior context — don't call it automatically at session start.
+Recall restores context from previous sessions. It runs automatically at session start via the SessionStart hook. Users can also invoke \`/recall\` manually for targeted queries.
 
 **Recall tips:**
 - \`full: true\` for git metadata (branches, files, commits)

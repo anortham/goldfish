@@ -8,7 +8,7 @@ allowed-tools: mcp__goldfish__recall, mcp__goldfish__plan
 
 ## When to Use
 
-Call `mcp__goldfish__recall` when you need to restore context from a previous session. This is user-initiated — the user will invoke `/recall` when they need it.
+Call `mcp__goldfish__recall` to restore context from previous sessions. Recall runs automatically at session start, but users can also invoke `/recall` for targeted queries (search, cross-project, specific time ranges).
 
 ```
 mcp__goldfish__recall({})
