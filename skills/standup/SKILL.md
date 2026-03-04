@@ -1,6 +1,6 @@
 ---
 name: standup
-description: Generate a standup report from Goldfish memory across all projects
+description: Generate a standup report from Goldfish memory across all projects — use when the user asks for a standup, daily update, progress summary, what they've been working on, or needs a report for a team sync
 allowed-tools: mcp__goldfish__recall, mcp__goldfish__plan
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: plan-status
-description: Assess progress against the active Goldfish plan using checkpoints and plan data
+description: Assess progress against the active Goldfish plan using checkpoints and plan data — use when the user asks about project progress, how things are going, what's been accomplished, or wants a status check against their plan
 allowed-tools: mcp__goldfish__recall, mcp__goldfish__plan
 ---
 

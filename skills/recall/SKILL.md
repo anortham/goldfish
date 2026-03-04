@@ -1,6 +1,6 @@
 ---
 name: recall
-description: Restore context from Goldfish developer memory — use when starting a new session or after context loss
+description: Restore context from Goldfish developer memory — use when starting a new session, after context loss, searching for past work, or when the user asks what happened previously, wants to find old decisions, or needs cross-project context
 allowed-tools: mcp__goldfish__recall, mcp__goldfish__plan
 ---
 

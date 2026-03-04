@@ -35,7 +35,7 @@ Your description becomes the **markdown body** of a `.md` file. Format it with s
 ```
 mcp__goldfish__checkpoint({
   description: "## Implemented JWT refresh token rotation\n\nThe existing single-token approach was vulnerable to token theft.\n\n- **Approach:** Rotate tokens on each use, limiting the attack window\n- **Added:** `RefreshTokenStore` with atomic file writes and 7-day expiry\n- **Tests:** All 12 auth tests passing\n- **Impact:** Unblocks the session management PR",
-  tags: ["feature", "auth", "security"]
+  tags: ["feature", "auth", "security", "jwt", "refresh-token", "token-rotation", "session-management"]
 })
 ```
 
@@ -66,12 +66,27 @@ Use `type` to classify your checkpoint for better searchability:
 
 All types benefit from `symbols`, `next`, and `impact`.
 
-## Tags
+## Tags — Think About Future Search
 
-Keep tags short and consistent:
+Tags power fuzzy search recall. Write them for **discoverability** — how would future-you search for this?
+
+**Category tags** (1-2):
 - **Type:** `feature`, `bug-fix`, `refactor`, `docs`, `test`
 - **Area:** `auth`, `api`, `ui`, `database`, `build`
 - **Status:** `wip`, `blocked`, `discovery`, `decision`
+
+**Concept tags** (2-5) — the important part:
+- Include **synonyms and related terms** for the core topic
+- Include **the problem domain**, not just the solution
+- Think: "what words might I use when searching for this later?"
+
+Example: a checkpoint about implementing retry logic for payment webhooks:
+- BAD tags: `["bug-fix", "payments"]`
+- GOOD tags: `["bug-fix", "payments", "retry", "resilience", "webhooks", "fault-tolerance", "idempotency"]`
+
+Example: a decision to use WebSockets over SSE for real-time updates:
+- BAD tags: `["decision", "api"]`
+- GOOD tags: `["decision", "real-time", "websockets", "sse", "push", "streaming", "notifications"]`
 
 ## What Gets Captured Automatically
 
