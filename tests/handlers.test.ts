@@ -185,6 +185,56 @@ describe('Readable markdown responses', () => {
         handleCheckpoint({ workspace: TEST_DIR })
       ).rejects.toThrow('Description is required');
     });
+
+    it('handles tags passed as JSON string', async () => {
+      const result = await handleCheckpoint({
+        description: 'String tags checkpoint',
+        tags: '["release", "v3.9.0", "bug-fix"]',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('Tags: release, v3.9.0, bug-fix');
+    });
+
+    it('handles symbols passed as JSON string', async () => {
+      const result = await handleCheckpoint({
+        description: 'String symbols checkpoint',
+        symbols: '["resolve_workspace_path", "load_agent_instructions"]',
+        workspace: TEST_DIR
+      });
+
+      // Should not throw - symbols are passed through to saveCheckpoint
+      expect(result.content[0]!.text).toContain('Checkpoint saved');
+    });
+
+    it('handles alternatives passed as JSON string', async () => {
+      const result = await handleCheckpoint({
+        description: 'String alternatives checkpoint',
+        type: 'decision',
+        decision: 'Use REST',
+        alternatives: '["GraphQL", "gRPC"]',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      // Should not warn about missing alternatives
+      expect(text).not.toContain('alternatives');
+    });
+
+    it('handles evidence passed as JSON string', async () => {
+      const result = await handleCheckpoint({
+        description: 'String evidence checkpoint',
+        type: 'incident',
+        context: 'Server crashed',
+        evidence: '["stack trace", "logs"]',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      // Should not warn about missing evidence
+      expect(text).not.toContain('consider adding');
+    });
   });
 
   describe('recall handler', () => {

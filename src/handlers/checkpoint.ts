@@ -7,24 +7,42 @@ import { getFishEmoji } from '../emoji.js';
 import { resolveWorkspace } from '../workspace.js';
 
 /**
+ * Coerce a value that may be a JSON string into an array.
+ * MCP tool args can arrive as JSON strings instead of parsed arrays.
+ */
+function coerceArray(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch { /* not JSON, ignore */ }
+  }
+  return undefined;
+}
+
+/**
  * Handle checkpoint tool calls
  */
 export async function handleCheckpoint(args: any) {
   const {
     description,
-    tags,
     workspace,
     type,
     context,
     decision,
-    alternatives,
     impact,
-    evidence,
-    symbols,
     next,
     confidence,
     unknowns
   } = args;
+
+  // Coerce array params that may arrive as JSON strings from MCP
+  const tags = coerceArray(args.tags);
+  const alternatives = coerceArray(args.alternatives);
+  const evidence = coerceArray(args.evidence);
+  const symbols = coerceArray(args.symbols);
 
   if (!description) {
     throw new Error('Description is required');

@@ -9,6 +9,23 @@ import { getFishEmoji } from '../emoji.js';
 import type { Checkpoint, Plan } from '../types.js';
 
 /**
+ * Safely convert a value to an array for display.
+ * Stored data may have arrays serialized as JSON strings.
+ */
+function safeArray(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch { /* not JSON */ }
+    return [value]; // single string tag
+  }
+  return undefined;
+}
+
+/**
  * Resolve the effective workspace path, handling the 'all' special case
  */
 function resolveWorkspacePath(workspace?: string): string {
@@ -27,8 +44,9 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
   const dateTime = ts.replace('T', ' ').replace(/:\d{2}(\.\d+)?Z$/, '');
   lines.push(`### ${dateTime} ${checkpoint.id}`);
 
-  if (checkpoint.tags && checkpoint.tags.length > 0) {
-    lines.push(`Tags: ${checkpoint.tags.join(', ')}`);
+  const tags = safeArray(checkpoint.tags);
+  if (tags && tags.length > 0) {
+    lines.push(`Tags: ${tags.join(', ')}`);
   }
 
   if (checkpoint.planId) {
@@ -51,8 +69,9 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
     lines.push(`Impact: ${checkpoint.impact}`);
   }
 
-  if (checkpoint.symbols && checkpoint.symbols.length > 0) {
-    lines.push(`Symbols: ${checkpoint.symbols.join(', ')}`);
+  const symbols = safeArray(checkpoint.symbols);
+  if (symbols && symbols.length > 0) {
+    lines.push(`Symbols: ${symbols.join(', ')}`);
   }
 
   if (checkpoint.next) {
@@ -72,8 +91,9 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
     if (checkpoint.git.branch) gitParts.push(`branch: ${checkpoint.git.branch}`);
     if (checkpoint.git.commit) gitParts.push(`commit: ${checkpoint.git.commit}`);
     if (gitParts.length > 0) lines.push(`Git: ${gitParts.join(', ')}`);
-    if (checkpoint.git.files && checkpoint.git.files.length > 0) {
-      lines.push(`Files: ${checkpoint.git.files.join(', ')}`);
+    const files = safeArray(checkpoint.git.files);
+    if (files && files.length > 0) {
+      lines.push(`Files: ${files.join(', ')}`);
     }
   }
 
@@ -89,8 +109,9 @@ function formatActivePlan(plan: Plan): string {
   const lines: string[] = [];
   lines.push(`## Active Plan: ${plan.title} (${plan.status})`);
   lines.push(`Updated: ${plan.updated}`);
-  if (plan.tags && plan.tags.length > 0) {
-    lines.push(`Tags: ${plan.tags.join(', ')}`);
+  const planTags = safeArray(plan.tags);
+  if (planTags && planTags.length > 0) {
+    lines.push(`Tags: ${planTags.join(', ')}`);
   }
   lines.push('');
   lines.push(plan.content);
