@@ -15,6 +15,13 @@ interface BuildHybridRankingInput {
   queryEmbedding?: number[]
 }
 
+export interface ScoredCheckpoint {
+  checkpoint: Checkpoint
+  score: number
+}
+
+export const MINIMUM_SEARCH_RELEVANCE = 0.15
+
 interface PendingSemanticWorkItem {
   checkpointId: string
   digest: string
@@ -151,7 +158,7 @@ function metadataBoost(query: string, checkpoint: Checkpoint): number {
   return Math.min(boost, 0.2)
 }
 
-export async function buildHybridRanking(input: BuildHybridRankingInput): Promise<Checkpoint[]> {
+export async function buildHybridRanking(input: BuildHybridRankingInput): Promise<ScoredCheckpoint[]> {
   const lexicalRanks = new Map(input.lexicalOrder.map((checkpointId, index) => [checkpointId, index]))
   const originalIndexes = new Map(input.checkpoints.map((checkpoint, index) => [checkpoint.id, index]))
   const readyRecordsById = new Map(input.readyRecords.map(record => [record.checkpointId, record]))
@@ -165,54 +172,54 @@ export async function buildHybridRanking(input: BuildHybridRankingInput): Promis
     queryEmbedding = embeddings[0]
   }
 
-  return [...input.checkpoints].sort((left, right) => {
-    const leftLexicalIndex = lexicalRanks.get(left.id) ?? input.lexicalOrder.length
-    const rightLexicalIndex = lexicalRanks.get(right.id) ?? input.lexicalOrder.length
-    const leftLexical = lexicalScore(leftLexicalIndex, Math.max(input.lexicalOrder.length, 1))
-    const rightLexical = lexicalScore(rightLexicalIndex, Math.max(input.lexicalOrder.length, 1))
+  function computeScore(checkpoint: Checkpoint): number {
+    const lexicalIndex = lexicalRanks.get(checkpoint.id) ?? input.lexicalOrder.length
+    const lexical = (input.lexicalOrder.length === 0 && !lexicalRanks.has(checkpoint.id))
+      ? 0
+      : lexicalScore(lexicalIndex, Math.max(input.lexicalOrder.length, 1))
 
-    const leftSemantic = queryEmbedding
-      ? cosineSimilarity(queryEmbedding, readyRecordsById.get(left.id)?.embedding ?? [])
-      : 0
-    const rightSemantic = queryEmbedding
-      ? cosineSimilarity(queryEmbedding, readyRecordsById.get(right.id)?.embedding ?? [])
+    const semantic = queryEmbedding
+      ? cosineSimilarity(queryEmbedding, readyRecordsById.get(checkpoint.id)?.embedding ?? [])
       : 0
 
-    const leftScore =
-      (leftLexical * 0.65) +
-      (leftSemantic * 0.35) +
-      lexicalMatchBoost(input.query, left, input.digests[left.id]) +
-      metadataBoost(input.query, left) +
-      (recencyScore(left.timestamp, oldest, newest) * 0.03)
+    return (
+      (lexical * 0.65) +
+      (semantic * 0.35) +
+      lexicalMatchBoost(input.query, checkpoint, input.digests[checkpoint.id]) +
+      metadataBoost(input.query, checkpoint) +
+      (recencyScore(checkpoint.timestamp, oldest, newest) * 0.03)
+    )
+  }
 
-    const rightScore =
-      (rightLexical * 0.65) +
-      (rightSemantic * 0.35) +
-      lexicalMatchBoost(input.query, right, input.digests[right.id]) +
-      metadataBoost(input.query, right) +
-      (recencyScore(right.timestamp, oldest, newest) * 0.03)
+  const scored: ScoredCheckpoint[] = input.checkpoints.map(checkpoint => ({
+    checkpoint,
+    score: computeScore(checkpoint)
+  }))
 
-    if (rightScore !== leftScore) {
-      return rightScore - leftScore
+  return scored.sort((left, right) => {
+    if (right.score !== left.score) {
+      return right.score - left.score
     }
 
+    const leftLexicalIndex = lexicalRanks.get(left.checkpoint.id) ?? input.lexicalOrder.length
+    const rightLexicalIndex = lexicalRanks.get(right.checkpoint.id) ?? input.lexicalOrder.length
     if (leftLexicalIndex !== rightLexicalIndex) {
       return leftLexicalIndex - rightLexicalIndex
     }
 
-    const leftTime = new Date(left.timestamp).getTime()
-    const rightTime = new Date(right.timestamp).getTime()
+    const leftTime = new Date(left.checkpoint.timestamp).getTime()
+    const rightTime = new Date(right.checkpoint.timestamp).getTime()
     if (leftTime !== rightTime) {
       return rightTime - leftTime
     }
 
-    const leftOriginalIndex = originalIndexes.get(left.id) ?? 0
-    const rightOriginalIndex = originalIndexes.get(right.id) ?? 0
+    const leftOriginalIndex = originalIndexes.get(left.checkpoint.id) ?? 0
+    const rightOriginalIndex = originalIndexes.get(right.checkpoint.id) ?? 0
     if (leftOriginalIndex !== rightOriginalIndex) {
       return leftOriginalIndex - rightOriginalIndex
     }
 
-    return left.id.localeCompare(right.id)
+    return left.checkpoint.id.localeCompare(right.checkpoint.id)
   })
 }
 

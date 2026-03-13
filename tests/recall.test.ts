@@ -685,6 +685,38 @@ describe('Search functionality', () => {
     const stateAfter = await loadSemanticState(TEST_DIR_A);
     expect(stateAfter.records).toHaveLength(recordsBefore);
   });
+
+  it('returns empty results when no checkpoints match the search query', async () => {
+    // Mark all pending records from beforeEach with orthogonal embeddings [1, 0, 0]
+    // so they are semantically unrelated to any query embedding [0, 0, 1]
+    const stateBefore = await loadSemanticState(TEST_DIR_A)
+    for (const record of stateBefore.records) {
+      if (record.status === 'pending') {
+        await markSemanticRecordReady(TEST_DIR_A, record.checkpointId, [1, 0, 0], {
+          id: 'test-model',
+          version: '1'
+        })
+      }
+    }
+
+    // Runtime that returns [0, 0, 1] — orthogonal to all stored embeddings
+    // isReady returns false so maintenance doesn't re-embed using this runtime
+    const runtime = {
+      isReady: () => false,
+      getModelInfo: () => ({ id: 'test-model', version: '1' }),
+      embedTexts: async (texts: string[]) => texts.map(() => [0, 0, 1])
+    }
+
+    const result = await recall({
+      search: 'kubernetes deployment configuration',
+      workspace: TEST_DIR_A,
+      _semanticRuntime: runtime,
+      limit: 5
+    })
+
+    // Should return 0 results — nothing relevant (all embeddings orthogonal, no lexical match)
+    expect(result.checkpoints).toHaveLength(0)
+  });
 });
 
 describe('Cross-workspace functionality', () => {

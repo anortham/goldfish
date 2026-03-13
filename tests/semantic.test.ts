@@ -5,6 +5,7 @@ import { join } from 'path'
 import { invalidateSemanticRecordsForModelVersion, loadSemanticState, markSemanticRecordReady, upsertPendingSemanticRecord } from '../src/semantic-cache'
 import type { Checkpoint } from '../src/types'
 import { buildHybridRanking, processPendingSemanticWork } from '../src/semantic'
+import type { ScoredCheckpoint } from '../src/semantic'
 
 describe('buildHybridRanking', () => {
   it('keeps strong lexical matches first while semantic similarity rescues wording mismatches', async () => {
@@ -52,11 +53,13 @@ describe('buildHybridRanking', () => {
       }
     })
 
-    expect(ranked.map((checkpoint: Checkpoint) => checkpoint.id)).toEqual([
+    expect(ranked.map(r => r.checkpoint.id)).toEqual([
       'exact-lexical',
       'semantic-rescue',
       'irrelevant'
     ])
+    expect(ranked[0]!.score).toBeGreaterThan(0.15)
+    expect(ranked.every(r => typeof r.score === 'number')).toBe(true)
   })
 
   it('applies lightweight metadata boosts for nearby candidates', async () => {
@@ -97,7 +100,7 @@ describe('buildHybridRanking', () => {
       }
     })
 
-    expect(ranked.map((checkpoint: Checkpoint) => checkpoint.id)).toEqual(['boosted', 'plain'])
+    expect(ranked.map(r => r.checkpoint.id)).toEqual(['boosted', 'plain'])
   })
 
   it('ignores untyped hidden thread metadata during ranking', async () => {
@@ -131,7 +134,7 @@ describe('buildHybridRanking', () => {
       }
     })
 
-    expect(ranked.map((checkpoint: Checkpoint) => checkpoint.id)).toEqual(['plain', 'hidden-thread'])
+    expect(ranked.map(r => r.checkpoint.id)).toEqual(['plain', 'hidden-thread'])
   })
 })
 

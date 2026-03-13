@@ -13,7 +13,7 @@ import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } f
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
 import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady, upsertPendingSemanticRecord } from './semantic-cache';
-import { buildHybridRanking, processPendingSemanticWork } from './semantic';
+import { buildHybridRanking, processPendingSemanticWork, MINIMUM_SEARCH_RELEVANCE } from './semantic';
 import { getDefaultSemanticRuntime } from './transformers-embedder';
 import { resolveWorkspace } from './workspace';
 
@@ -346,7 +346,7 @@ async function rankSearchCheckpoints(
 
     const queryEmbedding = queryEmbeddingResult?.embedding;
 
-    return await buildHybridRanking({
+    const scored = await buildHybridRanking({
       query,
       checkpoints: candidateCheckpoints,
       lexicalOrder,
@@ -355,6 +355,13 @@ async function rankSearchCheckpoints(
       runtime,
       ...(queryEmbedding ? { queryEmbedding } : {})
     });
+
+    return scored
+      .filter(item => item.score >= MINIMUM_SEARCH_RELEVANCE)
+      .map(item => {
+        const original = checkpointsById.get(item.checkpoint.id);
+        return original ?? item.checkpoint;
+      });
   } catch {
     return lexicalRanked
       .map(checkpoint => checkpointsById.get(checkpoint.id))
