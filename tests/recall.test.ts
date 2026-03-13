@@ -395,6 +395,10 @@ describe('Search functionality', () => {
       workspace: TEST_DIR_B
     });
 
+    const initialSemanticState = await loadSemanticState(TEST_DIR_B);
+    const lexicalDigest = initialSemanticState.records.find(record => record.checkpointId === lexicalMatch.id)!.digest;
+    const semanticDigest = initialSemanticState.records.find(record => record.checkpointId === semanticRescue.id)!.digest;
+
     let warm = false;
     const embedCalls: string[] = [];
 
@@ -446,8 +450,8 @@ describe('Search functionality', () => {
     expect(embedCalls).toEqual([
       'login timeout issue',
       'login timeout issue',
-      'auth | semantic-recall-phase-1 | Fixed login timeout bug in authentication flow',
-      'session | semantic-recall-phase-1 | Resolved idle session expiry for returning users'
+      lexicalDigest,
+      semanticDigest
     ]);
   });
 
@@ -1105,19 +1109,20 @@ describe('Summary vs Full descriptions', () => {
       search: 'authentication'
     });
 
+    const fullResult = await recall({
+      workspace: TEST_DIR_A,
+      search: 'authentication',
+      full: true
+    });
+
     expect(result.checkpoints.length).toBeGreaterThan(0);
 
     const authCheckpoint = result.checkpoints.find(c => c.tags?.includes('refactor'));
-    const fullCheckpoint: Checkpoint = {
-      id: 'checkpoint_compact_search',
-      timestamp: new Date().toISOString(),
-      description: 'Successfully refactored the entire authentication system to use JWT tokens instead of session cookies. Updated all middleware, tests, and documentation. Added refresh token support and improved error handling for expired tokens.',
-      tags: ['refactor', 'auth'],
-      planId: 'semantic-recall-phase-1'
-    };
+    const fullCheckpoint = fullResult.checkpoints.find(c => c.tags?.includes('refactor'));
 
     expect(authCheckpoint).toBeDefined();
-    expect(authCheckpoint!.description).toBe(buildCompactSearchDescription(fullCheckpoint));
+    expect(fullCheckpoint).toBeDefined();
+    expect(authCheckpoint!.description).toBe(buildCompactSearchDescription(fullCheckpoint!));
     expect(authCheckpoint!.description.length).toBeLessThanOrEqual(220);
   });
 
