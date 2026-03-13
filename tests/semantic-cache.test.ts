@@ -9,6 +9,7 @@ import {
   listPendingSemanticRecords,
   loadSemanticState,
   markSemanticRecordReady,
+  pruneOrphanedSemanticCaches,
   type SemanticRecord,
   upsertPendingSemanticRecord
 } from '../src/semantic-cache'
@@ -403,5 +404,92 @@ describe('semantic cache', () => {
         updatedAt: '2026-03-12T10:00:00.000Z'
       }
     ])
+  })
+})
+
+describe('pruneOrphanedSemanticCaches', () => {
+  const originalGoldfishHome = process.env.GOLDFISH_HOME
+
+  let tempHome: string
+  let workspacePath: string
+
+  beforeEach(async () => {
+    tempHome = join(tmpdir(), `test-prune-home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    workspacePath = join(tmpdir(), `test-prune-workspace-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+
+    process.env.GOLDFISH_HOME = join(tempHome, '.goldfish')
+
+    await mkdir(tempHome, { recursive: true })
+    await mkdir(workspacePath, { recursive: true })
+  })
+
+  afterEach(async () => {
+    if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME
+    else process.env.GOLDFISH_HOME = originalGoldfishHome
+
+    await rm(tempHome, { recursive: true, force: true })
+    await rm(workspacePath, { recursive: true, force: true })
+  })
+
+  it('deletes cache directories with no manifest', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    const parentDir = join(cacheDir, '..')
+    const orphanDir = join(parentDir, 'orphan-no-manifest')
+
+    await mkdir(orphanDir, { recursive: true })
+
+    await pruneOrphanedSemanticCaches()
+
+    const { existsSync } = await import('fs')
+    expect(existsSync(orphanDir)).toBe(false)
+  })
+
+  it('deletes cache directories with manifest but no workspacePath', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    const parentDir = join(cacheDir, '..')
+    const orphanDir = join(parentDir, 'orphan-no-wspath')
+
+    await mkdir(orphanDir, { recursive: true })
+    await writeFile(join(orphanDir, 'manifest.json'), JSON.stringify({
+      checkpoints: { 'checkpoint_old': { digestHash: 'x', digestVersion: 1 } }
+    }))
+
+    await pruneOrphanedSemanticCaches()
+
+    const { existsSync } = await import('fs')
+    expect(existsSync(orphanDir)).toBe(false)
+  })
+
+  it('keeps cache directories with a valid workspacePath', async () => {
+    // Create a real semantic record so the manifest has workspacePath
+    await upsertPendingSemanticRecord(workspacePath, {
+      checkpointId: 'checkpoint_keep_test',
+      checkpointTimestamp: '2026-03-13T10:00:00.000Z',
+      digest: 'Keep this',
+      digestHash: 'hash-keep',
+      digestVersion: 1
+    })
+
+    await pruneOrphanedSemanticCaches()
+
+    const state = await loadSemanticState(workspacePath)
+    expect(state.records).toHaveLength(1)
+  })
+
+  it('deletes cache directories where workspacePath no longer exists', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    const parentDir = join(cacheDir, '..')
+    const orphanDir = join(parentDir, 'orphan-gone-path')
+
+    await mkdir(orphanDir, { recursive: true })
+    await writeFile(join(orphanDir, 'manifest.json'), JSON.stringify({
+      workspacePath: '/nonexistent/path/that/does/not/exist',
+      checkpoints: {}
+    }))
+
+    await pruneOrphanedSemanticCaches()
+
+    const { existsSync } = await import('fs')
+    expect(existsSync(orphanDir)).toBe(false)
   })
 })

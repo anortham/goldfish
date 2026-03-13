@@ -1,8 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
+import { existsSync } from 'fs'
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { withLock } from './lock'
 import type { SemanticModelInfo } from './types'
-import { getSemanticCacheDir } from './workspace'
+import { getGoldfishHomeDir, getSemanticCacheDir } from './workspace'
 
 export interface SemanticRecord {
   checkpointId: string
@@ -312,4 +313,70 @@ export async function invalidateSemanticRecordsForModelVersion(
 
     await writeSemanticState(paths, state)
   })
+}
+
+const PRUNE_MAX_DIRS = 500
+
+export async function pruneOrphanedSemanticCaches(): Promise<void> {
+  const cacheRoot = join(getGoldfishHomeDir(), 'cache', 'semantic')
+
+  let entries: string[]
+  try {
+    entries = await readdir(cacheRoot)
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return
+    }
+    throw error
+  }
+
+  // Sort by mtime (oldest first) and cap at PRUNE_MAX_DIRS
+  const withStats = await Promise.all(
+    entries.map(async (entry) => {
+      const dirPath = join(cacheRoot, entry)
+      try {
+        const stats = await stat(dirPath)
+        return stats.isDirectory() ? { entry, dirPath, mtime: stats.mtimeMs } : null
+      } catch {
+        return null
+      }
+    })
+  )
+
+  const dirs = withStats
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => a.mtime - b.mtime)
+    .slice(0, PRUNE_MAX_DIRS)
+
+  for (const { dirPath } of dirs) {
+    try {
+      const manifestPath = join(dirPath, MANIFEST_FILE)
+      let manifest: SemanticManifest | undefined
+
+      try {
+        const content = await readFile(manifestPath, 'utf-8')
+        manifest = JSON.parse(content)
+      } catch {
+        // No manifest or invalid JSON — delete
+        await rm(dirPath, { recursive: true, force: true })
+        continue
+      }
+
+      if (!manifest?.workspacePath) {
+        // Pre-migration manifest without workspacePath — delete
+        await rm(dirPath, { recursive: true, force: true })
+        continue
+      }
+
+      if (!existsSync(manifest.workspacePath)) {
+        // Workspace path no longer exists — delete
+        await rm(dirPath, { recursive: true, force: true })
+        continue
+      }
+
+      // workspacePath exists on disk — keep
+    } catch {
+      // Skip dirs that fail — best-effort
+    }
+  }
 }
