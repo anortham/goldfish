@@ -310,7 +310,7 @@ describe('Search functionality', () => {
     expect(result.checkpoints[0]!.id).toBe(matchingPlan.id);
   });
 
-  it('processes at most 3 pending semantic records per warm search call', async () => {
+  it('processes all pending semantic records in a warm search call', async () => {
     for (let i = 1; i <= 4; i++) {
       await saveCheckpoint({
         description: `Authentication search record ${i}`,
@@ -333,8 +333,38 @@ describe('Search functionality', () => {
     const state = await loadSemanticState(TEST_DIR_A);
 
     expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(pending).toHaveLength(4);
-    expect(state.records.filter(record => record.status === 'ready')).toHaveLength(3);
+    expect(pending).toHaveLength(0);
+    expect(state.records.filter(record => record.status === 'ready')).toHaveLength(7);
+  });
+
+  it('processes entire pending backlog in a single maintenance pass', async () => {
+    const runtime = {
+      isReady: () => true,
+      getModelInfo: () => ({ id: 'test-model', version: '1' }),
+      embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
+    }
+
+    // Create 10 checkpoints to produce 10 pending records
+    for (let i = 0; i < 10; i++) {
+      await saveCheckpoint({
+        description: `Checkpoint ${i} for bulk maintenance`,
+        tags: ['bulk-test'],
+        workspace: TEST_DIR_A
+      })
+    }
+
+    // First recall with search triggers backfill + maintenance
+    await recall({
+      search: 'bulk maintenance',
+      workspace: TEST_DIR_A,
+      _semanticRuntime: runtime
+    })
+
+    // All records should now be ready (not capped at 3)
+    // beforeEach creates 3 checkpoints + 10 new ones = 13 total
+    const state = await loadSemanticState(TEST_DIR_A)
+    const readyCount = state.records.filter(r => r.status === 'ready').length
+    expect(readyCount).toBe(13)
   });
 
   it('searches using decision fields the same way as the lexical helper', async () => {
@@ -601,49 +631,6 @@ describe('Search functionality', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]!).toContain('semantic maintenance failed');
     expect(warnings[0]!).toContain('semantic maintenance warning');
-  });
-
-  it('does not let slow maintenance block a warm search past the budget', async () => {
-    await saveCheckpoint({
-      description: 'Authentication maintenance timeout guard',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    let embedCalls = 0;
-    let maintenanceAborted = false;
-
-    const result = await Promise.race([
-      recall({
-        workspace: TEST_DIR_A,
-        search: 'authentication',
-        limit: 10,
-        _semanticRuntime: {
-          isReady: () => true,
-          embedTexts: async (_texts: string[], signal?: AbortSignal) => {
-            embedCalls += 1;
-
-            if (embedCalls === 1) {
-              return [[1, 0]];
-            }
-
-            signal?.addEventListener('abort', () => {
-              maintenanceAborted = true;
-            });
-
-            await new Promise(resolve => setTimeout(resolve, 250));
-            return [[1, 0]];
-          }
-        }
-      }),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('recall timed out waiting for maintenance')), 220);
-      })
-    ]);
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(result.checkpoints[0]!.description.toLowerCase()).toContain('auth');
-    expect(maintenanceAborted).toBe(true);
   });
 
   it('backfills checkpoints missing from semantic cache during search', async () => {

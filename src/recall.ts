@@ -26,8 +26,6 @@ type QueryEmbeddingResult =
   | { ok: true; embedding?: number[] }
   | { ok: false; error: unknown };
 
-const SEARCH_SEMANTIC_MAINTENANCE_LIMIT = 3;
-const SEARCH_SEMANTIC_MAINTENANCE_MS = 150;
 const SEARCH_SEMANTIC_MODEL = {
   id: 'semantic-search-runtime',
   version: '1'
@@ -245,8 +243,6 @@ async function runSearchSemanticMaintenance(
   }
 
   const seenWorkspaces = new Set<string>();
-  let processed = 0;
-  const startedAt = Date.now();
 
   try {
     for (const workspace of workspaces) {
@@ -256,25 +252,14 @@ async function runSearchSemanticMaintenance(
 
       seenWorkspaces.add(workspace);
 
-      if (processed >= SEARCH_SEMANTIC_MAINTENANCE_LIMIT) {
-        return;
-      }
-
-      const elapsedMs = Date.now() - startedAt;
-      const remainingMs = SEARCH_SEMANTIC_MAINTENANCE_MS - elapsedMs;
-      if (remainingMs <= 0) {
-        return;
-      }
-
       const pending = await listPendingSemanticRecords(workspace);
       if (pending.length === 0) {
         continue;
       }
 
-      const result = await processPendingSemanticWork({
+      await processPendingSemanticWork({
         pending,
-        maxItems: SEARCH_SEMANTIC_MAINTENANCE_LIMIT - processed,
-        maxMs: remainingMs,
+        maxItems: pending.length,
         embed: async (texts: string[], signal?: AbortSignal) => await runtime.embedTexts(texts, signal),
         save: async (checkpointId: string, embedding: number[]) => {
           await markSemanticRecordReady(
@@ -285,8 +270,6 @@ async function runSearchSemanticMaintenance(
           );
         }
       });
-
-      processed += result.processed;
     }
   } catch (error) {
     warnSemanticFailure('semantic maintenance failed', error);
