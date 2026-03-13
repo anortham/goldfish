@@ -13,21 +13,16 @@ export function getInstructions(): string {
 
 ## Checkpointing
 
-Checkpoint when you complete **meaningful milestones** — not after every action.
+Checkpoint your work so future sessions have context. **When in doubt, checkpoint** — a few extra checkpoints are better than lost context.
 
-**When to checkpoint:**
-- Completed a deliverable (feature, bug fix, refactor step)
-- Made a decision that future sessions need to know about
-- Found a non-obvious discovery or blocker worth preserving
-- Before context compaction (the PreCompact hook handles this automatically)
+**Checkpoint after:**
+- Completing a feature, bug fix, or refactor step
+- Making a key decision or discovery
+- Committing or pushing completed work
+- Reaching a natural stopping point in a session
+- Before context compaction (PreCompact hook handles this automatically)
 
-**Do NOT checkpoint:**
-- After every small edit or routine step
-- After test runs that simply pass
-- Multiple times for the same work — if you just checkpointed, you don't need another
-- With near-identical descriptions to a recent checkpoint
-
-Think of checkpoints like git commits: one per logical milestone, not one per keystroke.
+Space out checkpoints so each one captures a distinct piece of progress — one per logical milestone is the right cadence.
 
 ### Writing Good Checkpoints
 

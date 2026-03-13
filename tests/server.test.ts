@@ -310,8 +310,8 @@ describe('Tool descriptions', () => {
     const tools = getTools();
 
     const checkpointTool = tools.find(t => t.name === 'checkpoint');
-    expect(checkpointTool!.description).toContain('milestone');
-    expect(checkpointTool!.description).toContain('Do NOT checkpoint');
+    expect(checkpointTool!.description).toContain('When in doubt, checkpoint');
+    expect(checkpointTool!.description).toContain('one per logical milestone');
     expect(checkpointTool!.description).toContain('WHAT');
 
     const recallTool = tools.find(t => t.name === 'recall');

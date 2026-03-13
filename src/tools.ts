@@ -13,19 +13,15 @@ export function getTools(): Tool[] {
   return [
     {
       name: 'checkpoint',
-      description: `Save a milestone checkpoint to developer memory. Use when you complete meaningful work that future sessions should know about.
+      description: `Save a checkpoint to developer memory so future sessions have context. When in doubt, checkpoint — a few extra checkpoints are better than lost context.
 
-When to checkpoint:
-- Completed a meaningful deliverable (feature, bug fix, refactor)
-- Made a key decision that future sessions must follow
-- Before context compaction (PreCompact hook handles this)
-- Found a blocker or non-obvious discovery worth preserving
+Checkpoint after:
+- Completing a feature, bug fix, or refactor step
+- Making a key decision or discovery
+- Committing or pushing completed work
+- Reaching a natural stopping point
 
-Do NOT checkpoint:
-- After every small step or individual file edit
-- After routine test runs
-- Multiple times for the same piece of work (one checkpoint per milestone)
-- Rapid-fire — if you checkpointed in the last few minutes, you probably don't need another
+Space out checkpoints so each captures distinct progress — one per logical milestone.
 
 Write descriptions in MARKDOWN with structure (headers, bullets). Include WHAT, WHY, HOW, and IMPACT. Descriptions power fuzzy search — make them findable.
 

@@ -8,23 +8,17 @@ allowed-tools: mcp__goldfish__checkpoint
 
 ## When to Checkpoint
 
-Checkpoint at **meaningful milestones** — think git commits, not keystrokes.
+**When in doubt, checkpoint** — a few extra checkpoints are better than lost context.
 
 - **Completed a deliverable** — feature slice, bug fix, refactor step
 - **Made a key decision** — architecture, tradeoffs, approach choices that future sessions must follow
+- **Committed or pushed work** — natural checkpoint moment after code lands
+- **Reaching a stopping point** — end of a work session or switching tasks
 - **Before context compaction** — preserve active state (PreCompact hook handles this automatically)
 - **Found something non-obvious** — blockers, root causes, discoveries worth preserving
 - **User shared requirements/constraints** — preserve what future work must honor
 
-## When NOT to Checkpoint
-
-- After every small edit or file change
-- After routine test runs that pass
-- Multiple times for the same piece of work
-- Rapid-fire — if you checkpointed in the last few minutes, you probably don't need another
-- With nearly identical descriptions to a recent checkpoint (4 checkpoints in 2 minutes about "embeddings fix" is not helpful)
-
-One checkpoint per completed milestone. Not one per action.
+Space out checkpoints so each one captures a distinct piece of progress — one per logical milestone is the right cadence.
 
 ## How to Write Good Descriptions
 

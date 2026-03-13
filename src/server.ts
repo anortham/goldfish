@@ -18,7 +18,7 @@ import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handlePlan } from './handlers/index.js';
 
-export const SERVER_VERSION = '5.8.2';
+export const SERVER_VERSION = '5.8.4';
 
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan };
