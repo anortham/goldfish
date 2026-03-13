@@ -17,6 +17,7 @@ import {
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handlePlan } from './handlers/index.js';
+import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 
 export const SERVER_VERSION = '5.8.4';
 
@@ -39,6 +40,11 @@ export async function startServer() {
       instructions: getInstructions()
     }
   );
+
+  // Prune orphaned semantic caches (fire-and-forget)
+  pruneOrphanedSemanticCaches().catch(() => {
+    // Silently ignore — pruning is best-effort
+  });
 
   // Register tool handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => {

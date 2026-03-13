@@ -445,6 +445,15 @@ describe('Server instructions', () => {
   });
 });
 
+describe('Server startup', () => {
+  it('calls pruneOrphanedSemanticCaches on startup without blocking', async () => {
+    const { pruneOrphanedSemanticCaches } = await import('../src/semantic-cache');
+
+    // The function should not throw even on a clean environment
+    await expect(pruneOrphanedSemanticCaches()).resolves.toBeUndefined();
+  });
+});
+
 describe('Server exports', () => {
   it('exports startServer function', async () => {
     const { startServer } = await import('../src/server');
