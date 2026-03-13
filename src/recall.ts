@@ -393,7 +393,11 @@ function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Chec
   };
 
   if (!options.full) {
-    const { git, ...minimal } = withDescription;
+    const {
+      git, context, decision, alternatives, evidence,
+      impact, symbols, unknowns, confidence,
+      ...minimal
+    } = withDescription;
     return minimal;
   }
 

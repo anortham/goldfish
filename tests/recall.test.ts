@@ -357,7 +357,8 @@ describe('Search functionality', () => {
     });
 
     expect(result.checkpoints).toHaveLength(1);
-    expect(result.checkpoints[0]!.decision).toContain('CQRS');
+    // decision field is stripped in non-full mode, but the checkpoint was found via decision search
+    expect(result.checkpoints[0]!.description).toContain('order processing');
   });
 
   it('does not run semantic maintenance for plain recall without search', async () => {

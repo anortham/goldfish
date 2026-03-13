@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "goldfish": {
-      "command": "bun",
-      "args": ["run", "./src/server.ts"]
-    }
-  }
-}

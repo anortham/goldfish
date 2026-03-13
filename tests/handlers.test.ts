@@ -453,6 +453,46 @@ describe('Readable markdown responses', () => {
       expect(text).toContain('Unknowns: Whether mobile clients need longer retry windows');
     });
 
+    it('strips structured fields in non-full mode for token efficiency', async () => {
+      await saveCheckpoint({
+        description: 'Structured compact checkpoint',
+        workspace: TEST_DIR,
+        type: 'decision',
+        context: 'Need to simplify auth retry behavior',
+        decision: 'Use bounded retries with jitter',
+        alternatives: ['Disable retries', 'Keep unbounded backoff'],
+        evidence: ['Staging retry logs', 'Support escalation notes'],
+        impact: 'Reduced retry storms in staging',
+        symbols: ['retryAuthRequest'],
+        next: 'Track retry metrics for one week',
+        confidence: 4,
+        unknowns: ['Whether mobile clients need longer retry windows'],
+        tags: ['decision', 'auth']
+      });
+
+      const result = await handleRecall({
+        workspace: TEST_DIR,
+        full: false
+      });
+
+      const text = result.content[0]!.text;
+
+      // Should keep orientation fields
+      expect(text).toContain('Tags: decision, auth');
+      expect(text).toContain('Type: decision');
+      expect(text).toContain('Next: Track retry metrics for one week');
+
+      // Should strip verbose forensic fields
+      expect(text).not.toContain('Context: Need to simplify');
+      expect(text).not.toContain('Decision: Use bounded retries');
+      expect(text).not.toContain('Alternatives:');
+      expect(text).not.toContain('Evidence:');
+      expect(text).not.toContain('Impact:');
+      expect(text).not.toContain('Symbols:');
+      expect(text).not.toContain('Confidence:');
+      expect(text).not.toContain('Unknowns:');
+    });
+
     it('tightens non-full search defaults to 3 checkpoint sections', async () => {
       for (let i = 0; i < 4; i++) {
         await saveCheckpoint({
