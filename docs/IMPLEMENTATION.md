@@ -1,4 +1,4 @@
-# Goldfish v5.8.0 - Implementation Specification
+# Goldfish v5.8.1 - Implementation Specification
 
 ## Design Philosophy
 
@@ -241,7 +241,7 @@ We achieve this through:
 
 ## Implementation Status
 
-### Complete - v5.8.0
+### Complete - v5.8.1
 
 **ALL MODULES IMPLEMENTED AND TESTED**
 
