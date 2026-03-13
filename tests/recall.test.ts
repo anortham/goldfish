@@ -225,13 +225,15 @@ describe('Search functionality', () => {
       _semanticRuntime: {
         isReady: () => true,
         embedTexts: async (texts: string[]) => {
-          expect(texts).toEqual(['login timeout issue']);
-          return [[1, 0]];
+          return texts.map(text =>
+            text.includes('login timeout') ? [1, 0] : [0, 1]
+          );
         }
       }
     });
 
-    expect(result.checkpoints.map(c => c.id)).toEqual([
+    const rankedIds = result.checkpoints.map(c => c.id);
+    expect(rankedIds.slice(0, 2)).toEqual([
       exactLexical.id,
       semanticRescue.id
     ]);

@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, standup
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth (and is git-committable), while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
-**Version 5.7.0** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 5.8.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -139,6 +139,8 @@ Create a `.vscode/mcp.json` file in your project root:
 The `GOLDFISH_WORKSPACE` environment variable tells Goldfish where your project root is. VS Code automatically substitutes `${workspaceFolder}` with the actual path.
 
 Without this, Goldfish may create its `.memories/` directory in the wrong location since VS Code's MCP integration doesn't pass `cwd` the way Claude Code does.
+
+If you want Copilot to consistently checkpoint and recall with Goldfish, copy `docs/goldfish-checkpoint.instructions-vs-code.md` into your repo's `.github/instructions/` folder (or adapt it to your preferred instructions layout). That file gives VS Code users a ready-made Goldfish + Julie instruction set instead of starting from a blank page.
 
 ---
 

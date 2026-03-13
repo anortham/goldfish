@@ -160,7 +160,7 @@ export async function buildHybridRanking(input: BuildHybridRankingInput): Promis
   const newest = Math.max(...timestamps)
 
   let queryEmbedding = input.queryEmbedding
-  if (!queryEmbedding && (input.readyRecords.length > 0 || !input.runtime.isReady())) {
+  if (!queryEmbedding && input.readyRecords.length > 0) {
     const embeddings = await input.runtime.embedTexts([input.query])
     queryEmbedding = embeddings[0]
   }
