@@ -242,6 +242,7 @@ Keep documentation honest: do not hardcode stale test counts or module line coun
 - Read `docs/IMPLEMENTATION.md` for detailed specs
 - Keep code well-structured and maintainable
 - Store memories with the project (`.memories/` directory)
+- Always commit `.memories/` — checkpoints are source-controlled project artifacts, never leave them untracked
 - Treat semantic cache/model cache as derived local state under `~/.goldfish/`
 
 ### DON'T
