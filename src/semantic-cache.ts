@@ -25,6 +25,7 @@ export interface SemanticManifestCheckpoint {
 }
 
 export interface SemanticManifest {
+  workspacePath?: string
   checkpoints: Record<string, SemanticManifestCheckpoint>
 }
 
@@ -73,6 +74,7 @@ async function readManifest(manifestPath: string): Promise<SemanticManifest> {
     const parsed = JSON.parse(content) as SemanticManifest
 
     return {
+      ...(parsed.workspacePath ? { workspacePath: parsed.workspacePath } : {}),
       checkpoints: parsed.checkpoints ?? {}
     }
   } catch (error: any) {
@@ -210,6 +212,7 @@ export async function upsertPendingSemanticRecord(
     }
 
     state.manifest.checkpoints[input.checkpointId] = nextManifestEntry
+    state.manifest.workspacePath = workspace
 
     if (existingRecordIndex === -1) {
       state.records.push(createPendingRecord(input))
@@ -262,6 +265,8 @@ export async function markSemanticRecordReady(
       dimensions: embedding.length,
       indexedAt: now
     }
+
+    state.manifest.workspacePath = workspace
 
     await writeSemanticState(paths, state)
   })

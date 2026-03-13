@@ -14,8 +14,7 @@ import {
 } from '../src/semantic-cache'
 
 describe('semantic cache', () => {
-  const originalHome = process.env.HOME
-  const originalUserProfile = process.env.USERPROFILE
+  const originalGoldfishHome = process.env.GOLDFISH_HOME
 
   let tempHome: string
   let workspacePath: string
@@ -24,19 +23,15 @@ describe('semantic cache', () => {
     tempHome = join(tmpdir(), `test-semantic-cache-home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     workspacePath = join(tmpdir(), `test-semantic-cache-workspace-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
-    process.env.HOME = tempHome
-    delete process.env.USERPROFILE
+    process.env.GOLDFISH_HOME = join(tempHome, '.goldfish')
 
     await mkdir(tempHome, { recursive: true })
     await mkdir(workspacePath, { recursive: true })
   })
 
   afterEach(async () => {
-    if (originalHome === undefined) delete process.env.HOME
-    else process.env.HOME = originalHome
-
-    if (originalUserProfile === undefined) delete process.env.USERPROFILE
-    else process.env.USERPROFILE = originalUserProfile
+    if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME
+    else process.env.GOLDFISH_HOME = originalGoldfishHome
 
     await rm(tempHome, { recursive: true, force: true })
     await rm(workspacePath, { recursive: true, force: true })
@@ -62,6 +57,7 @@ describe('semantic cache', () => {
       updatedAt: expect.any(String)
     })
     expect(state.manifest).toEqual({
+      workspacePath: workspacePath,
       checkpoints: {
         checkpoint_alpha: {
           checkpointTimestamp: '2026-03-12T10:00:00.000Z',
@@ -347,6 +343,19 @@ describe('semantic cache', () => {
       'checkpoint_one',
       'checkpoint_two'
     ])
+  })
+
+  it('writes workspacePath into the manifest on upsert', async () => {
+    await upsertPendingSemanticRecord(workspacePath, {
+      checkpointId: 'checkpoint_wp_test',
+      checkpointTimestamp: '2026-03-13T10:00:00.000Z',
+      digest: 'Test digest',
+      digestHash: 'hash-wp',
+      digestVersion: 1
+    })
+
+    const state = await loadSemanticState(workspacePath)
+    expect(state.manifest.workspacePath).toBe(workspacePath)
   })
 
   it('waits for the semantic cache lock before reading manifest and records', async () => {
