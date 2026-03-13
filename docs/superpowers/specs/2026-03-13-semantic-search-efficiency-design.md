@@ -28,9 +28,9 @@ Dogfood testing revealed three issues with the semantic search system:
 
 **Changes:**
 - Remove `SEARCH_SEMANTIC_MAINTENANCE_LIMIT` (3) and `SEARCH_SEMANTIC_MAINTENANCE_MS` (150) constants from `src/recall.ts`
-- Simplify `runSearchSemanticMaintenance` to strip the per-workspace budget-tracking loop (`processed >= limit`, `elapsedMs`/`remainingMs` checks). Instead, call `processPendingSemanticWork` once per workspace with `maxItems: pending.length` and no time budget
-- Modify `processPendingSemanticWork` to skip the `setTimeout` abort-controller pattern when `maxMs` is not finite. Currently, `setTimeout(fn, Infinity)` overflows to 0 in JS engines (32-bit int clamp), which would immediately abort every embedding. When `maxMs` is `Infinity`, embed directly without the timeout wrapper
-- The `maxItems` check and post-embed time checks in `processPendingSemanticWork` still work correctly with large finite values, so only the `setTimeout` path needs the guard
+- Simplify `runSearchSemanticMaintenance`: keep the workspace iteration loop and `seenWorkspaces` dedup, but strip the budget-tracking code (`processed >= limit`, `startedAt`/`elapsedMs`/`remainingMs` checks, accumulated `processed` counter). Call `processPendingSemanticWork` once per workspace with `maxItems: pending.length` and `maxMs: undefined`
+- Make `maxMs` optional in `ProcessPendingSemanticWorkInput` (`maxMs?: number`). When `undefined`, skip the `setTimeout` abort-controller pattern entirely and embed directly. This avoids the `setTimeout(fn, Infinity)` hazard — passing `Infinity` to `setTimeout` overflows to 0 via 32-bit int clamp, immediately aborting every embedding. Making `maxMs` optional is cleaner than guarding against `Infinity`
+- The `maxItems` check still works as-is. The time-budget checks (`now() - startedAt >= input.maxMs`) become `input.maxMs !== undefined && ...`
 
 **Rationale:** The `recall({ search })` path already pays the model load cost (~1-2s). Users invoking search expect to wait for results. A few extra seconds of one-time indexing (50 checkpoints x ~50ms each = ~2.5s) is acceptable. Subsequent searches are instant cache hits since vectors are persisted.
 
@@ -47,8 +47,7 @@ Dogfood testing revealed three issues with the semantic search system:
 **Changes:**
 - Add constant `MINIMUM_SEARCH_RELEVANCE = 0.15` to `src/semantic.ts`
 - Refactor `buildHybridRanking` to return `Array<{ checkpoint: Checkpoint, score: number }>` instead of `Checkpoint[]`
-- `rankSearchCheckpoints` in `src/recall.ts` filters results below the threshold before returning `Checkpoint[]`
-- No change to callers of `rankSearchCheckpoints` — they still receive `Checkpoint[]`
+- `rankSearchCheckpoints` in `src/recall.ts` receives the scored results from `buildHybridRanking`, filters out results below the threshold, maps back to `Checkpoint[]`, and returns. The type change is internal — callers of `rankSearchCheckpoints` still receive `Checkpoint[]` with no changes needed
 
 **Scoring formula (unchanged):**
 ```
@@ -96,7 +95,7 @@ Add a `pruneOrphanedSemanticCaches()` function called from `src/server.ts` on st
 | `workspacePath` path doesn't exist on disk | Delete directory |
 | `workspacePath` path exists on disk | Keep |
 
-Fire-and-forget — failures don't prevent server startup.
+Fire-and-forget — failures don't prevent server startup. If the semantic cache root doesn't exist (fresh install), return early without error.
 
 **3c. Cap the scan**
 
