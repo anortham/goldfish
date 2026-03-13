@@ -1,10 +1,10 @@
 # Goldfish 🐠
 
-Persistent developer memory for Claude Code. Checkpoints, recall, plans, and standup reports -- stored as human-readable markdown, right in your project.
+Persistent developer memory for Claude Code. Checkpoints, recall, plans, standup reports, and built-in semantic recall -- stored as human-readable markdown right in your project.
 
-Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Data lives in `.memories/` (git-committable) with a lightweight cross-project registry at `~/.goldfish/registry.json`.
+Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth (and is git-committable), while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
-**Version 5.3.0** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 5.7.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -177,6 +177,8 @@ recall({ workspace: "all", days: 1 })       # Cross-project (for standups)
 recall({ limit: 0 })                        # Active plan only
 ```
 
+When you search with `recall({ search: "..." })`, results are compact by default so agents get dense, low-token snippets. Pass `full: true` to return full descriptions and metadata instead.
+
 ### Plan -- Track Long-Running Work
 
 Plans are strategic markdown documents that survive across sessions. They appear at the top of every `recall()` response.
@@ -239,7 +241,7 @@ Hook definitions live in `hooks/hooks.json`.
 
 ## Storage Format
 
-Everything is human-readable markdown. No database. No binary formats.
+Markdown in `.memories/` is still the source of truth. Goldfish also keeps derived JSON/JSONL semantic search artifacts outside `.memories/` so search stays fast without turning your project memory into an opaque database.
 
 ### Project-Level Storage
 
@@ -288,6 +290,21 @@ the edge case and verified the fix prevents token reuse attacks.
 ```
 
 The registry tracks which projects have `.memories/` directories. It is populated automatically on checkpoint save and used by cross-project recall for standup reports.
+
+### Derived Semantic Cache
+
+```
+~/.goldfish/
+  cache/
+    semantic/
+      <workspace-hash>/
+        manifest.json   # Checkpoint digest/version metadata
+        records.jsonl   # Pending/ready embedding records
+  models/
+    transformers/       # Downloaded model artifacts
+```
+
+These files are derived from checkpoint markdown and can be rebuilt. They live outside `.memories/` on purpose: project history stays human-readable and git-friendly, while embeddings and model downloads stay local machine cache.
 
 ---
 
@@ -363,7 +380,11 @@ goldfish/
     types.ts              # TypeScript interfaces
     checkpoints.ts        # Checkpoint storage and retrieval
     plans.ts              # Plan management
-    recall.ts             # Search and aggregation
+    recall.ts             # Fuzzy + semantic hybrid recall
+    digests.ts            # Compact retrieval/search digests
+    semantic-cache.ts     # Derived semantic manifest + JSONL records
+    semantic.ts           # Hybrid ranking + bounded maintenance
+    transformers-embedder.ts # Local embedding runtime
     registry.ts           # Cross-project registry (~/.goldfish/registry.json)
     workspace.ts          # Workspace detection and normalization
     git.ts                # Git context capture
@@ -371,7 +392,7 @@ goldfish/
     summary.ts            # Auto-summary generation
     emoji.ts              # Emoji utilities
     handlers/             # Tool handler implementations
-  tests/                  # Test files (265 tests)
+  tests/                  # Test files
 ```
 
 ---
@@ -381,7 +402,7 @@ goldfish/
 **This is a TDD project. Tests are written before implementation. No exceptions.**
 
 ```bash
-# Run all tests (265 tests)
+# Run all tests
 bun test
 
 # Watch mode (recommended during development)
@@ -399,9 +420,9 @@ bun run typecheck
 
 ### Stats
 
-- **265 tests**, all passing
-- **~2,070 lines** of production code
-- **3 dependencies:** `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`
+- **Storage:** markdown source of truth in `.memories/`, derived semantic cache in `~/.goldfish/cache/semantic/`
+- **Model runtime:** `@huggingface/transformers` cache in `~/.goldfish/models/transformers/`
+- **Runtime dependencies:** `@huggingface/transformers`, `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`
 
 ### TDD Workflow
 

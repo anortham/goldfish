@@ -23,7 +23,7 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 2. **Tusk (Bun + SQLite)** - Fixed bugs, became too complex, hook spam disaster
 3. **.NET rewrite** - Over-engineered, never finished
 4. **Goldfish 4.0** - Radical simplicity, markdown storage, evidence-based features
-5. **Goldfish 5.0** - **Claude Code plugin**, project-local `.memories/`, cross-project registry, skills & hooks
+5. **Goldfish 5.x** - **Claude Code plugin**, project-local `.memories/`, cross-project registry, hybrid semantic recall, skills & hooks
 
 **Core principle:** We only add complexity when we have EVIDENCE we need it.
 
@@ -43,9 +43,11 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 
 ~/.goldfish/
   registry.json            # Cross-project registry (auto-populated)
+  cache/semantic/          # Derived semantic manifest + JSONL records (rebuildable)
+  models/transformers/     # Local embedding model cache
 ```
 
-**Everything is human-readable markdown.** No database. No binary formats. Git-friendly. Memories live with the project.
+**Checkpoint and plan markdown in `.memories/` is the source of truth.** Semantic cache and model files live outside `.memories/` as rebuildable local artifacts.
 
 ### Claude Code Plugin
 
@@ -58,24 +60,26 @@ Goldfish is a **Claude Code plugin** with:
 
 ### Core Modules
 
-| Module | Purpose | Test File | Lines |
-|--------|---------|-----------|-------|
-| `src/workspace.ts` | Workspace normalization, .memories/ paths | `tests/workspace.test.ts` | ~78 |
-| `src/checkpoints.ts` | Checkpoint storage (YAML frontmatter individual files) | `tests/checkpoints.test.ts` | ~285 |
-| `src/plans.ts` | Plan management | `tests/plans.test.ts` | ~285 |
-| `src/recall.ts` | Search, aggregation, cross-project recall | `tests/recall.test.ts` | ~269 |
-| `src/registry.ts` | Cross-project registry | `tests/registry.test.ts` | ~145 |
-| `src/git.ts` | Git context capture | `tests/git.test.ts` | ~84 |
-| `src/lock.ts` | File locking utilities | `tests/lock.test.ts` | ~95 |
-| `src/server.ts` | MCP server | `tests/server.test.ts` | ~83 |
-| `src/handlers/` | Tool handlers (checkpoint, recall, plan) | `tests/handlers.test.ts` | ~275 |
-| `src/tools.ts` | Tool definitions | - | ~241 |
-| `src/instructions.ts` | Server instructions | - | ~81 |
-| `src/types.ts` | Type definitions | - | ~96 |
-| `src/emoji.ts` | Fish emoji helper | - | ~12 |
-| `src/summary.ts` | Auto-summary generation | - | ~34 |
-
-**Total production code: ~2,070 lines. Well-structured and maintainable.**
+| Module | Purpose | Test File |
+|--------|---------|-----------|
+| `src/workspace.ts` | Workspace normalization plus `.memories/`, semantic cache, and model cache paths | `tests/workspace.test.ts` |
+| `src/checkpoints.ts` | Checkpoint storage, plan affinity, semantic queueing | `tests/checkpoints.test.ts` |
+| `src/plans.ts` | Plan management | `tests/plans.test.ts` |
+| `src/recall.ts` | Fuzzy + semantic hybrid recall, aggregation, bounded maintenance | `tests/recall.test.ts` |
+| `src/digests.ts` | Compact retrieval digests and compact search descriptions | `tests/digests.test.ts` |
+| `src/semantic-cache.ts` | Derived semantic manifest and JSONL record storage | `tests/semantic-cache.test.ts` |
+| `src/semantic.ts` | Hybrid ranking and pending semantic work processing | `tests/semantic.test.ts` |
+| `src/transformers-embedder.ts` | Lazy embedding runtime backed by `@huggingface/transformers` | `tests/transformers-embedder.test.ts` |
+| `src/registry.ts` | Cross-project registry | `tests/registry.test.ts` |
+| `src/git.ts` | Git context capture | `tests/git.test.ts` |
+| `src/lock.ts` | File locking utilities | `tests/lock.test.ts` |
+| `src/server.ts` | MCP server | `tests/server.test.ts` |
+| `src/handlers/` | Tool handlers (checkpoint, recall, plan) | `tests/handlers.test.ts` |
+| `src/tools.ts` | Tool definitions | - |
+| `src/instructions.ts` | Server instructions | - |
+| `src/types.ts` | Type definitions | - |
+| `src/emoji.ts` | Fish emoji helper | - |
+| `src/summary.ts` | Auto-summary generation | - |
 
 ### Key Types
 
@@ -84,10 +88,21 @@ interface Checkpoint {
   id: string;             // checkpoint_{hash} unique identifier
   timestamp: string;      // ISO 8601 UTC (ALWAYS UTC!)
   description: string;    // Markdown body
+  workspace?: string;     // Workspace label added in cross-workspace recall results
   tags?: string[];
   git?: GitContext;        // Nested git context
   summary?: string;       // Auto-generated concise summary
   planId?: string;        // ID of active plan when checkpoint was created
+  type?: 'checkpoint' | 'decision' | 'incident' | 'learning';
+  context?: string;
+  decision?: string;
+  alternatives?: string[];
+  impact?: string;
+  evidence?: string[];
+  symbols?: string[];
+  next?: string;
+  confidence?: number;
+  unknowns?: string[];
 }
 
 interface GitContext {
@@ -116,6 +131,18 @@ interface RecallOptions {
   search?: string;        // Fuzzy search query (fuse.js)
   full?: boolean;         // Include full descriptions + git metadata (default: false)
   planId?: string;        // Filter to checkpoints associated with this plan
+  _semanticRuntime?: SemanticRuntime; // Internal override used by tests
+}
+
+interface SemanticRuntime {
+  isReady(): boolean;
+  getModelInfo?(): SemanticModelInfo | undefined;
+  embedTexts(texts: string[], signal?: AbortSignal): Promise<number[][]>;
+}
+
+interface SemanticModelInfo {
+  id: string;
+  version: string;
 }
 
 interface RegisteredProject {
@@ -199,7 +226,7 @@ git add tests/checkpoints.test.ts src/checkpoints.ts
 git commit -m "Add checkpoint storage with atomic writes"
 ```
 
-**Current test status: 265 tests, all passing.**
+Keep documentation honest: do not hardcode stale test counts or module line counts. Verify with `bun test` / `tsc --noEmit` when you need exact numbers.
 
 ---
 
@@ -215,6 +242,7 @@ git commit -m "Add checkpoint storage with atomic writes"
 - Read `docs/IMPLEMENTATION.md` for detailed specs
 - Keep code well-structured and maintainable
 - Store memories with the project (`.memories/` directory)
+- Treat semantic cache/model cache as derived local state under `~/.goldfish/`
 
 ### DON'T
 
@@ -224,6 +252,7 @@ git commit -m "Add checkpoint storage with atomic writes"
 - Add "intelligence" to storage layer (Goldfish is dumb storage, Claude is smart)
 - Add features without evidence from real usage
 - Add aggressive frequency-pushing language back to tool descriptions (we tuned this down deliberately)
+- Treat derived semantic cache as source of truth (it is not)
 
 ---
 
@@ -300,10 +329,11 @@ bun test --coverage
 
 - **Runtime:** Bun (for speed + built-in test runner)
 - **MCP SDK:** `@modelcontextprotocol/sdk` (^1.26.0)
+- **Embeddings:** `@huggingface/transformers` (^3.7.6)
 - **Search:** `fuse.js` (fuzzy search, proven from v1)
 - **YAML:** `yaml` package (for plan frontmatter)
 - **Language:** TypeScript
-- **Version:** 5.3.0
+- **Version:** 5.7.0
 
 ---
 

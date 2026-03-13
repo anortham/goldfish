@@ -65,6 +65,16 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
     lines.push(`Decision: ${checkpoint.decision}`);
   }
 
+  const alternatives = safeArray(checkpoint.alternatives);
+  if (alternatives && alternatives.length > 0) {
+    lines.push(`Alternatives: ${alternatives.join(', ')}`);
+  }
+
+  const evidence = safeArray(checkpoint.evidence);
+  if (evidence && evidence.length > 0) {
+    lines.push(`Evidence: ${evidence.join(', ')}`);
+  }
+
   if (checkpoint.impact) {
     lines.push(`Impact: ${checkpoint.impact}`);
   }
@@ -76,6 +86,11 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
 
   if (checkpoint.next) {
     lines.push(`Next: ${checkpoint.next}`);
+  }
+
+  const unknowns = safeArray(checkpoint.unknowns);
+  if (unknowns && unknowns.length > 0) {
+    lines.push(`Unknowns: ${unknowns.join(', ')}`);
   }
 
   if (typeof checkpoint.confidence === 'number') {
@@ -122,7 +137,10 @@ function formatActivePlan(plan: Plan): string {
  * Handle recall tool calls
  */
 export async function handleRecall(args: any) {
-  const result = await recallFunc(args);
+  const recallArgs = args.search && !args.full && args.limit === undefined
+    ? { ...args, limit: 3 }
+    : args;
+  const result = await recallFunc(recallArgs);
 
   // Capture diagnostic info
   const resolvedPath = resolveWorkspacePath(args.workspace);

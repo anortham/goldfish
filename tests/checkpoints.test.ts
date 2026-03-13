@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   saveCheckpoint,
+  __setCheckpointDependenciesForTests,
   getCheckpointsForDay,
   getCheckpointsForDateRange,
   getAllCheckpoints,
@@ -13,20 +14,62 @@ import {
 import type { Checkpoint, CheckpointInput } from '../src/types';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { listRegisteredProjects, unregisterProject } from '../src/registry';
+import { buildRetrievalDigest, DIGEST_VERSION } from '../src/digests';
+import { loadSemanticState } from '../src/semantic-cache';
+import { createHash } from 'crypto';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { rm, readdir, readFile, writeFile, mkdir } from 'fs/promises';
 
 let tempDir: string;
+let tempHome: string;
+const originalHome = process.env.HOME;
+const originalUserProfile = process.env.USERPROFILE;
+let restoreCheckpointDependencies: (() => void) | undefined;
+
+async function withFrozenTime<T>(isoTimestamp: string, fn: () => Promise<T>): Promise<T> {
+  const RealDate = Date;
+  const fixedTime = new RealDate(isoTimestamp).getTime();
+
+  class FrozenDate extends RealDate {
+    constructor(value?: string | number | Date) {
+      super(value ?? fixedTime);
+    }
+
+    static now(): number {
+      return fixedTime;
+    }
+  }
+
+  globalThis.Date = FrozenDate as DateConstructor;
+
+  try {
+    return await fn();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
 
 beforeEach(async () => {
   tempDir = join(tmpdir(), `test-checkpoints-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  tempHome = join(tmpdir(), `test-checkpoints-home-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  process.env.HOME = tempHome;
+  delete process.env.USERPROFILE;
+  await mkdir(tempHome, { recursive: true });
+  restoreCheckpointDependencies = undefined;
   await ensureMemoriesDir(tempDir);
 });
 
 afterEach(async () => {
   // Clean up registry entry to avoid polluting the real registry
   await unregisterProject(tempDir);
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
+  restoreCheckpointDependencies?.();
+  restoreCheckpointDependencies = undefined;
+  await rm(tempHome, { recursive: true, force: true });
   await rm(tempDir, { recursive: true, force: true });
 });
 
@@ -891,6 +934,37 @@ describe('saveCheckpoint', () => {
     expect(files.length).toBe(10);
   });
 
+  it('does not overwrite an existing checkpoint file when the base filename collides', async () => {
+    const frozenTimestamp = '2026-03-12T10:00:00.000Z';
+    const description = 'Collision-safe checkpoint save';
+    const checkpointId = generateCheckpointId(frozenTimestamp, description);
+    const dateDir = join(getMemoriesDir(tempDir), '2026-03-12');
+    const baseFilename = getCheckpointFilename({
+      id: checkpointId,
+      timestamp: frozenTimestamp,
+      description
+    });
+
+    await mkdir(dateDir, { recursive: true });
+    await writeFile(join(dateDir, baseFilename), 'existing checkpoint content', 'utf-8');
+
+    const checkpoint = await withFrozenTime(frozenTimestamp, async () => {
+      return await saveCheckpoint({
+        description,
+        workspace: tempDir
+      });
+    });
+
+    const files = (await readdir(dateDir)).sort();
+    const baseContent = await readFile(join(dateDir, baseFilename), 'utf-8');
+    const newFile = files.find(file => file !== baseFilename);
+
+    expect(checkpoint.id).toBe(checkpointId);
+    expect(files).toHaveLength(2);
+    expect(baseContent).toBe('existing checkpoint content');
+    expect(newFile).toMatch(/^100000_[0-9a-f]{4}_\d+\.md$/);
+  });
+
   it('attaches planId when active plan exists', async () => {
     // Set up an active plan
     const { savePlan } = await import('../src/plans');
@@ -956,27 +1030,77 @@ describe('saveCheckpoint', () => {
     expect(content).toContain('confidence: 4');
   });
 
+  it('creates a pending semantic record with the checkpoint retrieval digest', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: '# Retrieval heading\n\nCheckpoint body for semantic indexing',
+      workspace: tempDir,
+      context: 'Recall context',
+      decision: 'Queue semantic indexing after save',
+      tags: ['semantic', 'checkpoint'],
+      symbols: ['saveCheckpoint']
+    });
+
+    const expectedDigest = buildRetrievalDigest(checkpoint);
+    const expectedDigestHash = createHash('sha256').update(expectedDigest).digest('hex');
+    const state = await loadSemanticState(tempDir);
+
+    expect(state.records).toContainEqual({
+      checkpointId: checkpoint.id,
+      digest: expectedDigest,
+      digestHash: expectedDigestHash,
+      status: 'pending',
+      updatedAt: expect.any(String)
+    });
+    expect(state.manifest.checkpoints[checkpoint.id]).toEqual({
+      checkpointTimestamp: checkpoint.timestamp,
+      digestHash: expectedDigestHash,
+      digestVersion: DIGEST_VERSION
+    });
+  });
+
+  it('still saves the checkpoint when semantic queueing fails', async () => {
+    restoreCheckpointDependencies = __setCheckpointDependenciesForTests({
+      queueSemanticRecord: async () => {
+        throw new Error('semantic queue unavailable');
+      }
+    });
+
+    const checkpoint = await saveCheckpoint({
+      description: 'Checkpoint survives semantic queue failure',
+      workspace: tempDir
+    });
+
+    const today = checkpoint.timestamp.split('T')[0]!;
+    const dateDir = join(getMemoriesDir(tempDir), today);
+    const files = await readdir(dateDir);
+    const content = await readFile(join(dateDir, files[0]!), 'utf-8');
+
+    expect(checkpoint.description).toBe('Checkpoint survives semantic queue failure');
+    expect(files).toHaveLength(1);
+    expect(content).toContain(`id: ${checkpoint.id}`);
+  });
+
   it('saves multiple checkpoints as separate files', async () => {
-    await saveCheckpoint({
+    const firstCheckpoint = await saveCheckpoint({
       description: 'First checkpoint',
       workspace: tempDir
     });
 
-    // Small delay to ensure different timestamps
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    await saveCheckpoint({
+    const secondCheckpoint = await saveCheckpoint({
       description: 'Second checkpoint',
       workspace: tempDir
     });
 
-    const today = new Date().toISOString().split('T')[0]!;
-    const memoriesDir = getMemoriesDir(tempDir);
-    const dateDir = join(memoriesDir, today);
-    const files = await readdir(dateDir);
+    const uniqueDates = new Set([
+      firstCheckpoint.timestamp.split('T')[0]!,
+      secondCheckpoint.timestamp.split('T')[0]!
+    ]);
+    const fileCounts = await Promise.all(
+      [...uniqueDates].map(async date => (await readdir(join(getMemoriesDir(tempDir), date))).length)
+    );
 
     // Each checkpoint is its own file
-    expect(files.length).toBe(2);
+    expect(fileCounts.reduce((total, count) => total + count, 0)).toBe(2);
   });
 });
 
@@ -984,22 +1108,13 @@ describe('saveCheckpoint', () => {
 
 describe('getCheckpointsForDay', () => {
   it('returns checkpoints for a specific day', async () => {
-    await saveCheckpoint({
-      description: 'Morning work',
-      tags: ['feature'],
-      workspace: tempDir
-    });
+    const date = '2026-03-12';
+    const dateDir = join(getMemoriesDir(tempDir), date);
+    await mkdir(dateDir, { recursive: true });
+    await writeFile(join(dateDir, '090000_morn.md'), `---\nid: checkpoint_morning\ntimestamp: "${date}T09:00:00.000Z"\ntags:\n  - feature\n---\n\nMorning work\n`, 'utf-8');
+    await writeFile(join(dateDir, '150000_aftr.md'), `---\nid: checkpoint_afternoon\ntimestamp: "${date}T15:00:00.000Z"\ntags:\n  - bug-fix\n---\n\nAfternoon work\n`, 'utf-8');
 
-    await new Promise(resolve => setTimeout(resolve, 10));
-
-    await saveCheckpoint({
-      description: 'Afternoon work',
-      tags: ['bug-fix'],
-      workspace: tempDir
-    });
-
-    const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(tempDir, today);
+    const checkpoints = await getCheckpointsForDay(tempDir, date);
 
     expect(checkpoints).toHaveLength(2);
     expect(checkpoints[0]!.description).toBe('Morning work');
@@ -1012,17 +1127,14 @@ describe('getCheckpointsForDay', () => {
   });
 
   it('returns checkpoints sorted by timestamp', async () => {
-    // Create checkpoints with small delays to ensure ordering
-    for (let i = 0; i < 3; i++) {
-      await saveCheckpoint({
-        description: `Checkpoint ${i}`,
-        workspace: tempDir
-      });
-      if (i < 2) await new Promise(resolve => setTimeout(resolve, 10));
-    }
+    const date = '2026-03-12';
+    const dateDir = join(getMemoriesDir(tempDir), date);
+    await mkdir(dateDir, { recursive: true });
+    await writeFile(join(dateDir, '120000_mid.md'), `---\nid: checkpoint_1\ntimestamp: "${date}T12:00:00.000Z"\n---\n\nCheckpoint 1\n`, 'utf-8');
+    await writeFile(join(dateDir, '090000_earl.md'), `---\nid: checkpoint_0\ntimestamp: "${date}T09:00:00.000Z"\n---\n\nCheckpoint 0\n`, 'utf-8');
+    await writeFile(join(dateDir, '150000_late.md'), `---\nid: checkpoint_2\ntimestamp: "${date}T15:00:00.000Z"\n---\n\nCheckpoint 2\n`, 'utf-8');
 
-    const today = new Date().toISOString().split('T')[0]!;
-    const checkpoints = await getCheckpointsForDay(tempDir, today);
+    const checkpoints = await getCheckpointsForDay(tempDir, date);
 
     expect(checkpoints).toHaveLength(3);
     for (let i = 1; i < checkpoints.length; i++) {
@@ -1033,12 +1145,12 @@ describe('getCheckpointsForDay', () => {
   });
 
   it('each checkpoint has an id field', async () => {
-    await saveCheckpoint({
+    const checkpoint = await saveCheckpoint({
       description: 'ID check',
       workspace: tempDir
     });
 
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = checkpoint.timestamp.split('T')[0]!;
     const checkpoints = await getCheckpointsForDay(tempDir, today);
 
     expect(checkpoints[0]!.id).toMatch(/^checkpoint_[0-9a-f]{8}$/);
@@ -1050,7 +1162,7 @@ describe('getCheckpointsForDay', () => {
 describe('getCheckpointsForDateRange', () => {
   it('returns checkpoints across date range', async () => {
     // Save a checkpoint for today
-    await saveCheckpoint({
+    const checkpoint = await saveCheckpoint({
       description: 'Today work',
       workspace: tempDir
     });
@@ -1072,7 +1184,7 @@ Yesterday's work
 `;
     await writeFile(join(yesterdayDir, '150000_yest.md'), yesterdayContent, 'utf-8');
 
-    const today = new Date().toISOString().split('T')[0]!;
+    const today = checkpoint.timestamp.split('T')[0]!;
     const checkpoints = await getCheckpointsForDateRange(tempDir, yesterday, today);
 
     expect(checkpoints.length).toBeGreaterThanOrEqual(2);

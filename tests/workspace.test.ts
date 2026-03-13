@@ -5,8 +5,12 @@ import {
   getMemoriesDir,
   getPlansDir,
   ensureMemoriesDir,
+  getGoldfishHomeDir,
+  getModelCacheDir,
+  getSemanticWorkspaceKey,
+  getSemanticCacheDir,
 } from '../src/workspace';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { rm, stat } from 'fs/promises';
 
@@ -14,10 +18,14 @@ describe('Workspace normalization', () => {
   it('normalizes full Unix path to simple name', () => {
     expect(normalizeWorkspace('/Users/user/source/goldfish'))
       .toBe('goldfish');
+    expect(normalizeWorkspace('/Users/user/source/goldfish/'))
+      .toBe('goldfish');
   });
 
   it('normalizes full Windows path to simple name', () => {
     expect(normalizeWorkspace('C:\\source\\goldfish'))
+      .toBe('goldfish');
+    expect(normalizeWorkspace('C:\\source\\goldfish\\'))
       .toBe('goldfish');
     expect(normalizeWorkspace('C:\\Users\\user\\source\\goldfish'))
       .toBe('goldfish');
@@ -71,6 +79,7 @@ describe('Workspace normalization', () => {
 
 describe('Project-level .memories/ storage', () => {
   const tmpDirs: string[] = [];
+  const originalCwd = process.cwd();
 
   function makeTmpDir(): string {
     const dir = join(tmpdir(), `test-goldfish-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -79,6 +88,8 @@ describe('Project-level .memories/ storage', () => {
   }
 
   afterEach(async () => {
+    process.chdir(originalCwd);
+
     for (const dir of tmpDirs) {
       await rm(dir, { recursive: true, force: true }).catch(() => {});
     }
@@ -131,12 +142,18 @@ describe('Project-level .memories/ storage', () => {
       expect(memoriesStat.isDirectory()).toBe(true);
     });
 
-    it('uses cwd when no arg is provided', () => {
-      // Just verify it doesn't throw and returns the right path shape
-      // We don't actually want to create .memories/ in our project root during tests,
-      // so we only test with explicit paths above. This test verifies the function signature.
-      const dir = getMemoriesDir();
-      expect(dir).toBe(join(process.cwd(), '.memories'));
+    it('uses cwd when no arg is provided', async () => {
+      const tmpDir = makeTmpDir();
+      await Bun.write(join(tmpDir, '.keep'), '');
+      process.chdir(tmpDir);
+
+      await ensureMemoriesDir();
+
+      const memoriesStat = await stat(join(tmpDir, '.memories'));
+      expect(memoriesStat.isDirectory()).toBe(true);
+
+      const plansStat = await stat(join(tmpDir, '.memories', 'plans'));
+      expect(plansStat.isDirectory()).toBe(true);
     });
   });
 });
@@ -172,5 +189,61 @@ describe('resolveWorkspace', () => {
   it('ignores empty string GOLDFISH_WORKSPACE', () => {
     process.env.GOLDFISH_WORKSPACE = '';
     expect(resolveWorkspace()).toBe(process.cwd());
+  });
+});
+
+describe('Semantic cache paths', () => {
+  const originalHome = process.env.HOME;
+  const originalUserProfile = process.env.USERPROFILE;
+
+  afterEach(() => {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+
+    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = originalUserProfile;
+  });
+
+  it('stores semantic cache under ~/.goldfish/cache/semantic', () => {
+    process.env.HOME = '/test/home';
+    delete process.env.USERPROFILE;
+
+    expect(getSemanticCacheDir('/workspace/project'))
+      .toBe(join('/test/home', '.goldfish', 'cache', 'semantic', getSemanticWorkspaceKey('/workspace/project')));
+  });
+
+  it('stores model cache under ~/.goldfish/models/transformers', () => {
+    process.env.HOME = '/test/home';
+    delete process.env.USERPROFILE;
+
+    expect(getModelCacheDir())
+      .toBe(join('/test/home', '.goldfish', 'models', 'transformers'));
+  });
+
+  it('uses the goldfish home directory from HOME or USERPROFILE', () => {
+    process.env.HOME = '/test/home';
+    process.env.USERPROFILE = '/test/profile';
+    expect(getGoldfishHomeDir()).toBe(join('/test/home', '.goldfish'));
+
+    delete process.env.HOME;
+    expect(getGoldfishHomeDir()).toBe(join('/test/profile', '.goldfish'));
+  });
+
+  it('normalizes relative and absolute paths to the same workspace key', () => {
+    const absolutePath = resolve(process.cwd(), 'fixtures/semantic-workspace');
+    const relativePath = './fixtures/semantic-workspace';
+
+    expect(getSemanticWorkspaceKey(relativePath))
+      .toBe(getSemanticWorkspaceKey(absolutePath));
+  });
+
+  it('returns a stable key for the same path and a different key for different paths', () => {
+    const firstPath = resolve('/workspace/one');
+    const secondPath = resolve('/workspace/two');
+
+    expect(getSemanticWorkspaceKey(firstPath))
+      .toBe(getSemanticWorkspaceKey(firstPath));
+    expect(getSemanticWorkspaceKey(firstPath))
+      .not.toBe(getSemanticWorkspaceKey(secondPath));
   });
 });

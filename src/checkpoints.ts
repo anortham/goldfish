@@ -8,6 +8,7 @@
 import { join } from 'path';
 import { readFile, writeFile, readdir, rename, mkdir } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { createHash } from 'crypto';
 import type { Checkpoint, CheckpointInput } from './types';
 import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
 import { getGitContext } from './git';
@@ -15,6 +16,40 @@ import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
 import { getActivePlan } from './plans';
+import { buildRetrievalDigest, DIGEST_VERSION } from './digests';
+import { upsertPendingSemanticRecord } from './semantic-cache';
+
+type SemanticQueueInput = {
+  checkpointId: string;
+  checkpointTimestamp: string;
+  digest: string;
+  digestHash: string;
+  digestVersion: number;
+};
+
+interface CheckpointDependencies {
+  queueSemanticRecord: (workspace: string, input: SemanticQueueInput) => Promise<void>;
+}
+
+const defaultCheckpointDependencies: CheckpointDependencies = {
+  queueSemanticRecord: upsertPendingSemanticRecord
+};
+
+let checkpointDependencies: CheckpointDependencies = defaultCheckpointDependencies;
+
+export function __setCheckpointDependenciesForTests(
+  overrides: Partial<CheckpointDependencies> = {}
+): () => void {
+  const previousDependencies = checkpointDependencies;
+  checkpointDependencies = {
+    ...checkpointDependencies,
+    ...overrides
+  };
+
+  return () => {
+    checkpointDependencies = previousDependencies;
+  };
+}
 
 /**
  * Generate a deterministic checkpoint ID from timestamp and description.
@@ -42,6 +77,25 @@ export function getCheckpointFilename(checkpoint: Checkpoint): string {
   const hash4 = checkpoint.id.replace('checkpoint_', '').slice(0, 4);
 
   return `${hhmmss}_${hash4}.md`;
+}
+
+async function getAvailableCheckpointPath(dateDir: string, checkpoint: Checkpoint): Promise<string> {
+  const baseFilename = getCheckpointFilename(checkpoint);
+  const existingFiles = new Set(await readdir(dateDir));
+
+  if (!existingFiles.has(baseFilename)) {
+    return join(dateDir, baseFilename);
+  }
+
+  let suffix = 1;
+  let candidateFilename = baseFilename.replace(/\.md$/, `_${suffix}.md`);
+
+  while (existingFiles.has(candidateFilename)) {
+    suffix += 1;
+    candidateFilename = baseFilename.replace(/\.md$/, `_${suffix}.md`);
+  }
+
+  return join(dateDir, candidateFilename);
 }
 
 /**
@@ -330,11 +384,10 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
   // Ensure date directory exists
   await mkdir(dateDir, { recursive: true });
 
-  const filename = getCheckpointFilename(checkpoint);
-  const filePath = join(dateDir, filename);
-
   // Use file lock on the date directory to prevent name collisions
   await withLock(dateDir, async () => {
+    const filePath = await getAvailableCheckpointPath(dateDir, checkpoint);
+
     // Atomic write (write to temp file, then rename)
     const tempPath = `${filePath}.tmp.${Date.now()}`;
     const content = formatCheckpoint(checkpoint);
@@ -346,6 +399,21 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
   registerProject(projectPath).catch(() => {
     // Silently ignore registration failures — this is best-effort
   });
+
+  const digest = buildRetrievalDigest(checkpoint);
+  const digestHash = createHash('sha256').update(digest).digest('hex');
+
+  try {
+    await checkpointDependencies.queueSemanticRecord(projectPath, {
+      checkpointId: checkpoint.id,
+      checkpointTimestamp: checkpoint.timestamp,
+      digest,
+      digestHash,
+      digestVersion: DIGEST_VERSION
+    });
+  } catch {
+    // Silently ignore semantic queue failures — checkpoint saves must still succeed
+  }
 
   return checkpoint;
 }

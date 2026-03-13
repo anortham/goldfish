@@ -6,6 +6,7 @@ export interface Checkpoint {
   id: string;             // checkpoint_{hash} unique identifier
   timestamp: string;      // ISO 8601 UTC
   description: string;    // Markdown body
+  workspace?: string;     // Workspace label used in cross-workspace recall results
   type?: 'checkpoint' | 'decision' | 'incident' | 'learning';
   context?: string;
   decision?: string;
@@ -76,6 +77,18 @@ export interface RecallOptions {
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   planId?: string;        // Filter to checkpoints associated with this plan
   _registryDir?: string;  // Internal: override registry dir for test isolation
+  _semanticRuntime?: SemanticRuntime; // Internal: semantic runtime override for test isolation
+}
+
+export interface SemanticRuntime {
+  isReady(): boolean
+  getModelInfo?(): SemanticModelInfo | undefined
+  embedTexts(texts: string[], signal?: AbortSignal): Promise<number[][]>
+}
+
+export interface SemanticModelInfo {
+  id: string
+  version: string
 }
 
 export interface RecallResult {

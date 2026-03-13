@@ -6,11 +6,43 @@
  */
 
 import Fuse from 'fuse.js';
-import type { Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from './types';
+import type { Checkpoint, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
+import { buildCompactSearchDescription, buildRetrievalDigest } from './digests';
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
+import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady } from './semantic-cache';
+import { buildHybridRanking, processPendingSemanticWork } from './semantic';
+import { getDefaultSemanticRuntime } from './transformers-embedder';
 import { resolveWorkspace } from './workspace';
+
+type ReadySemanticRecord = {
+  checkpointId: string;
+  embedding: number[];
+};
+
+type QueryEmbeddingResult =
+  | { ok: true; embedding?: number[] }
+  | { ok: false; error: unknown };
+
+const SEARCH_SEMANTIC_MAINTENANCE_LIMIT = 3;
+const SEARCH_SEMANTIC_MAINTENANCE_MS = 150;
+const SEARCH_SEMANTIC_MODEL = {
+  id: 'semantic-search-runtime',
+  version: '1'
+};
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function warnSemanticFailure(context: string, error: unknown): void {
+  console.warn(`[goldfish] ${context}: ${describeError(error)}`);
+}
 
 /**
  * Parse human-friendly time spans or ISO timestamps
@@ -139,7 +171,203 @@ function getDateRange(options: RecallOptions): { from: string; to: string } {
  * When none are set, recall uses "last N checkpoints" mode instead of a date window.
  */
 function hasDateParams(options: RecallOptions): boolean {
-  return !!(options.since || options.days || options.from || options.to);
+  return (
+    options.since !== undefined ||
+    options.days !== undefined ||
+    options.from !== undefined ||
+    options.to !== undefined
+  );
+}
+
+async function loadWorkspaceCheckpoints(workspace: string, options: RecallOptions): Promise<Checkpoint[]> {
+  let checkpoints: Checkpoint[];
+  if (hasDateParams(options)) {
+    const { from, to } = getDateRange(options);
+    checkpoints = await getCheckpointsForDateRange(workspace, from, to);
+  } else {
+    const earlyLimit = options.search ? undefined : (options.limit !== undefined ? options.limit : 5);
+    checkpoints = await getAllCheckpoints(workspace, earlyLimit);
+  }
+
+  if (options.planId) {
+    checkpoints = checkpoints.filter(cp => cp.planId === options.planId);
+  }
+
+  return checkpoints;
+}
+
+function buildLexicalSearchCandidates(
+  checkpoints: Checkpoint[],
+  digests: Record<string, string>
+): Checkpoint[] {
+  return checkpoints.map(checkpoint => ({
+    ...checkpoint,
+    description: digests[checkpoint.id] ?? checkpoint.description
+  }));
+}
+
+async function loadReadySemanticRecords(
+  workspace: string,
+  checkpoints: Checkpoint[],
+  runtime?: RecallOptions['_semanticRuntime']
+): Promise<ReadySemanticRecord[]> {
+  if (checkpoints.length === 0) {
+    return [];
+  }
+
+  const modelInfo = runtime?.getModelInfo?.();
+  if (modelInfo) {
+    await invalidateSemanticRecordsForModelVersion(workspace, modelInfo);
+  }
+
+  const checkpointIds = new Set(checkpoints.map(checkpoint => checkpoint.id));
+  const state = await loadSemanticState(workspace);
+
+  return state.records
+    .filter(record =>
+      record.status === 'ready' &&
+      Array.isArray(record.embedding) &&
+      checkpointIds.has(record.checkpointId)
+    )
+    .map(record => ({
+      checkpointId: record.checkpointId,
+      embedding: record.embedding!
+    }));
+}
+
+async function runSearchSemanticMaintenance(
+  workspaces: string[],
+  runtime: RecallOptions['_semanticRuntime'],
+  wasWarm: boolean
+): Promise<void> {
+  if (!runtime || !wasWarm) {
+    return;
+  }
+
+  const seenWorkspaces = new Set<string>();
+  let processed = 0;
+  const startedAt = Date.now();
+
+  try {
+    for (const workspace of workspaces) {
+      if (seenWorkspaces.has(workspace)) {
+        continue;
+      }
+
+      seenWorkspaces.add(workspace);
+
+      if (processed >= SEARCH_SEMANTIC_MAINTENANCE_LIMIT) {
+        return;
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      const remainingMs = SEARCH_SEMANTIC_MAINTENANCE_MS - elapsedMs;
+      if (remainingMs <= 0) {
+        return;
+      }
+
+      const pending = await listPendingSemanticRecords(workspace);
+      if (pending.length === 0) {
+        continue;
+      }
+
+      const result = await processPendingSemanticWork({
+        pending,
+        maxItems: SEARCH_SEMANTIC_MAINTENANCE_LIMIT - processed,
+        maxMs: remainingMs,
+        embed: async (texts: string[], signal?: AbortSignal) => await runtime.embedTexts(texts, signal),
+        save: async (checkpointId: string, embedding: number[]) => {
+          await markSemanticRecordReady(
+            workspace,
+            checkpointId,
+            embedding,
+            runtime.getModelInfo?.() ?? SEARCH_SEMANTIC_MODEL
+          );
+        }
+      });
+
+      processed += result.processed;
+    }
+  } catch (error) {
+    warnSemanticFailure('semantic maintenance failed', error);
+    return;
+  }
+}
+
+async function rankSearchCheckpoints(
+  query: string,
+  checkpoints: Checkpoint[],
+  digests: Record<string, string>,
+  readyRecords: ReadySemanticRecord[],
+  runtime?: RecallOptions['_semanticRuntime'],
+  queryEmbeddingPromise?: Promise<QueryEmbeddingResult>
+): Promise<Checkpoint[]> {
+  const checkpointsById = new Map(checkpoints.map(checkpoint => [checkpoint.id, checkpoint]));
+  const lexicalRanked = searchCheckpoints(
+    query,
+    buildLexicalSearchCandidates(checkpoints, digests)
+  );
+  const lexicalOrder = lexicalRanked.map(checkpoint => checkpoint.id);
+
+  if (!runtime) {
+    return lexicalRanked
+      .map(checkpoint => checkpointsById.get(checkpoint.id))
+      .filter((checkpoint): checkpoint is Checkpoint => Boolean(checkpoint));
+  }
+
+  const candidateIds = new Set<string>([
+    ...lexicalOrder,
+    ...readyRecords.map(record => record.checkpointId)
+  ]);
+  const candidateCheckpoints = checkpoints.filter(checkpoint => candidateIds.has(checkpoint.id));
+
+  if (candidateCheckpoints.length === 0) {
+    return [];
+  }
+
+  try {
+    const queryEmbeddingResult = queryEmbeddingPromise ? await queryEmbeddingPromise : undefined;
+    if (queryEmbeddingResult && !queryEmbeddingResult.ok) {
+      throw queryEmbeddingResult.error;
+    }
+
+    const queryEmbedding = queryEmbeddingResult?.embedding;
+
+    return await buildHybridRanking({
+      query,
+      checkpoints: candidateCheckpoints,
+      lexicalOrder,
+      digests,
+      readyRecords,
+      runtime,
+      ...(queryEmbedding ? { queryEmbedding } : {})
+    });
+  } catch {
+    return lexicalRanked
+      .map(checkpoint => checkpointsById.get(checkpoint.id))
+      .filter((checkpoint): checkpoint is Checkpoint => Boolean(checkpoint));
+  }
+}
+
+function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Checkpoint {
+  const description = options.search && !options.full
+    ? buildCompactSearchDescription(checkpoint)
+    : (!options.full && checkpoint.summary)
+      ? checkpoint.summary
+      : checkpoint.description;
+
+  const { summary, ...cleanCheckpoint } = checkpoint;
+  const withDescription = {
+    ...cleanCheckpoint,
+    description
+  };
+
+  if (!options.full) {
+    const { git, ...minimal } = withDescription;
+    return minimal;
+  }
+
+  return withDescription;
 }
 
 /**
@@ -148,46 +376,38 @@ function hasDateParams(options: RecallOptions): boolean {
 async function recallFromWorkspace(
   workspace: string,
   options: RecallOptions
-): Promise<{ checkpoints: Checkpoint[]; activePlan: any }> {
-  // When no date params: load all checkpoints (newest first), limited by `limit`.
-  // When date params: use date-range filtering as before.
-  let checkpoints: Checkpoint[];
-  if (hasDateParams(options)) {
-    const { from, to } = getDateRange(options);
-    checkpoints = await getCheckpointsForDateRange(workspace, from, to);
-  } else {
-    // Pass limit for early termination (but not when searching — need all for fuse.js)
-    const earlyLimit = options.search ? undefined : (options.limit !== undefined ? options.limit : 5);
-    checkpoints = await getAllCheckpoints(workspace, earlyLimit);
-  }
+): Promise<{ checkpoints: Checkpoint[]; activePlan: Plan | null }> {
+  let checkpoints = await loadWorkspaceCheckpoints(workspace, options);
 
-  // Apply fuzzy search filter if provided
   if (options.search) {
-    checkpoints = searchCheckpoints(options.search, checkpoints);
-  }
+    const semanticRuntime = options._semanticRuntime ?? getDefaultSemanticRuntime();
+    const wasWarm = semanticRuntime.isReady();
+    const queryEmbeddingPromise = semanticRuntime
+      .embedTexts([options.search])
+      .then(embeddings => ({ ok: true, embedding: embeddings[0] } as QueryEmbeddingResult))
+      .catch(error => ({ ok: false, error } as QueryEmbeddingResult));
+    const digests = Object.fromEntries(
+      checkpoints.map(checkpoint => [checkpoint.id, buildRetrievalDigest(checkpoint)])
+    );
 
-  // Filter by planId if specified
-  if (options.planId) {
-    checkpoints = checkpoints.filter(cp => cp.planId === options.planId);
-  }
+    if (wasWarm) {
+      await runSearchSemanticMaintenance([workspace], semanticRuntime, true);
+    }
 
-  // Apply summary filtering (default: return summaries, not full descriptions)
-  // BUT: Always return full descriptions for search results (so users see why it matched)
-  if (!options.full && !options.search) {
-    checkpoints = checkpoints.map(checkpoint => {
-      if (checkpoint.summary) {
-        // Return checkpoint with summary as description
-        return {
-          ...checkpoint,
-          description: checkpoint.summary
-        };
-      }
-      return checkpoint;
-    });
-  }
+    const readyRecords = await loadReadySemanticRecords(workspace, checkpoints, semanticRuntime);
+    checkpoints = await rankSearchCheckpoints(
+      options.search,
+      checkpoints,
+      digests,
+      readyRecords,
+      semanticRuntime,
+      queryEmbeddingPromise
+    );
 
-  // Sort by timestamp descending (newest first) — but preserve fuse.js relevance order for searches
-  if (!options.search) {
+    if (!wasWarm) {
+      await runSearchSemanticMaintenance([workspace], semanticRuntime, false);
+    }
+  } else {
     checkpoints = checkpoints.sort((a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
@@ -195,19 +415,7 @@ async function recallFromWorkspace(
 
   const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
   checkpoints = limit > 0 ? checkpoints.slice(0, limit) : [];
-
-  // Strip metadata fields based on full flag
-  checkpoints = checkpoints.map(checkpoint => {
-    const { summary, ...cleanCheckpoint } = checkpoint;
-
-    // Strip verbose metadata unless full: true
-    if (!options.full) {
-      const { git, ...minimal } = cleanCheckpoint;
-      return minimal;
-    }
-
-    return cleanCheckpoint;
-  });
+  checkpoints = checkpoints.map(checkpoint => presentCheckpoint(checkpoint, options));
 
   // Get active plan
   const activePlan = await getActivePlan(workspace);
@@ -244,6 +452,115 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   // Short-circuit: limit=0 means plan-only, skip all project I/O
   if (globalLimit === 0) {
     return { checkpoints: [], workspaces: [] };
+  }
+
+  if (options.search) {
+    const semanticRuntime = options._semanticRuntime ?? getDefaultSemanticRuntime();
+    const wasWarm = semanticRuntime.isReady();
+    const queryEmbeddingPromise = semanticRuntime
+      .embedTexts([options.search])
+      .then(embeddings => ({ ok: true, embedding: embeddings[0] } as QueryEmbeddingResult))
+      .catch(error => ({ ok: false, error } as QueryEmbeddingResult));
+
+    if (wasWarm) {
+      await runSearchSemanticMaintenance(
+        projects.map(project => project.path),
+        semanticRuntime,
+        true
+      );
+    }
+
+    const projectResults = await Promise.all(
+      projects.map(async (project) => {
+        const checkpoints = await loadWorkspaceCheckpoints(project.path, options);
+        const readyRecords = await loadReadySemanticRecords(project.path, checkpoints, semanticRuntime);
+
+        return {
+          project,
+          checkpoints,
+          readyRecords
+        };
+      })
+    );
+
+    const workspaceSummaries: WorkspaceSummary[] = [];
+    const syntheticToCheckpoint = new Map<string, { checkpoint: Checkpoint; workspace: string }>();
+    const rankedCandidates: Checkpoint[] = [];
+    const readyRecords: ReadySemanticRecord[] = [];
+    const digests: Record<string, string> = {};
+
+    for (const { project, checkpoints, readyRecords: projectReadyRecords } of projectResults) {
+      if (checkpoints.length === 0) {
+        continue;
+      }
+
+      const lastActivity = checkpoints
+        .map(c => c.timestamp)
+        .filter(Boolean)
+        .sort()
+        .pop();
+
+      workspaceSummaries.push({
+        name: project.name,
+        path: project.path,
+        checkpointCount: checkpoints.length,
+        ...(lastActivity ? { lastActivity } : {})
+      });
+
+      for (const checkpoint of checkpoints) {
+        const syntheticId = `${project.path}::${checkpoint.id}`;
+        syntheticToCheckpoint.set(syntheticId, {
+          checkpoint,
+          workspace: project.name
+        });
+        rankedCandidates.push({
+          ...checkpoint,
+          id: syntheticId
+        });
+        digests[syntheticId] = buildRetrievalDigest(checkpoint);
+      }
+
+      for (const record of projectReadyRecords) {
+        readyRecords.push({
+          checkpointId: `${project.path}::${record.checkpointId}`,
+          embedding: record.embedding
+        });
+      }
+    }
+
+    const ranked = await rankSearchCheckpoints(
+      options.search,
+      rankedCandidates,
+      digests,
+      readyRecords,
+      semanticRuntime,
+      queryEmbeddingPromise
+    );
+
+    if (!wasWarm) {
+      await runSearchSemanticMaintenance(
+        projects.map(project => project.path),
+        semanticRuntime,
+        false
+      );
+    }
+
+    return {
+      checkpoints: ranked
+        .slice(0, globalLimit)
+        .map(checkpoint => {
+          const original = syntheticToCheckpoint.get(checkpoint.id);
+          if (!original) {
+            return checkpoint;
+          }
+
+          return presentCheckpoint({
+            ...original.checkpoint,
+            workspace: original.workspace
+          }, options);
+        }),
+      workspaces: workspaceSummaries
+    };
   }
 
   // Fetch from all registered projects in parallel.

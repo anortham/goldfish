@@ -4,6 +4,7 @@
 
 import { saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
+import type { CheckpointInput } from '../types.js';
 import { resolveWorkspace } from '../workspace.js';
 
 /**
@@ -34,8 +35,7 @@ export async function handleCheckpoint(args: any) {
     decision,
     impact,
     next,
-    confidence,
-    unknowns
+    confidence
   } = args;
 
   // Coerce array params that may arrive as JSON strings from MCP
@@ -43,6 +43,7 @@ export async function handleCheckpoint(args: any) {
   const alternatives = coerceArray(args.alternatives);
   const evidence = coerceArray(args.evidence);
   const symbols = coerceArray(args.symbols);
+  const unknowns = coerceArray(args.unknowns);
 
   if (!description) {
     throw new Error('Description is required');
@@ -57,21 +58,23 @@ export async function handleCheckpoint(args: any) {
     }
   }
 
-  const checkpoint = await saveCheckpoint({
+  const checkpointInput: CheckpointInput = {
     description,
-    tags,
-    type,
-    context,
-    decision,
-    alternatives,
-    impact,
-    evidence,
-    symbols,
-    next,
-    confidence,
-    unknowns,
+    ...(tags ? { tags } : {}),
+    ...(type ? { type } : {}),
+    ...(context ? { context } : {}),
+    ...(decision ? { decision } : {}),
+    ...(alternatives ? { alternatives } : {}),
+    ...(impact ? { impact } : {}),
+    ...(evidence ? { evidence } : {}),
+    ...(symbols ? { symbols } : {}),
+    ...(next ? { next } : {}),
+    ...(confidence !== undefined ? { confidence: Number(confidence) } : {}),
+    ...(unknowns ? { unknowns } : {}),
     workspace: ws
-  });
+  };
+
+  const checkpoint = await saveCheckpoint(checkpointInput);
 
   // Build readable markdown response
   const MAX_FILES = 10;

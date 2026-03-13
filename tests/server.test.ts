@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { saveCheckpoint } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
+import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir } from '../src/workspace';
 import { rm, mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -10,6 +11,20 @@ import { join } from 'path';
 // in tests is complex. We'll validate tool handlers work correctly.
 
 let TEST_DIR: string;
+
+const TEST_DEFAULT_RUNTIME = {
+  isReady: () => false,
+  getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
+  embedTexts: async () => [[1, 0]]
+};
+
+beforeAll(() => {
+  setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
+});
+
+afterAll(() => {
+  setDefaultSemanticRuntime(undefined);
+});
 
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-server-'));

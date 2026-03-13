@@ -5,8 +5,10 @@
  * its memories in a local .memories/ directory.
  */
 
-import { join } from 'path';
+import { createHash } from 'crypto';
 import { mkdir } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join, resolve } from 'path';
 
 /**
  * Normalize a workspace identifier (path or name) to a simple name
@@ -27,6 +29,8 @@ export function normalizeWorkspace(pathOrName: string): string {
   }
   // Handle file paths (Unix or Windows)
   else if (name.includes('/') || name.includes('\\')) {
+    name = name.replace(/[/\\]+$/, '');
+
     // Get last path component
     name = name.replace(/^.*[/\\]/, '');
   }
@@ -76,6 +80,34 @@ export function getMemoriesDir(projectPath?: string): string {
  */
 export function getPlansDir(projectPath?: string): string {
   return join(getMemoriesDir(projectPath), 'plans');
+}
+
+export function getGoldfishHomeDir(): string {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || tmpdir();
+  return join(homeDir, '.goldfish');
+}
+
+export function getModelCacheDir(): string {
+  return join(getGoldfishHomeDir(), 'models', 'transformers');
+}
+
+export function getSemanticWorkspaceKey(projectPath: string): string {
+  const normalizedPath = resolve(projectPath);
+
+  return createHash('sha256')
+    .update(normalizedPath)
+    .digest('hex')
+    .slice(0, 12);
+}
+
+export function getSemanticCacheDir(projectPath?: string): string {
+  const workspacePath = resolveWorkspace(projectPath);
+  return join(
+    getGoldfishHomeDir(),
+    'cache',
+    'semantic',
+    getSemanticWorkspaceKey(workspacePath)
+  );
 }
 
 /**

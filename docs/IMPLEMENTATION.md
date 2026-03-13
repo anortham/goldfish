@@ -1,4 +1,4 @@
-# Goldfish v5.0.0 - Implementation Specification
+# Goldfish v5.7.0 - Implementation Specification
 
 ## Design Philosophy
 
@@ -24,6 +24,8 @@
   .active-plan                 # Active plan ID
 
 ~/.goldfish/registry.json      # Cross-project registry
+~/.goldfish/cache/semantic/    # Derived semantic manifest + JSONL records
+~/.goldfish/models/transformers/ # Local embedding model cache
 ```
 
 ### Core Principles
@@ -32,6 +34,7 @@
 3. **Project-local storage** (git-committable)
 4. **Cross-project via registry** (~/.goldfish/registry.json)
 5. **Atomic writes** (write-then-rename with locking)
+6. **Derived semantic cache stays rebuildable** (JSON/JSONL outside `.memories/`)
 
 ---
 
@@ -131,6 +134,10 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 | `src/checkpoints.ts` | YAML frontmatter individual files, `generateCheckpointId()`, `saveCheckpoint()`, `getCheckpointsForDay()`, `getCheckpointsForDateRange()` |
 | `src/plans.ts` | Plan CRUD, active plan tracking |
 | `src/recall.ts` | Search (fuse.js), aggregation, cross-project recall via registry |
+| `src/digests.ts` | Compact retrieval digests for lexical search and compact result presentation |
+| `src/semantic-cache.ts` | Derived semantic manifest/records storage under `~/.goldfish/cache/semantic/` |
+| `src/semantic.ts` | Hybrid ranking and bounded semantic maintenance helpers |
+| `src/transformers-embedder.ts` | Lazy local embedding runtime backed by `@huggingface/transformers` |
 | `src/registry.ts` | `~/.goldfish/registry.json` management, auto-registration, stale filtering |
 | `src/git.ts` | Git context capture (branch, commit, files) |
 | `src/lock.ts` | File locking for concurrent writes |
@@ -153,6 +160,7 @@ goldfish/
 ├── skills/
 │   ├── recall/SKILL.md
 │   ├── checkpoint/SKILL.md
+│   ├── plan/SKILL.md
 │   ├── standup/SKILL.md
 │   └── plan-status/SKILL.md
 ├── hooks/hooks.json
@@ -181,6 +189,19 @@ This is a deliberate recalibration. The original aggressive language (from Tusk 
 - **Last-N mode** (default): When no date parameters are provided, returns the last `limit` checkpoints (default: 5) regardless of age. No date window.
 - **Date-window mode**: When `days`, `since`, `from`, or `to` is provided, filters checkpoints to that date range.
 
+**Phase 1 hybrid recall flow:**
+1. Load markdown checkpoints from `.memories/` and build compact retrieval digests.
+2. Run Fuse lexical search over those digests so default search stays fast and token-efficient.
+3. If the semantic runtime is already warm, load ready embeddings from the derived cache and blend lexical, semantic, metadata, and recency signals into a hybrid ranking.
+4. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
+5. After search, do bounded semantic maintenance only while time budget remains: at most 3 records and ~150ms per recall pass.
+
+**Bounded maintenance details:**
+- Pending semantic work is queued on checkpoint save.
+- Search-triggered maintenance is best-effort only; recall still succeeds if embedding work fails.
+- Model-version invalidation marks derived records stale without touching checkpoint markdown.
+- Semantic cache and model downloads live under `~/.goldfish/`, outside `.memories/`, and can be rebuilt from source markdown.
+
 Recall runs **automatically at session start** via the SessionStart hook. Users can also invoke `/recall` manually for targeted queries (search, cross-project, time ranges).
 
 ### Plan Tool
@@ -198,7 +219,7 @@ Based on lessons from previous iterations:
 - **Don't scan directories repeatedly** (cache workspace list, invalidate on write)
 - **Don't add database** (we're going simpler this time)
 - **Don't try to be smart about deduplication** (let Claude handle that)
-- **Don't add confidence scores** (unnecessary complexity)
+- **Don't add redundant scoring fields without evidence** (confidence is already part of the checkpoint schema; avoid piling on more metadata)
 
 ---
 
@@ -220,7 +241,7 @@ We achieve this through:
 
 ## Implementation Status
 
-### Complete - v5.0.0
+### Complete - v5.7.0
 
 **ALL MODULES IMPLEMENTED AND TESTED**
 
@@ -235,7 +256,7 @@ We achieve this through:
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
 
-**Total: 265 tests passing | ~2,094 lines of production code | 3 runtime dependencies**
+**Current architecture:** markdown source data in-project, derived semantic cache in `~/.goldfish/cache/semantic/`, and 4 runtime dependencies (`@huggingface/transformers`, `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`).
 
 ---
 

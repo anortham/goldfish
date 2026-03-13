@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { handleCheckpoint } from '../src/handlers/checkpoint';
 import { handleRecall } from '../src/handlers/recall';
 import { handlePlan } from '../src/handlers/plan';
-import { saveCheckpoint } from '../src/checkpoints';
+import { getCheckpointsForDay, saveCheckpoint } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
+import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir } from '../src/workspace';
 import { rm } from 'fs/promises';
 import { mkdtemp } from 'fs/promises';
@@ -18,6 +19,20 @@ import { join } from 'path';
  */
 
 let TEST_DIR: string;
+
+const TEST_DEFAULT_RUNTIME = {
+  isReady: () => false,
+  getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
+  embedTexts: async () => [[1, 0]]
+};
+
+beforeAll(() => {
+  setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
+});
+
+afterAll(() => {
+  setDefaultSemanticRuntime(undefined);
+});
 
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-handlers-'));
@@ -81,7 +96,7 @@ describe('Readable markdown responses', () => {
       expect(text).not.toContain('Tags:');
     });
 
-    it('caps files at 10 with overflow indicator', async () => {
+    it('formats files line sensibly when git files are present', async () => {
       // We can't easily mock git files, but we can verify the format handles it
       const result = await handleCheckpoint({
         description: 'Files test',
@@ -235,6 +250,20 @@ describe('Readable markdown responses', () => {
       // Should not warn about missing evidence
       expect(text).not.toContain('consider adding');
     });
+
+    it('persists unknowns passed as JSON string', async () => {
+      await handleCheckpoint({
+        description: 'String unknowns checkpoint',
+        unknowns: '["Whether the rollout needs a flag"]',
+        workspace: TEST_DIR
+      });
+
+      const date = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, date);
+
+      expect(checkpoints).toHaveLength(1);
+      expect(checkpoints[0]!.unknowns).toEqual(['Whether the rollout needs a flag']);
+    });
   });
 
   describe('recall handler', () => {
@@ -336,19 +365,21 @@ describe('Readable markdown responses', () => {
 
     it('returns readable message when no checkpoints found', async () => {
       const emptyDir = await mkdtemp(join(tmpdir(), 'test-handlers-empty-'));
-      await ensureMemoriesDir(emptyDir);
+      try {
+        await ensureMemoriesDir(emptyDir);
 
-      const result = await handleRecall({
-        workspace: emptyDir,
-        days: 1
-      });
+        const result = await handleRecall({
+          workspace: emptyDir,
+          days: 1
+        });
 
-      const text = result.content[0]!.text;
+        const text = result.content[0]!.text;
 
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] No checkpoints found/);
-      expect(text).not.toStartWith('{');
-
-      await rm(emptyDir, { recursive: true, force: true });
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] No checkpoints found/);
+        expect(text).not.toStartWith('{');
+      } finally {
+        await rm(emptyDir, { recursive: true, force: true });
+      }
     });
 
     it('shows planId in checkpoint output when present', async () => {
@@ -394,10 +425,13 @@ describe('Readable markdown responses', () => {
         type: 'decision',
         context: 'Need to simplify auth retry behavior',
         decision: 'Use bounded retries with jitter',
+        alternatives: ['Disable retries', 'Keep unbounded backoff'],
+        evidence: ['Staging retry logs', 'Support escalation notes'],
         impact: 'Reduced retry storms in staging',
         symbols: ['retryAuthRequest'],
         next: 'Track retry metrics for one week',
-        confidence: 4
+        confidence: 4,
+        unknowns: ['Whether mobile clients need longer retry windows']
       });
 
       const result = await handleRecall({
@@ -410,10 +444,66 @@ describe('Readable markdown responses', () => {
       expect(text).toContain('Type: decision');
       expect(text).toContain('Context: Need to simplify auth retry behavior');
       expect(text).toContain('Decision: Use bounded retries with jitter');
+      expect(text).toContain('Alternatives: Disable retries, Keep unbounded backoff');
+      expect(text).toContain('Evidence: Staging retry logs, Support escalation notes');
       expect(text).toContain('Impact: Reduced retry storms in staging');
       expect(text).toContain('Symbols: retryAuthRequest');
       expect(text).toContain('Next: Track retry metrics for one week');
       expect(text).toContain('Confidence: 4/5');
+      expect(text).toContain('Unknowns: Whether mobile clients need longer retry windows');
+    });
+
+    it('tightens non-full search defaults to 3 checkpoint sections', async () => {
+      for (let i = 0; i < 4; i++) {
+        await saveCheckpoint({
+          description: `Searchable checkpoint ${i}`,
+          workspace: TEST_DIR
+        });
+      }
+
+      const result = await handleRecall({
+        workspace: TEST_DIR,
+        search: 'checkpoint'
+      });
+
+      const text = result.content[0]!.text;
+      expect(text.match(/^### /gm)?.length).toBe(3);
+    });
+
+    it('respects explicit limit for search requests', async () => {
+      for (let i = 0; i < 4; i++) {
+        await saveCheckpoint({
+          description: `Explicit limit checkpoint ${i}`,
+          workspace: TEST_DIR
+        });
+      }
+
+      const result = await handleRecall({
+        workspace: TEST_DIR,
+        search: 'checkpoint',
+        limit: 4
+      });
+
+      const text = result.content[0]!.text;
+      expect(text.match(/^### /gm)?.length).toBe(4);
+    });
+
+    it('does not tighten full search requests', async () => {
+      for (let i = 0; i < 4; i++) {
+        await saveCheckpoint({
+          description: `Full search checkpoint ${i}`,
+          workspace: TEST_DIR
+        });
+      }
+
+      const result = await handleRecall({
+        workspace: TEST_DIR,
+        search: 'checkpoint',
+        full: true
+      });
+
+      const text = result.content[0]!.text;
+      expect(text.match(/^### /gm)?.length).toBe(5);
     });
   });
 
@@ -544,38 +634,40 @@ describe('Readable markdown responses', () => {
 
       it('filters by status', async () => {
         const filterDir = await mkdtemp(join(tmpdir(), 'test-handlers-filter-'));
-        await ensureMemoriesDir(filterDir);
+        try {
+          await ensureMemoriesDir(filterDir);
 
-        await savePlan({
-          id: 'active-plan',
-          title: 'Active',
-          content: 'Content',
-          workspace: filterDir,
-          status: 'active'
-        });
+          await savePlan({
+            id: 'active-plan',
+            title: 'Active',
+            content: 'Content',
+            workspace: filterDir,
+            status: 'active'
+          });
 
-        await savePlan({
-          id: 'completed-plan',
-          title: 'Completed',
-          content: 'Content',
-          workspace: filterDir,
-          status: 'completed'
-        });
+          await savePlan({
+            id: 'completed-plan',
+            title: 'Completed',
+            content: 'Content',
+            workspace: filterDir,
+            status: 'completed'
+          });
 
-        const result = await handlePlan({
-          action: 'list',
-          status: 'completed',
-          workspace: filterDir
-        });
+          const result = await handlePlan({
+            action: 'list',
+            status: 'completed',
+            workspace: filterDir
+          });
 
-        const text = result.content[0]!.text;
+          const text = result.content[0]!.text;
 
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 1 plan/);
-        expect(text).toContain('completed-plan');
-        expect(text).toContain('Completed');
-        expect(text).not.toContain('active-plan');
-
-        await rm(filterDir, { recursive: true, force: true });
+          expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 1 plan/);
+          expect(text).toContain('completed-plan');
+          expect(text).toContain('Completed');
+          expect(text).not.toContain('active-plan');
+        } finally {
+          await rm(filterDir, { recursive: true, force: true });
+        }
       });
 
       it('returns message when no plans found', async () => {
