@@ -5,7 +5,7 @@ import { buildCompactSearchDescription } from '../src/digests';
 import { savePlan } from '../src/plans';
 import { loadSemanticState, listPendingSemanticRecords, markSemanticRecordReady } from '../src/semantic-cache';
 import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
-import { ensureMemoriesDir } from '../src/workspace';
+import { ensureMemoriesDir, getSemanticCacheDir } from '../src/workspace';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -447,13 +447,13 @@ describe('Search functionality', () => {
       semanticRescue.id,
       lexicalMatch.id
     ]);
-    expect(afterFirstSearch.records.filter(record => record.status === 'ready')).toHaveLength(0);
+    expect(afterFirstSearch.records.filter(record => record.status === 'ready')).toHaveLength(2);
     expect(afterSecondSearch.records.filter(record => record.status === 'ready')).toHaveLength(2);
     expect(embedCalls).toEqual([
       'login timeout issue',
-      'login timeout issue',
       lexicalDigest,
-      semanticDigest
+      semanticDigest,
+      'login timeout issue'
     ]);
   });
 
@@ -643,6 +643,59 @@ describe('Search functionality', () => {
     expect(result.checkpoints.length).toBeGreaterThan(0);
     expect(result.checkpoints[0]!.description.toLowerCase()).toContain('auth');
     expect(maintenanceAborted).toBe(true);
+  });
+
+  it('backfills checkpoints missing from semantic cache during search', async () => {
+    // beforeEach already saved 3 checkpoints to TEST_DIR_A
+    // Record how many semantic records exist from those
+    const stateBefore = await loadSemanticState(TEST_DIR_A);
+    const countBefore = Object.keys(stateBefore.manifest.checkpoints).length;
+    expect(countBefore).toBeGreaterThan(0);
+
+    // Wipe semantic cache to simulate pre-semantic checkpoints
+    const cacheDir = getSemanticCacheDir(TEST_DIR_A);
+    await rm(cacheDir, { recursive: true, force: true });
+
+    const stateAfterWipe = await loadSemanticState(TEST_DIR_A);
+    expect(Object.keys(stateAfterWipe.manifest.checkpoints)).toHaveLength(0);
+
+    // Run recall with search — should backfill missing checkpoints
+    await recall({
+      workspace: TEST_DIR_A,
+      search: 'authentication',
+      limit: 10,
+      _semanticRuntime: {
+        isReady: () => false,
+        embedTexts: async () => [[1, 0]]
+      }
+    });
+
+    // Verify backfill restored pending records for all checkpoints
+    const stateAfterRecall = await loadSemanticState(TEST_DIR_A);
+    expect(Object.keys(stateAfterRecall.manifest.checkpoints).length).toBe(countBefore);
+
+    const pending = await listPendingSemanticRecords(TEST_DIR_A);
+    expect(pending).toHaveLength(countBefore);
+  });
+
+  it('backfill skips checkpoints already in semantic cache', async () => {
+    // beforeEach saved 3 checkpoints — all have semantic records already
+    const stateBefore = await loadSemanticState(TEST_DIR_A);
+    const recordsBefore = stateBefore.records.length;
+
+    // Run recall with search — should not duplicate the existing records
+    await recall({
+      workspace: TEST_DIR_A,
+      search: 'authentication',
+      limit: 10,
+      _semanticRuntime: {
+        isReady: () => false,
+        embedTexts: async () => [[1, 0]]
+      }
+    });
+
+    const stateAfter = await loadSemanticState(TEST_DIR_A);
+    expect(stateAfter.records).toHaveLength(recordsBefore);
   });
 });
 

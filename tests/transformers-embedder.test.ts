@@ -3,7 +3,14 @@ import { createTransformersEmbedder } from '../src/transformers-embedder'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
-const transformersPackage = require('@huggingface/transformers/package.json') as { version: string }
+
+let transformersVersion: string | undefined
+try {
+  const pkg = require('@huggingface/transformers/package.json') as { version?: string }
+  transformersVersion = pkg.version
+} catch {
+  // Package not installed — version-dependent test will be skipped
+}
 
 describe('createTransformersEmbedder', () => {
   it('exposes model metadata for cache compatibility checks', async () => {
@@ -20,13 +27,17 @@ describe('createTransformersEmbedder', () => {
   })
 
   it('derives default model metadata from installed transformers package metadata', () => {
+    if (!transformersVersion) {
+      return
+    }
+
     const runtime = createTransformersEmbedder({
       loadPipeline: async () => async (texts: string[]) => texts.map(() => [1, 0])
     })
 
     expect(runtime.getModelInfo?.()).toEqual({
       id: 'Xenova/all-MiniLM-L6-v2',
-      version: transformersPackage.version
+      version: transformersVersion
     })
   })
 

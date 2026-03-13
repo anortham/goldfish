@@ -5,13 +5,14 @@
  * with fuzzy search powered by fuse.js
  */
 
+import { createHash } from 'crypto';
 import Fuse from 'fuse.js';
 import type { Checkpoint, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
-import { buildCompactSearchDescription, buildRetrievalDigest } from './digests';
+import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } from './digests';
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
-import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady } from './semantic-cache';
+import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady, upsertPendingSemanticRecord } from './semantic-cache';
 import { buildHybridRanking, processPendingSemanticWork } from './semantic';
 import { getDefaultSemanticRuntime } from './transformers-embedder';
 import { resolveWorkspace } from './workspace';
@@ -237,10 +238,9 @@ async function loadReadySemanticRecords(
 
 async function runSearchSemanticMaintenance(
   workspaces: string[],
-  runtime: RecallOptions['_semanticRuntime'],
-  wasWarm: boolean
+  runtime: RecallOptions['_semanticRuntime']
 ): Promise<void> {
-  if (!runtime || !wasWarm) {
+  if (!runtime || !runtime.isReady()) {
     return;
   }
 
@@ -291,6 +291,36 @@ async function runSearchSemanticMaintenance(
   } catch (error) {
     warnSemanticFailure('semantic maintenance failed', error);
     return;
+  }
+}
+
+async function backfillMissingSemanticRecords(
+  workspace: string,
+  checkpoints: Checkpoint[]
+): Promise<void> {
+  if (checkpoints.length === 0) {
+    return;
+  }
+
+  try {
+    const state = await loadSemanticState(workspace);
+    const knownIds = new Set(Object.keys(state.manifest.checkpoints));
+    const missing = checkpoints.filter(checkpoint => !knownIds.has(checkpoint.id));
+
+    for (const checkpoint of missing) {
+      const digest = buildRetrievalDigest(checkpoint);
+      const digestHash = createHash('sha256').update(digest).digest('hex');
+
+      await upsertPendingSemanticRecord(workspace, {
+        checkpointId: checkpoint.id,
+        checkpointTimestamp: checkpoint.timestamp,
+        digest,
+        digestHash,
+        digestVersion: DIGEST_VERSION
+      });
+    }
+  } catch {
+    // Silently ignore — backfill is best-effort
   }
 }
 
@@ -390,8 +420,10 @@ async function recallFromWorkspace(
       checkpoints.map(checkpoint => [checkpoint.id, buildRetrievalDigest(checkpoint)])
     );
 
+    await backfillMissingSemanticRecords(workspace, checkpoints);
+
     if (wasWarm) {
-      await runSearchSemanticMaintenance([workspace], semanticRuntime, true);
+      await runSearchSemanticMaintenance([workspace], semanticRuntime);
     }
 
     const readyRecords = await loadReadySemanticRecords(workspace, checkpoints, semanticRuntime);
@@ -405,7 +437,7 @@ async function recallFromWorkspace(
     );
 
     if (!wasWarm) {
-      await runSearchSemanticMaintenance([workspace], semanticRuntime, false);
+      await runSearchSemanticMaintenance([workspace], semanticRuntime);
     }
   } else {
     checkpoints = checkpoints.sort((a, b) =>
@@ -465,14 +497,14 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     if (wasWarm) {
       await runSearchSemanticMaintenance(
         projects.map(project => project.path),
-        semanticRuntime,
-        true
+        semanticRuntime
       );
     }
 
     const projectResults = await Promise.all(
       projects.map(async (project) => {
         const checkpoints = await loadWorkspaceCheckpoints(project.path, options);
+        await backfillMissingSemanticRecords(project.path, checkpoints);
         const readyRecords = await loadReadySemanticRecords(project.path, checkpoints, semanticRuntime);
 
         return {
@@ -540,8 +572,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     if (!wasWarm) {
       await runSearchSemanticMaintenance(
         projects.map(project => project.path),
-        semanticRuntime,
-        false
+        semanticRuntime
       );
     }
 
