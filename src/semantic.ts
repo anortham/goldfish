@@ -23,7 +23,7 @@ interface PendingSemanticWorkItem {
 interface ProcessPendingSemanticWorkInput {
   pending: PendingSemanticWorkItem[]
   maxItems: number
-  maxMs: number
+  maxMs?: number
   now?: () => number
   embed: (texts: string[], signal?: AbortSignal) => Promise<number[][]>
   save: (checkpointId: string, embedding: number[]) => Promise<void>
@@ -221,6 +221,7 @@ export async function processPendingSemanticWork(
 ): Promise<ProcessPendingSemanticWorkResult> {
   const now = input.now ?? Date.now
   const startedAt = now()
+  const hasTimeBudget = input.maxMs !== undefined
   let processed = 0
 
   for (const item of input.pending) {
@@ -232,7 +233,7 @@ export async function processPendingSemanticWork(
       }
     }
 
-    if ((now() - startedAt) >= input.maxMs) {
+    if (hasTimeBudget && (now() - startedAt) >= input.maxMs!) {
       return {
         processed,
         remaining: input.pending.length - processed,
@@ -240,32 +241,43 @@ export async function processPendingSemanticWork(
       }
     }
 
-    const remainingMs = input.maxMs - (now() - startedAt)
-    if (remainingMs <= 0) {
-      return {
-        processed,
-        remaining: input.pending.length - processed,
-        stopped: 'max-ms'
+    let embeddingsResult: TimedEmbeddingResult
+
+    if (hasTimeBudget) {
+      const remainingMs = input.maxMs! - (now() - startedAt)
+      if (remainingMs <= 0) {
+        return {
+          processed,
+          remaining: input.pending.length - processed,
+          stopped: 'max-ms'
+        }
+      }
+
+      embeddingsResult = await new Promise<TimedEmbeddingResult>((resolve) => {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => {
+          controller.abort()
+          resolve({ status: 'timeout' })
+        }, remainingMs)
+
+        void input.embed([item.digest], controller.signal)
+          .then(embeddings => {
+            clearTimeout(timeout)
+            resolve({ status: 'ok', embeddings })
+          })
+          .catch(error => {
+            clearTimeout(timeout)
+            resolve({ status: 'error', error })
+          })
+      })
+    } else {
+      try {
+        const embeddings = await input.embed([item.digest])
+        embeddingsResult = { status: 'ok', embeddings }
+      } catch (error) {
+        embeddingsResult = { status: 'error', error }
       }
     }
-
-    const embeddingsResult = await new Promise<TimedEmbeddingResult>((resolve) => {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => {
-        controller.abort()
-        resolve({ status: 'timeout' })
-      }, remainingMs)
-
-      void input.embed([item.digest], controller.signal)
-        .then(embeddings => {
-          clearTimeout(timeout)
-          resolve({ status: 'ok', embeddings })
-        })
-        .catch(error => {
-          clearTimeout(timeout)
-          resolve({ status: 'error', error })
-        })
-    })
 
     if (embeddingsResult.status === 'timeout') {
       return {
@@ -289,7 +301,7 @@ export async function processPendingSemanticWork(
     await input.save(item.checkpointId, embedding)
     processed += 1
 
-    if ((now() - startedAt) >= input.maxMs) {
+    if (hasTimeBudget && (now() - startedAt) >= input.maxMs!) {
       return {
         processed,
         remaining: input.pending.length - processed,

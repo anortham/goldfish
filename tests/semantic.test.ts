@@ -248,6 +248,26 @@ describe('processPendingSemanticWork', () => {
     expect(aborted).toBe(true)
     expect(result).toEqual({ processed: 0, remaining: 1, stopped: 'max-ms' })
   })
+
+  it('processes all items without timeout when maxMs is undefined', async () => {
+    const saved: string[] = []
+
+    const result = await processPendingSemanticWork({
+      pending: [
+        { checkpointId: 'one', digest: 'first digest' },
+        { checkpointId: 'two', digest: 'second digest' },
+        { checkpointId: 'three', digest: 'third digest' }
+      ],
+      maxItems: 10,
+      embed: async (texts: string[]) => texts.map(() => [1]),
+      save: async (checkpointId: string) => {
+        saved.push(checkpointId)
+      }
+    })
+
+    expect(saved).toEqual(['one', 'two', 'three'])
+    expect(result).toEqual({ processed: 3, remaining: 0, stopped: 'exhausted' })
+  })
 })
 
 describe('semantic cache invalidation', () => {
