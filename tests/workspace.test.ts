@@ -229,6 +229,21 @@ describe('Semantic cache paths', () => {
     expect(getGoldfishHomeDir()).toBe(join('/test/profile', '.goldfish'));
   });
 
+  it('uses GOLDFISH_HOME when set, ignoring HOME and USERPROFILE', () => {
+    const originalGoldfishHome = process.env.GOLDFISH_HOME;
+
+    try {
+      process.env.GOLDFISH_HOME = '/custom/goldfish';
+      process.env.HOME = '/test/home';
+      process.env.USERPROFILE = '/test/profile';
+
+      expect(getGoldfishHomeDir()).toBe('/custom/goldfish');
+    } finally {
+      if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
+      else process.env.GOLDFISH_HOME = originalGoldfishHome;
+    }
+  });
+
   it('normalizes relative and absolute paths to the same workspace key', () => {
     const absolutePath = resolve(process.cwd(), 'fixtures/semantic-workspace');
     const relativePath = './fixtures/semantic-workspace';

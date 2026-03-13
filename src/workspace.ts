@@ -83,6 +83,7 @@ export function getPlansDir(projectPath?: string): string {
 }
 
 export function getGoldfishHomeDir(): string {
+  if (process.env.GOLDFISH_HOME) return process.env.GOLDFISH_HOME;
   const homeDir = process.env.HOME || process.env.USERPROFILE || tmpdir();
   return join(homeDir, '.goldfish');
 }
