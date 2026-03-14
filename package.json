@@ -1,6 +1,6 @@
 {
   "name": "goldfish",
-  "version": "5.9.0",
+  "version": "5.9.1",
   "description": "Claude Code plugin — persistent developer memory with checkpoints, recall, plans, and standups",
   "type": "module",
   "main": "src/server.ts",
@@ -10,7 +10,8 @@
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
     "build": "bun build src/server.ts --outdir dist --target node",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "keywords": [
     "mcp",
