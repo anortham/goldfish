@@ -423,6 +423,22 @@ describe('Active plan management', () => {
     expect(activePlan).toBeNull();
   });
 
+  it('returns null when active plan has status completed', async () => {
+    await setActivePlan(TEST_DIR, 'plan-1');
+    await updatePlan(TEST_DIR, 'plan-1', { status: 'completed' });
+
+    const activePlan = await getActivePlan(TEST_DIR);
+    expect(activePlan).toBeNull();
+  });
+
+  it('returns null when active plan has status archived', async () => {
+    await setActivePlan(TEST_DIR, 'plan-1');
+    await updatePlan(TEST_DIR, 'plan-1', { status: 'archived' });
+
+    const activePlan = await getActivePlan(TEST_DIR);
+    expect(activePlan).toBeNull();
+  });
+
   it('throws when setting non-existent plan as active', async () => {
     await expect(
       setActivePlan(TEST_DIR, 'nonexistent')
@@ -494,6 +510,28 @@ describe('Plan updates', () => {
 
     const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan!.status).toBe('completed');
+  });
+
+  it('checks all unchecked boxes when status transitions to completed', async () => {
+    await updatePlan(TEST_DIR, 'test-plan', {
+      content: '## Tasks\n- [ ] First task\n- [x] Already done\n- [ ] Third task'
+    });
+
+    await updatePlan(TEST_DIR, 'test-plan', { status: 'completed' });
+
+    const plan = await getPlan(TEST_DIR, 'test-plan');
+    expect(plan!.content).toBe('## Tasks\n- [x] First task\n- [x] Already done\n- [x] Third task');
+  });
+
+  it('does not modify checkboxes when status is not completed', async () => {
+    await updatePlan(TEST_DIR, 'test-plan', {
+      content: '## Tasks\n- [ ] Incomplete task'
+    });
+
+    await updatePlan(TEST_DIR, 'test-plan', { status: 'archived' });
+
+    const plan = await getPlan(TEST_DIR, 'test-plan');
+    expect(plan!.content).toBe('## Tasks\n- [ ] Incomplete task');
   });
 
   it('updates plan tags', async () => {

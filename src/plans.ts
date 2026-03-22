@@ -200,7 +200,11 @@ export async function getActivePlan(projectPath: string): Promise<Plan | null> {
 
   try {
     const planId = (await readFile(activePlanPath, 'utf-8')).trim();
-    return await getPlan(projectPath, planId);
+    const plan = await getPlan(projectPath, planId);
+    if (plan && plan.status !== 'active') {
+      return null;
+    }
+    return plan;
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return null;
@@ -250,6 +254,11 @@ export async function updatePlan(
       ...updates,
       updated: new Date().toISOString()
     };
+
+    // Auto-check all unchecked boxes when completing a plan
+    if (updatedPlan.status === 'completed' && plan.status !== 'completed') {
+      updatedPlan.content = updatedPlan.content.replace(/- \[ \]/g, '- [x]');
+    }
 
     // Write updated plan (atomic)
     const content = formatPlanFile(updatedPlan);

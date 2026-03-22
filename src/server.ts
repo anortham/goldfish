@@ -19,7 +19,7 @@ import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handlePlan } from './handlers/index.js';
 import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 
-export const SERVER_VERSION = '5.9.0';
+export const SERVER_VERSION = '5.10.0';
 
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan };

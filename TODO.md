@@ -55,6 +55,14 @@
 - [x] Updated `/plan-status` skill — dual-source plan awareness with source attribution
 - [x] VS Code `.vscode/mcp.json` setup documented in README
 
+## v5.10.0 — Active Plan Bug Fix (2026-03-22)
+
+- [x] `getActivePlan()` returns `null` when referenced plan has `status: completed` or `status: archived`
+- [x] `updatePlan()` auto-checks all `- [ ]` boxes when transitioning a plan to `status: completed`
+- [x] Fix `SERVER_VERSION` drift (was `5.9.0` while package.json/plugin.json were `5.9.1`)
+
+---
+
 ## What's Next
 
 ### From Real Usage
