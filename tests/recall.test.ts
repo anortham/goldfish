@@ -1,5 +1,5 @@
 import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { recall, searchCheckpoints, parseSince } from '../src/recall';
+import { recall, searchCheckpoints, parseSince, MEMORY_SECTION_PREFIX } from '../src/recall';
 import { saveCheckpoint } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
 import { writeMemory, writeConsolidationState } from '../src/memory';
@@ -1811,5 +1811,114 @@ Sparks is the MCP server entry point.
 
     expect(result.memory).toBeUndefined();
     expect(result.consolidation).toBeUndefined();
+  });
+});
+
+describe('Memory section search integration', () => {
+  it('search finds content in MEMORY.md sections', async () => {
+    await writeMemory(TEST_DIR_A, [
+      '## Deployment Architecture',
+      '',
+      'We use Kubernetes with Helm charts for all production deployments.',
+      '',
+      '## Testing Strategy',
+      '',
+      'Integration tests run in CI against ephemeral postgres databases.',
+    ].join('\n'));
+
+    await saveCheckpoint({
+      description: 'Added retry logic to payment processor',
+      tags: ['payments'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'Kubernetes',
+      limit: 5
+    });
+
+    expect(result.matchedMemorySections).toBeDefined();
+    expect(result.matchedMemorySections!.length).toBeGreaterThanOrEqual(1);
+    const matched = result.matchedMemorySections!.find(s => s.header === 'Deployment Architecture');
+    expect(matched).toBeDefined();
+    expect(matched!.content).toContain('Kubernetes');
+  });
+
+  it('memory sections rank alongside checkpoints', async () => {
+    await writeMemory(TEST_DIR_A, [
+      '## Authentication Flow',
+      '',
+      'OAuth2 with PKCE for all client applications. Tokens expire after 1 hour.',
+    ].join('\n'));
+
+    await saveCheckpoint({
+      description: 'Implemented OAuth2 PKCE flow for mobile clients',
+      tags: ['auth', 'oauth'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'OAuth2 PKCE',
+      limit: 5
+    });
+
+    // Both the memory section and the checkpoint should appear
+    expect(result.matchedMemorySections).toBeDefined();
+    expect(result.matchedMemorySections!.length).toBeGreaterThanOrEqual(1);
+    expect(result.checkpoints.length).toBeGreaterThanOrEqual(1);
+
+    const memoryMatch = result.matchedMemorySections!.find(s => s.header === 'Authentication Flow');
+    expect(memoryMatch).toBeDefined();
+
+    const checkpointMatch = result.checkpoints.find(c => c.description.includes('OAuth2'));
+    expect(checkpointMatch).toBeDefined();
+  });
+
+  it('no memory sections returned when no MEMORY.md exists', async () => {
+    await saveCheckpoint({
+      description: 'Some work without any memory file',
+      tags: ['misc'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'anything',
+      limit: 5
+    });
+
+    expect(result.matchedMemorySections).toBeUndefined();
+  });
+
+  it('memory section IDs use the expected prefix', async () => {
+    // Verify the prefix constant is exported and usable
+    expect(MEMORY_SECTION_PREFIX).toBe('memory_section_');
+  });
+
+  it('memory sections do not appear in the checkpoints array', async () => {
+    await writeMemory(TEST_DIR_A, [
+      '## Unique Xylophone Config',
+      '',
+      'The xylophone service uses a custom configuration format.',
+    ].join('\n'));
+
+    await saveCheckpoint({
+      description: 'Unrelated checkpoint about database migrations',
+      tags: ['db'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'xylophone configuration',
+      limit: 5
+    });
+
+    // No checkpoint should have a memory_section_ prefix in its ID
+    for (const cp of result.checkpoints) {
+      expect(cp.id.startsWith(MEMORY_SECTION_PREFIX)).toBe(false);
+    }
   });
 });

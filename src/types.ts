@@ -97,6 +97,7 @@ export interface RecallResult {
   activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
   memory?: string;                     // MEMORY.md content (when includeMemory is true)
+  matchedMemorySections?: MemorySection[];  // Memory sections that matched search query
   consolidation?: {
     needed: boolean;
     staleCheckpoints: number;

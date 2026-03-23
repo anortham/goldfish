@@ -7,10 +7,10 @@
 
 import { createHash } from 'crypto';
 import Fuse from 'fuse.js';
-import type { Checkpoint, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
+import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
 import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } from './digests';
-import { readMemory, readConsolidationState, getMemorySummary } from './memory';
+import { readMemory, readConsolidationState, getMemorySummary, parseMemorySections } from './memory';
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
 import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady, upsertPendingSemanticRecord } from './semantic-cache';
@@ -31,6 +31,8 @@ const SEARCH_SEMANTIC_MODEL = {
   id: 'semantic-search-runtime',
   version: '1'
 };
+
+export const MEMORY_SECTION_PREFIX = 'memory_section_';
 
 function describeError(error: unknown): string {
   if (error instanceof Error) {
@@ -405,6 +407,7 @@ async function recallFromWorkspace(
   checkpoints: Checkpoint[];
   activePlan: Plan | null;
   memory?: string;
+  matchedMemorySections?: MemorySection[];
   consolidation?: { needed: boolean; staleCheckpoints: number; lastConsolidated: string | null };
 }> {
   // Load all checkpoints once; reuse for both staleness counting and display.
@@ -428,6 +431,9 @@ async function recallFromWorkspace(
     checkpoints = checkpoints.filter(cp => cp.planId === options.planId);
   }
 
+  let matchedMemorySections: MemorySection[] | undefined;
+  let cachedConsolidationState: Awaited<ReturnType<typeof readConsolidationState>> | undefined;
+
   if (options.search) {
     const semanticRuntime = options._semanticRuntime ?? getDefaultSemanticRuntime();
     const wasWarm = semanticRuntime.isReady();
@@ -435,20 +441,37 @@ async function recallFromWorkspace(
       .embedTexts([options.search])
       .then(embeddings => ({ ok: true, embedding: embeddings[0] } as QueryEmbeddingResult))
       .catch(error => ({ ok: false, error } as QueryEmbeddingResult));
+
+    // Load and parse MEMORY.md sections into synthetic checkpoints for search
+    const searchMemoryContent = await readMemory(workspace);
+    const memorySections = searchMemoryContent ? parseMemorySections(searchMemoryContent) : [];
+    cachedConsolidationState = await readConsolidationState(workspace);
+
+    const syntheticSectionCheckpoints: Checkpoint[] = memorySections.map(section => ({
+      id: `${MEMORY_SECTION_PREFIX}${section.slug}`,
+      timestamp: cachedConsolidationState?.timestamp ?? new Date().toISOString(),
+      description: section.content,
+      tags: ['memory'],
+      type: 'checkpoint' as const,
+      summary: `Memory: ${section.header}`
+    }));
+
+    const allCandidates = [...checkpoints, ...syntheticSectionCheckpoints];
+
     const digests = Object.fromEntries(
-      checkpoints.map(checkpoint => [checkpoint.id, buildRetrievalDigest(checkpoint)])
+      allCandidates.map(checkpoint => [checkpoint.id, buildRetrievalDigest(checkpoint)])
     );
 
-    await backfillMissingSemanticRecords(workspace, checkpoints);
+    await backfillMissingSemanticRecords(workspace, allCandidates);
 
     if (wasWarm) {
       await runSearchSemanticMaintenance([workspace], semanticRuntime);
     }
 
-    const readyRecords = await loadReadySemanticRecords(workspace, checkpoints, semanticRuntime);
-    checkpoints = await rankSearchCheckpoints(
+    const readyRecords = await loadReadySemanticRecords(workspace, allCandidates, semanticRuntime);
+    let rankedResults = await rankSearchCheckpoints(
       options.search,
-      checkpoints,
+      allCandidates,
       digests,
       readyRecords,
       semanticRuntime,
@@ -458,6 +481,21 @@ async function recallFromWorkspace(
     if (!wasWarm) {
       await runSearchSemanticMaintenance([workspace], semanticRuntime);
     }
+
+    // Separate memory section matches from real checkpoints
+    const sectionMatches = rankedResults
+      .filter(cp => cp.id.startsWith(MEMORY_SECTION_PREFIX))
+      .map(cp => {
+        const slug = cp.id.slice(MEMORY_SECTION_PREFIX.length);
+        const section = memorySections.find(s => s.slug === slug);
+        return section ?? { slug, header: slug, content: cp.description };
+      });
+
+    if (sectionMatches.length > 0) {
+      matchedMemorySections = sectionMatches;
+    }
+
+    checkpoints = rankedResults.filter(cp => !cp.id.startsWith(MEMORY_SECTION_PREFIX));
   } else {
     checkpoints = checkpoints.sort((a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -477,7 +515,9 @@ async function recallFromWorkspace(
     : !options.search;
 
   const memoryContent = shouldIncludeMemory ? await readMemory(workspace) : null;
-  const consolidationState = await readConsolidationState(workspace);
+  const consolidationState = cachedConsolidationState !== undefined
+    ? cachedConsolidationState
+    : await readConsolidationState(workspace);
 
   // Count stale checkpoints (checkpoints newer than last consolidation)
   let staleCheckpoints = 0;
@@ -501,6 +541,7 @@ async function recallFromWorkspace(
     checkpoints,
     activePlan,
     ...(memoryContent !== null && shouldIncludeMemory ? { memory: memoryContent } : {}),
+    ...(matchedMemorySections ? { matchedMemorySections } : {}),
     ...(consolidation ? { consolidation } : {})
   };
 }
@@ -517,12 +558,13 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   if (workspace !== 'all') {
     const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
-    const { checkpoints, activePlan, memory, consolidation } = await recallFromWorkspace(projectPath, options);
+    const { checkpoints, activePlan, memory, matchedMemorySections, consolidation } = await recallFromWorkspace(projectPath, options);
 
     return {
       checkpoints,
       activePlan,
       ...(memory !== undefined ? { memory } : {}),
+      ...(matchedMemorySections ? { matchedMemorySections } : {}),
       ...(consolidation ? { consolidation } : {})
     };
   }

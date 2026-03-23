@@ -214,6 +214,21 @@ export async function handleRecall(args: any) {
     }
   }
 
+  // Matched memory sections (from search)
+  if (result.matchedMemorySections?.length) {
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push('## Matched Memory Sections');
+    lines.push('');
+    for (const section of result.matchedMemorySections) {
+      lines.push(`### ${section.header}`);
+      lines.push('');
+      lines.push(section.content);
+      lines.push('');
+    }
+  }
+
   // Checkpoints section
   if (count > 0) {
     lines.push('');
