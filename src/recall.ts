@@ -407,7 +407,26 @@ async function recallFromWorkspace(
   memory?: string;
   consolidation?: { needed: boolean; staleCheckpoints: number; lastConsolidated: string | null };
 }> {
-  let checkpoints = await loadWorkspaceCheckpoints(workspace, options);
+  // Load all checkpoints once; reuse for both staleness counting and display.
+  const allWorkspaceCheckpoints = await getAllCheckpoints(workspace);
+
+  // Apply date filtering and plan filtering to get the display candidate set.
+  let checkpoints: Checkpoint[];
+  if (hasDateParams(options)) {
+    const { from, to } = getDateRange(options);
+    const fromTime = new Date(from).getTime();
+    const toTime = new Date(to).getTime();
+    checkpoints = allWorkspaceCheckpoints.filter(cp => {
+      const t = new Date(cp.timestamp).getTime();
+      return t >= fromTime && t <= toTime;
+    });
+  } else {
+    checkpoints = allWorkspaceCheckpoints;
+  }
+
+  if (options.planId) {
+    checkpoints = checkpoints.filter(cp => cp.planId === options.planId);
+  }
 
   if (options.search) {
     const semanticRuntime = options._semanticRuntime ?? getDefaultSemanticRuntime();
@@ -464,10 +483,12 @@ async function recallFromWorkspace(
   let staleCheckpoints = 0;
   if (consolidationState) {
     const lastTimestamp = new Date(consolidationState.timestamp).getTime();
-    const allCps = await getAllCheckpoints(workspace);
-    staleCheckpoints = allCps.filter(
+    staleCheckpoints = allWorkspaceCheckpoints.filter(
       cp => new Date(cp.timestamp).getTime() > lastTimestamp
     ).length;
+  } else if (consolidationState === null && memoryContent !== null) {
+    // No consolidation state but MEMORY.md exists: treat all checkpoints as stale.
+    staleCheckpoints = allWorkspaceCheckpoints.length;
   }
 
   const consolidation = (consolidationState || memoryContent !== null) ? {

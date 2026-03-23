@@ -57,7 +57,7 @@ export async function readConsolidationState(workspace: string): Promise<Consoli
 export async function writeConsolidationState(workspace: string, state: ConsolidationState): Promise<void> {
   const dir = memoriesDir(workspace);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, CONSOLIDATION_STATE_FILE), JSON.stringify(state), 'utf-8');
+  await writeFile(join(dir, CONSOLIDATION_STATE_FILE), JSON.stringify(state, null, 2), 'utf-8');
 }
 
 /**
@@ -134,7 +134,7 @@ export function getMemorySummary(content: string | null): string | null {
     summary = summary.slice(0, 300) + '...';
   }
 
-  return summary;
+  return summary.trim();
 }
 
 function isEnoent(err: unknown): boolean {

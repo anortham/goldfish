@@ -1796,8 +1796,8 @@ Sparks is the MCP server entry point.
     const result = await recall({ workspace: TEST_DIR_A });
 
     expect(result.consolidation).toBeDefined();
-    expect(result.consolidation!.needed).toBe(false);
-    expect(result.consolidation!.staleCheckpoints).toBe(0);
+    expect(result.consolidation!.needed).toBe(true);
+    expect(result.consolidation!.staleCheckpoints).toBe(1);
     expect(result.consolidation!.lastConsolidated).toBeNull();
   });
 

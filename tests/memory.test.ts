@@ -174,7 +174,7 @@ describe('getMemorySummary', () => {
   it('returns content up to second ## header', () => {
     const content = '## First Section\n\nSome content.\n\n## Second Section\n\nMore content.';
     const result = getMemorySummary(content);
-    expect(result).toBe('## First Section\n\nSome content.\n\n');
+    expect(result).toBe('## First Section\n\nSome content.');
   });
 
   it('truncates long content at 300 chars with "..."', () => {
@@ -188,7 +188,7 @@ describe('getMemorySummary', () => {
   it('stops at second ## header even if under 300 chars', () => {
     const content = '## A\n\nshort.\n\n## B\n\nmore.';
     const result = getMemorySummary(content);
-    expect(result).toBe('## A\n\nshort.\n\n');
+    expect(result).toBe('## A\n\nshort.');
     expect(result!.length).toBeLessThan(300);
   });
 });
