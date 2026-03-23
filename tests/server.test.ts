@@ -463,11 +463,12 @@ describe('Server exports', () => {
   });
 
   it('exports all handler functions', async () => {
-    const { handleCheckpoint, handleRecall, handlePlan } = await import('../src/server');
+    const { handleCheckpoint, handleRecall, handlePlan, handleConsolidate } = await import('../src/server');
 
     expect(typeof handleCheckpoint).toBe('function');
     expect(typeof handleRecall).toBe('function');
     expect(typeof handlePlan).toBe('function');
+    expect(typeof handleConsolidate).toBe('function');
   });
 
   it('exports getTools and getInstructions', async () => {

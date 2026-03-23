@@ -6,6 +6,8 @@
  */
 
 import { createHash } from 'crypto';
+import { stat } from 'fs/promises';
+import { join } from 'path';
 import Fuse from 'fuse.js';
 import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
@@ -519,6 +521,13 @@ async function recallFromWorkspace(
     ? cachedConsolidationState
     : await readConsolidationState(workspace);
 
+  // Check if MEMORY.md exists (cheap stat, independent of whether we read its content)
+  let memoryExists = false;
+  try {
+    await stat(join(workspace, '.memories', 'MEMORY.md'));
+    memoryExists = true;
+  } catch { /* doesn't exist */ }
+
   // Count stale checkpoints (checkpoints newer than last consolidation)
   let staleCheckpoints = 0;
   if (consolidationState) {
@@ -526,12 +535,12 @@ async function recallFromWorkspace(
     staleCheckpoints = allWorkspaceCheckpoints.filter(
       cp => new Date(cp.timestamp).getTime() > lastTimestamp
     ).length;
-  } else if (consolidationState === null && memoryContent !== null) {
+  } else if (consolidationState === null && memoryExists) {
     // No consolidation state but MEMORY.md exists: treat all checkpoints as stale.
     staleCheckpoints = allWorkspaceCheckpoints.length;
   }
 
-  const consolidation = (consolidationState || memoryContent !== null) ? {
+  const consolidation = (consolidationState || memoryExists) ? {
     needed: staleCheckpoints > 0,
     staleCheckpoints,
     lastConsolidated: consolidationState?.timestamp ?? null

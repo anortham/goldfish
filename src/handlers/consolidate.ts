@@ -81,7 +81,7 @@ export async function handleConsolidate(args: any) {
     unconsolidatedCheckpoints: unconsolidated,
     activePlan: activePlan?.content ?? undefined,
     checkpointCount,
-    lastConsolidated: consolidationState ?? undefined,
+    lastConsolidated: consolidationState ?? null,
     prompt
   };
 

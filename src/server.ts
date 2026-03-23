@@ -2,10 +2,11 @@
 /**
  * Goldfish MCP Server
  *
- * Provides 3 tools for AI agents:
+ * Provides 4 tools for AI agents:
  * - checkpoint: Save work progress
  * - recall: Restore context
  * - plan: Manage long-running plans
+ * - consolidate: Prepare memory consolidation
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';

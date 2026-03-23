@@ -1,7 +1,7 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the 3 core tools: checkpoint, recall, and plan.
+ * Contains the 4 core tools: checkpoint, recall, plan, and consolidate.
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';

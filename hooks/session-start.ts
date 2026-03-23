@@ -26,7 +26,7 @@ try {
   try {
     const entries = readdirSync(memoriesDir, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      if (!entry.isDirectory() || entry.name.startsWith('.') || !/^\d{4}-\d{2}-\d{2}$/.test(entry.name)) continue;
       const dateDir = join(memoriesDir, entry.name);
       const files = readdirSync(dateDir);
       for (const file of files) {

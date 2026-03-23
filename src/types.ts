@@ -158,6 +158,6 @@ export interface ConsolidationPayload {
   unconsolidatedCheckpoints?: Checkpoint[];
   activePlan?: string;                 // Plan content if active
   checkpointCount?: number;
-  lastConsolidated?: ConsolidationState;
+  lastConsolidated?: ConsolidationState | null;
   prompt?: string;                     // Subagent prompt template
 }
