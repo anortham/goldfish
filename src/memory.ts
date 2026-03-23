@@ -2,7 +2,7 @@
  * Memory module: file I/O for MEMORY.md and .last-consolidated
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'fs/promises';
 import { join } from 'path';
 import type { ConsolidationState, MemorySection } from './types';
 
@@ -30,11 +30,15 @@ export async function readMemory(workspace: string): Promise<string | null> {
 
 /**
  * Write content to .memories/MEMORY.md, creating the directory if needed.
+ * Uses atomic write-then-rename to prevent corruption.
  */
 export async function writeMemory(workspace: string, content: string): Promise<void> {
   const dir = memoriesDir(workspace);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, MEMORY_FILE), content, 'utf-8');
+  const filePath = join(dir, MEMORY_FILE);
+  const tempPath = `${filePath}.tmp.${Date.now()}`;
+  await writeFile(tempPath, content, 'utf-8');
+  await rename(tempPath, filePath);
 }
 
 /**
@@ -53,11 +57,15 @@ export async function readConsolidationState(workspace: string): Promise<Consoli
 
 /**
  * Write consolidation state as JSON to .memories/.last-consolidated.
+ * Uses atomic write-then-rename to prevent corruption.
  */
 export async function writeConsolidationState(workspace: string, state: ConsolidationState): Promise<void> {
   const dir = memoriesDir(workspace);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, CONSOLIDATION_STATE_FILE), JSON.stringify(state, null, 2), 'utf-8');
+  const filePath = join(dir, CONSOLIDATION_STATE_FILE);
+  const tempPath = `${filePath}.tmp.${Date.now()}`;
+  await writeFile(tempPath, JSON.stringify(state, null, 2), 'utf-8');
+  await rename(tempPath, filePath);
 }
 
 /**

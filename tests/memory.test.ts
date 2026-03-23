@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, readdir } from 'fs/promises';
 import {
   readMemory,
   writeMemory,
@@ -79,6 +79,18 @@ describe('writeMemory', () => {
     const content = await readFile(join(tempDir, '.memories', 'MEMORY.md'), 'utf-8');
     expect(content).toBe('## Section\n\nContent.');
   });
+
+  it('uses atomic write (no temp files left behind)', async () => {
+    const memoriesDir = join(tempDir, '.memories');
+    await mkdir(memoriesDir, { recursive: true });
+
+    await writeMemory(tempDir, '## Atomic\n\nContent.');
+
+    const files = await readdir(memoriesDir);
+    const tempFiles = files.filter(f => f.includes('.tmp.'));
+    expect(tempFiles).toEqual([]);
+    expect(files).toContain('MEMORY.md');
+  });
 });
 
 describe('readConsolidationState', () => {
@@ -125,6 +137,22 @@ describe('writeConsolidationState', () => {
     const { readFile } = await import('fs/promises');
     const raw = await readFile(join(memoriesDir, '.last-consolidated'), 'utf-8');
     expect(JSON.parse(raw)).toEqual(state);
+  });
+
+  it('uses atomic write (no temp files left behind)', async () => {
+    const memoriesDir = join(tempDir, '.memories');
+    await mkdir(memoriesDir, { recursive: true });
+
+    const state: ConsolidationState = {
+      timestamp: '2026-03-23T12:00:00.000Z',
+      checkpointsConsolidated: 7,
+    };
+    await writeConsolidationState(tempDir, state);
+
+    const files = await readdir(memoriesDir);
+    const tempFiles = files.filter(f => f.includes('.tmp.'));
+    expect(tempFiles).toEqual([]);
+    expect(files).toContain('.last-consolidated');
   });
 });
 

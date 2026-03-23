@@ -63,7 +63,28 @@
 
 ---
 
+## v6.0.0 -- Memory Consolidation (2026-03-23)
+
+- [x] MEMORY.md semantic layer (`.memories/MEMORY.md` + `.last-consolidated`)
+- [x] `consolidate()` MCP tool with subagent prompt template
+- [x] First-consolidation bootstrap (cap at 50 checkpoints)
+- [x] Recall evolution: three-part response (memory + delta + consolidation flag)
+- [x] `includeMemory` parameter with smart defaults (true for bootstrap, false for search)
+- [x] MEMORY.md sections in semantic search index (chunked by `##` headers)
+- [x] Cross-project recall returns `memorySummary` per project
+- [x] PreCompact and SessionStart hooks converted to Bun scripts with state inspection
+- [x] Source control instruction for `.memories/` in server-level plugin instructions
+- [x] `/consolidate` skill
+
+---
+
 ## What's Next
+
+### Consolidation Tuning (Needs Real Usage Data)
+- [ ] Tune consolidation subagent prompt based on real output quality
+- [ ] Evaluate 500-line cap (too small? too large? depends on project?)
+- [ ] Monitor semantic search quality with MEMORY.md sections in the index
+- [ ] Evaluate consolidation frequency (too aggressive? too lazy?)
 
 ### From Real Usage
 - [ ] Tune hook prompts based on actual agent behavior
@@ -71,14 +92,13 @@
 - [ ] Evaluate checkpoint frequency in practice (too many? too few?)
 
 ### Potential Future Features (Evidence Required)
-- [ ] Checkpoint pruning/archival (if .memories/ grows too large)
+- [ ] Checkpoint pruning/archival (consolidation reduces urgency since MEMORY.md captures the essence)
 - [ ] Plan templates (if pattern emerges from usage)
-- [ ] Checkpoint export/reporting (if standups aren't enough)
-- [ ] Migration tool for v4 → v5 checkpoint format
+- [ ] Checkpoint export/reporting (MEMORY.md summaries in cross-project recall may solve this)
+- [ ] Tiered temporal rollups: daily -> weekly -> monthly summaries (if single MEMORY.md proves insufficient for long-lived projects)
 
 ### Open Questions
 - Is the PreCompact hook reliable enough? Does Claude actually checkpoint before compaction?
 - Does the SessionStart hook fire consistently? Any startup delay issues?
-- Is the ExitPlanMode → plan save hook working as expected?
+- Is the ExitPlanMode -> plan save hook working as expected?
 - Should skills be more or less prescriptive?
-- [x] ~~JSON output from the tools makes no sense. We are burning extra tokens. We need readable output.~~ (Fixed in v5.0.4)
