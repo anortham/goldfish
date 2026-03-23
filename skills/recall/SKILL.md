@@ -84,3 +84,12 @@ Once you have context, act on it:
 3. Continue (pick up where the last session left off)
 
 Trust recalled context — don't re-verify information from checkpoints.
+
+## Consolidation
+
+Recall now returns consolidated memory (MEMORY.md) alongside checkpoints. When recall flags `consolidation.needed: true`:
+
+1. Orient yourself using the returned memory + delta checkpoints
+2. Call `consolidate()` to get the consolidation payload
+3. Dispatch a BACKGROUND subagent with the payload's prompt
+4. Continue your work - consolidation happens in the background
