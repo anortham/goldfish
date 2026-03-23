@@ -1,7 +1,7 @@
 {
   "name": "goldfish",
   "description": "Developer memory system — checkpoints, recall, plans, and standups for AI-assisted development",
-  "version": "6.0.2",
+  "version": "6.0.3",
   "author": {
     "name": "Alan Northam"
   },

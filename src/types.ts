@@ -142,7 +142,7 @@ export interface Registry {
 }
 
 export interface ConsolidationState {
-  timestamp: string;              // ISO 8601 UTC - when consolidation last ran
+  timestamp: string;              // ISO 8601 UTC - timestamp of last consolidated checkpoint (cursor for next batch)
   checkpointsConsolidated: number; // Running total across all consolidations
 }
 

@@ -62,8 +62,8 @@ export async function handleConsolidate(args: any) {
     };
   }
 
-  // Batch: take first CONSOLIDATION_BATCH_CAP (oldest-first)
-  const batch = mdOnly.slice(0, CONSOLIDATION_BATCH_CAP);
+  // Batch: take all if requested, otherwise cap at CONSOLIDATION_BATCH_CAP
+  const batch = args?.all ? mdOnly : mdOnly.slice(0, CONSOLIDATION_BATCH_CAP);
   const remainingCount = mdOnly.length - batch.length;
   const checkpointFiles = batch.map(c => c.filePath!);
 
@@ -79,6 +79,7 @@ export async function handleConsolidate(args: any) {
 
   const previousTotal = consolidationState?.checkpointsConsolidated ?? 0;
   const checkpointCount = batch.length;
+  const lastBatchTimestamp = batch[batch.length - 1].timestamp;
 
   const prompt = buildConsolidationPrompt(
     memoryPath,
@@ -86,7 +87,8 @@ export async function handleConsolidate(args: any) {
     checkpointFiles,
     activePlanPath,
     checkpointCount,
-    previousTotal
+    previousTotal,
+    lastBatchTimestamp
   );
 
   const payload: ConsolidationPayload = {

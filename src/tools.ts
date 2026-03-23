@@ -306,6 +306,10 @@ Returns: JSON with status, checkpointFiles (paths), memoryPath, lastConsolidated
           workspace: {
             type: 'string',
             description: 'Workspace path (defaults to current directory)'
+          },
+          all: {
+            type: 'boolean',
+            description: 'Process all unconsolidated checkpoints in one batch instead of capping at 50. Use for initial consolidation or catching up after a reset.'
           }
         }
       }

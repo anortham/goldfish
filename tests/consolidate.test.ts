@@ -131,6 +131,64 @@ describe('handleConsolidate', () => {
     expect(parsed.prompt).toContain('MEMORY.md');
   });
 
+  it('prompt uses last batch checkpoint timestamp, not current time', async () => {
+    // Create two checkpoints with known timestamps spread apart
+    await saveCheckpoint({ description: 'first', workspace: TEST_DIR });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await saveCheckpoint({ description: 'second', workspace: TEST_DIR });
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    // The prompt should NOT tell the subagent to use "now" or "current time"
+    expect(parsed.prompt).not.toContain('UTC ISO timestamp of now');
+    expect(parsed.prompt).not.toContain('current UTC time');
+
+    // The prompt should contain a concrete ISO timestamp from the last checkpoint
+    // Read the last checkpoint file to get its actual timestamp
+    const { readFile } = await import('fs/promises');
+    const lastFile = parsed.checkpointFiles[parsed.checkpointFiles.length - 1];
+    const content = await readFile(lastFile, 'utf-8');
+    const match = content.match(/timestamp: (.+)/);
+    expect(match).toBeTruthy();
+    const lastCheckpointTs = match![1].trim();
+
+    // The prompt's JSON block should contain this exact timestamp
+    expect(parsed.prompt).toContain(lastCheckpointTs);
+  });
+
+  it('returns all checkpoints in one batch when all: true', async () => {
+    // Create more checkpoints than the default batch cap (50)
+    // We'll create 55 to prove the cap is bypassed
+    const promises = [];
+    for (let i = 0; i < 55; i++) {
+      promises.push(saveCheckpoint({ description: `checkpoint ${i}`, workspace: TEST_DIR }));
+    }
+    await Promise.all(promises);
+
+    const result = await handleConsolidate({ workspace: TEST_DIR, all: true });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('ready');
+    expect(parsed.checkpointFiles.length).toBe(55);
+    expect(parsed.remainingCount).toBe(0);
+  });
+
+  it('still batches at default cap without all: true', async () => {
+    const promises = [];
+    for (let i = 0; i < 55; i++) {
+      promises.push(saveCheckpoint({ description: `checkpoint ${i}`, workspace: TEST_DIR }));
+    }
+    await Promise.all(promises);
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('ready');
+    expect(parsed.checkpointFiles.length).toBe(50);
+    expect(parsed.remainingCount).toBe(5);
+  });
+
   it('excludes legacy .json checkpoint files from checkpointFiles', async () => {
     // Save a normal .md checkpoint
     await saveCheckpoint({ description: 'md checkpoint', workspace: TEST_DIR });

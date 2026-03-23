@@ -12,6 +12,7 @@
  * @param activePlanPath - Absolute path to active plan, or undefined
  * @param checkpointCount - Number of checkpoint files in this batch
  * @param previousTotal - Running total of checkpoints consolidated before this batch
+ * @param lastBatchTimestamp - ISO 8601 timestamp of the last checkpoint in this batch (used as consolidation cursor)
  */
 export function buildConsolidationPrompt(
   memoryPath: string,
@@ -19,7 +20,8 @@ export function buildConsolidationPrompt(
   checkpointFiles: string[],
   activePlanPath: string | undefined,
   checkpointCount: number,
-  previousTotal: number
+  previousTotal: number,
+  lastBatchTimestamp: string
 ): string {
   const newTotal = previousTotal + checkpointCount;
 
@@ -88,10 +90,8 @@ ${fileList}
 
 Content must be exactly:
 \`\`\`json
-{ "timestamp": "<UTC ISO timestamp of now>", "checkpointsConsolidated": ${newTotal} }
+{ "timestamp": "${lastBatchTimestamp}", "checkpointsConsolidated": ${newTotal} }
 \`\`\`
-
-Replace \`<UTC ISO timestamp of now>\` with the actual current UTC time in ISO 8601 format (e.g. \`2026-03-23T15:04:05.000Z\`).
 
 ## Constraints
 
