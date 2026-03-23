@@ -155,10 +155,12 @@ export interface MemorySection {
 export interface ConsolidationPayload {
   status: 'ready' | 'current';
   message?: string;                    // Only when status === 'current'
-  currentMemory?: string;              // Full MEMORY.md content
-  unconsolidatedCheckpoints?: Checkpoint[];
-  activePlan?: string;                 // Plan content if active
-  checkpointCount?: number;
-  lastConsolidated?: ConsolidationState | null;
-  prompt?: string;                     // Subagent prompt template
+  checkpointFiles?: string[];          // Absolute paths, chronological (oldest-first), capped at 50
+  memoryPath?: string;                 // Absolute path to .memories/MEMORY.md
+  lastConsolidatedPath?: string;       // Absolute path to .memories/.last-consolidated
+  activePlanPath?: string;             // Absolute path to active plan file, if one exists
+  checkpointCount?: number;            // Number of checkpoints in this batch
+  remainingCount?: number;             // Unconsolidated checkpoints beyond this batch
+  previousTotal?: number;              // Running total for incrementing checkpointsConsolidated
+  prompt?: string;                     // Subagent instructions (includes file paths)
 }
