@@ -59,5 +59,20 @@ All data is stored as human-readable markdown in {project}/.memories/:
 - Plans: Individual files (plans/{plan-id}.md)
 - Cross-project registry: ~/.goldfish/registry.json
 
-Everything is transparent, git-committable, and human-readable.`;
+Everything is transparent, git-committable, and human-readable.
+
+## Consolidation
+
+MEMORY.md is the project's consolidated understanding, built from checkpoints. When recall flags \`consolidation.needed: true\`, dispatch a background consolidation subagent:
+
+1. Call \`consolidate()\` to get the payload
+2. Dispatch a background subagent with the payload's \`prompt\` field
+3. Pass \`currentMemory\` and \`unconsolidatedCheckpoints\` as context to the subagent
+4. Continue your work - the subagent handles the rest
+
+Consolidation happens automatically via hooks, but you can trigger it manually any time.
+
+## Source Control
+
+ALWAYS commit the \`.memories/\` directory (including MEMORY.md, checkpoints, and plans) to source control. These are project artifacts, not ephemeral state. Never add \`.memories/\` to .gitignore.`;
 }

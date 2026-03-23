@@ -136,6 +136,14 @@ Key parameters (all optional):
 - full: Return full descriptions + all metadata including files, git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - planId: Filter checkpoints to those created under a specific plan
+- includeMemory: Include full MEMORY.md in response. Defaults to true (bootstrap mode, no search). Defaults to false (search mode, with search param). Override explicitly with true/false.
+
+Recall now returns three layers:
+1. Consolidated memory (MEMORY.md) - project understanding, included by default
+2. Delta checkpoints - events since last consolidation, included when stale
+3. Consolidation flag - metadata indicating if consolidation is needed
+
+If consolidation.needed is true: dispatch a BACKGROUND consolidation subagent (call consolidate() first to get the payload).
 
 Examples:
 - recall() - last 5 checkpoints regardless of age
@@ -183,6 +191,10 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
           planId: {
             type: 'string',
             description: 'Filter to checkpoints created while a specific plan was active. Use to see progress on a particular plan.'
+          },
+          includeMemory: {
+            type: 'boolean',
+            description: 'Include full MEMORY.md in response. Default: true when no search param (bootstrap mode), false when search param provided (search mode). MEMORY.md sections are always searchable regardless of this setting.'
           }
         }
       }
