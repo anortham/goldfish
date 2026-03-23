@@ -10,6 +10,7 @@ import Fuse from 'fuse.js';
 import type { Checkpoint, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
 import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } from './digests';
+import { readMemory, readConsolidationState, getMemorySummary } from './memory';
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
 import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady, upsertPendingSemanticRecord } from './semantic-cache';
@@ -400,7 +401,12 @@ function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Chec
 async function recallFromWorkspace(
   workspace: string,
   options: RecallOptions
-): Promise<{ checkpoints: Checkpoint[]; activePlan: Plan | null }> {
+): Promise<{
+  checkpoints: Checkpoint[];
+  activePlan: Plan | null;
+  memory?: string;
+  consolidation?: { needed: boolean; staleCheckpoints: number; lastConsolidated: string | null };
+}> {
   let checkpoints = await loadWorkspaceCheckpoints(workspace, options);
 
   if (options.search) {
@@ -446,7 +452,36 @@ async function recallFromWorkspace(
   // Get active plan
   const activePlan = await getActivePlan(workspace);
 
-  return { checkpoints, activePlan };
+  // Memory and consolidation
+  const shouldIncludeMemory = options.includeMemory !== undefined
+    ? options.includeMemory
+    : !options.search;
+
+  const memoryContent = shouldIncludeMemory ? await readMemory(workspace) : null;
+  const consolidationState = await readConsolidationState(workspace);
+
+  // Count stale checkpoints (checkpoints newer than last consolidation)
+  let staleCheckpoints = 0;
+  if (consolidationState) {
+    const lastTimestamp = new Date(consolidationState.timestamp).getTime();
+    const allCps = await getAllCheckpoints(workspace);
+    staleCheckpoints = allCps.filter(
+      cp => new Date(cp.timestamp).getTime() > lastTimestamp
+    ).length;
+  }
+
+  const consolidation = (consolidationState || memoryContent !== null) ? {
+    needed: staleCheckpoints > 0,
+    staleCheckpoints,
+    lastConsolidated: consolidationState?.timestamp ?? null
+  } : undefined;
+
+  return {
+    checkpoints,
+    activePlan,
+    ...(memoryContent !== null && shouldIncludeMemory ? { memory: memoryContent } : {}),
+    ...(consolidation ? { consolidation } : {})
+  };
 }
 
 /**
@@ -461,11 +496,13 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   if (workspace !== 'all') {
     const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
-    const { checkpoints, activePlan } = await recallFromWorkspace(projectPath, options);
+    const { checkpoints, activePlan, memory, consolidation } = await recallFromWorkspace(projectPath, options);
 
     return {
       checkpoints,
-      activePlan
+      activePlan,
+      ...(memory !== undefined ? { memory } : {}),
+      ...(consolidation ? { consolidation } : {})
     };
   }
 
@@ -500,11 +537,13 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
         const checkpoints = await loadWorkspaceCheckpoints(project.path, options);
         await backfillMissingSemanticRecords(project.path, checkpoints);
         const readyRecords = await loadReadySemanticRecords(project.path, checkpoints, semanticRuntime);
+        const projectMemory = await readMemory(project.path);
 
         return {
           project,
           checkpoints,
-          readyRecords
+          readyRecords,
+          projectMemory
         };
       })
     );
@@ -515,7 +554,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     const readyRecords: ReadySemanticRecord[] = [];
     const digests: Record<string, string> = {};
 
-    for (const { project, checkpoints, readyRecords: projectReadyRecords } of projectResults) {
+    for (const { project, checkpoints, readyRecords: projectReadyRecords, projectMemory } of projectResults) {
       if (checkpoints.length === 0) {
         continue;
       }
@@ -530,7 +569,8 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
         name: project.name,
         path: project.path,
         checkpointCount: checkpoints.length,
-        ...(lastActivity ? { lastActivity } : {})
+        ...(lastActivity ? { lastActivity } : {}),
+        memorySummary: getMemorySummary(projectMemory)
       });
 
       for (const checkpoint of checkpoints) {
@@ -596,7 +636,8 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
         ...options,
         limit: globalLimit
       });
-      return { project, checkpoints };
+      const projectMemory = await readMemory(project.path);
+      return { project, checkpoints, projectMemory };
     })
   );
 
@@ -604,7 +645,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   const allCheckpoints: Checkpoint[] = [];
   const workspaceSummaries: WorkspaceSummary[] = [];
 
-  for (const { project, checkpoints } of projectResults) {
+  for (const { project, checkpoints, projectMemory } of projectResults) {
     if (checkpoints.length > 0) {
       // Tag each checkpoint with its project name
       const tagged = checkpoints.map(c => ({ ...c, workspace: project.name }));
@@ -613,7 +654,8 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
       const summary: WorkspaceSummary = {
         name: project.name,
         path: project.path,
-        checkpointCount: checkpoints.length
+        checkpointCount: checkpoints.length,
+        memorySummary: getMemorySummary(projectMemory)
       };
       // Get last activity from the most recent checkpoint
       const lastActivity = checkpoints

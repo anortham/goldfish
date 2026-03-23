@@ -183,12 +183,34 @@ export async function handleRecall(args: any) {
     lines.push(formatActivePlan(result.activePlan));
   }
 
+  // Consolidated memory section
+  if (result.memory) {
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push('## Consolidated Memory');
+    lines.push(result.memory);
+  }
+
+  // Consolidation recommendation
+  if (result.consolidation?.needed) {
+    const since = result.consolidation.lastConsolidated
+      ? ` since last consolidation (${result.consolidation.lastConsolidated})`
+      : '';
+    lines.push('');
+    lines.push(`> **Consolidation recommended:** ${result.consolidation.staleCheckpoints} checkpoint(s)${since}. Dispatch a background consolidation subagent.`);
+  }
+
   // Workspace summaries for cross-project recall
   if (result.workspaces && result.workspaces.length > 0) {
     lines.push('');
     lines.push('## Workspaces');
     for (const ws of result.workspaces) {
-      lines.push(`- **${ws.name}** (${ws.path}): ${ws.checkpointCount} checkpoints${ws.lastActivity ? `, last: ${ws.lastActivity}` : ''}`);
+      let line = `- **${ws.name}** (${ws.path}): ${ws.checkpointCount} checkpoints${ws.lastActivity ? `, last: ${ws.lastActivity}` : ''}`;
+      lines.push(line);
+      if (ws.memorySummary) {
+        lines.push(`  Memory: ${ws.memorySummary.split('\n')[0]}`);
+      }
     }
   }
 

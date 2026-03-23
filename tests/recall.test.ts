@@ -2,6 +2,7 @@ import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach 
 import { recall, searchCheckpoints, parseSince } from '../src/recall';
 import { saveCheckpoint } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
+import { writeMemory, writeConsolidationState } from '../src/memory';
 import { savePlan } from '../src/plans';
 import { loadSemanticState, listPendingSemanticRecords, markSemanticRecordReady } from '../src/semantic-cache';
 import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
@@ -1644,5 +1645,171 @@ Work without a plan`;
     });
 
     expect(result.checkpoints).toHaveLength(3);
+  });
+});
+
+describe('Memory and consolidation in recall', () => {
+  const MEMORY_CONTENT = `## Key Decisions
+- Chose LanceDB for vector store
+- MPS acceleration for Apple Silicon
+
+## Architecture
+Sparks is the MCP server entry point.
+`;
+
+  it('default recall (no search) includes MEMORY.md content', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+    await writeConsolidationState(TEST_DIR_A, {
+      timestamp: new Date().toISOString(),
+      checkpointsConsolidated: 5
+    });
+
+    await saveCheckpoint({
+      description: 'Some work happened',
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.memory).toBe(MEMORY_CONTENT);
+  });
+
+  it('search recall excludes MEMORY.md by default', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+
+    await saveCheckpoint({
+      description: 'Fixed a LanceDB indexing bug',
+      tags: ['bug-fix'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'LanceDB'
+    });
+
+    expect(result.memory).toBeUndefined();
+  });
+
+  it('search recall includes MEMORY.md when includeMemory: true', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+
+    await saveCheckpoint({
+      description: 'Fixed a LanceDB indexing bug',
+      tags: ['bug-fix'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'LanceDB',
+      includeMemory: true
+    });
+
+    expect(result.memory).toBe(MEMORY_CONTENT);
+  });
+
+  it('default recall excludes MEMORY.md when includeMemory: false', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+
+    await saveCheckpoint({
+      description: 'Some work',
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      includeMemory: false
+    });
+
+    expect(result.memory).toBeUndefined();
+  });
+
+  it('returns undefined memory when no MEMORY.md exists', async () => {
+    await saveCheckpoint({
+      description: 'Work without memory file',
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.memory).toBeUndefined();
+  });
+
+  it('detects stale consolidation (old timestamp + new checkpoints)', async () => {
+    // Set consolidation timestamp in the past
+    const pastDate = new Date('2020-01-01T00:00:00Z');
+    await writeConsolidationState(TEST_DIR_A, {
+      timestamp: pastDate.toISOString(),
+      checkpointsConsolidated: 3
+    });
+
+    // Create checkpoints after that timestamp
+    await saveCheckpoint({
+      description: 'New work after consolidation',
+      workspace: TEST_DIR_A
+    });
+
+    await saveCheckpoint({
+      description: 'More new work',
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.consolidation).toBeDefined();
+    expect(result.consolidation!.needed).toBe(true);
+    expect(result.consolidation!.staleCheckpoints).toBe(2);
+    expect(result.consolidation!.lastConsolidated).toBe(pastDate.toISOString());
+  });
+
+  it('reports consolidation not needed when up to date', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+
+    // Set consolidation timestamp in the future
+    const futureDate = new Date('2099-01-01T00:00:00Z');
+    await writeConsolidationState(TEST_DIR_A, {
+      timestamp: futureDate.toISOString(),
+      checkpointsConsolidated: 10
+    });
+
+    await saveCheckpoint({
+      description: 'A checkpoint before the future consolidation',
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.consolidation).toBeDefined();
+    expect(result.consolidation!.needed).toBe(false);
+    expect(result.consolidation!.staleCheckpoints).toBe(0);
+  });
+
+  it('returns consolidation field when MEMORY.md exists but no consolidation state', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+
+    await saveCheckpoint({
+      description: 'Work with memory but no consolidation state',
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.consolidation).toBeDefined();
+    expect(result.consolidation!.needed).toBe(false);
+    expect(result.consolidation!.staleCheckpoints).toBe(0);
+    expect(result.consolidation!.lastConsolidated).toBeNull();
+  });
+
+  it('returns no consolidation field when neither MEMORY.md nor consolidation state exist', async () => {
+    await saveCheckpoint({
+      description: 'Bare workspace with no memory or consolidation',
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.memory).toBeUndefined();
+    expect(result.consolidation).toBeUndefined();
   });
 });
