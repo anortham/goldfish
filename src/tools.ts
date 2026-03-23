@@ -284,7 +284,7 @@ Returns: Plan details, status updates, or list of plans.`,
     },
     {
       name: 'consolidate',
-      description: `Prepare memory consolidation. Gathers current MEMORY.md + unconsolidated checkpoints into a payload for a consolidation subagent.
+      description: `Prepare memory consolidation. Returns file paths and metadata for a consolidation subagent. No checkpoint content is returned through this tool.
 
 When to use:
 - When recall flags consolidation.needed: true
@@ -292,13 +292,14 @@ When to use:
 - On a scheduled cadence (e.g., daily wrap-up)
 
 Workflow:
-1. Call consolidate() - returns payload with subagent prompt
-2. If status is "ready": dispatch a BACKGROUND subagent with the payload's prompt field, passing currentMemory and unconsolidatedCheckpoints as context
+1. Call consolidate() - returns file paths, counts, and subagent prompt
+2. If status is "ready": dispatch a BACKGROUND subagent with the prompt field. The subagent reads checkpoint files from disk.
 3. If status is "current": nothing to do, memory is up to date
+4. If remainingCount > 0: more checkpoints need processing. Run consolidate again or tell the user.
 
-The subagent writes two files: .memories/MEMORY.md (updated understanding) and .memories/.last-consolidated (timestamp).
+The subagent reads checkpoint files directly from disk and writes two files: .memories/MEMORY.md and .memories/.last-consolidated.
 
-Returns: JSON payload with status, current memory, unconsolidated checkpoints, and subagent prompt template.`,
+Returns: JSON with status, checkpointFiles (paths), memoryPath, lastConsolidatedPath, remainingCount, and subagent prompt.`,
       inputSchema: {
         type: 'object',
         properties: {
