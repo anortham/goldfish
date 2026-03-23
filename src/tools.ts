@@ -269,6 +269,33 @@ Returns: Plan details, status updates, or list of plans.`,
         },
         required: ['action']
       }
+    },
+    {
+      name: 'consolidate',
+      description: `Prepare memory consolidation. Gathers current MEMORY.md + unconsolidated checkpoints into a payload for a consolidation subagent.
+
+When to use:
+- When recall flags consolidation.needed: true
+- Before ending a long session with significant new work
+- On a scheduled cadence (e.g., daily wrap-up)
+
+Workflow:
+1. Call consolidate() - returns payload with subagent prompt
+2. If status is "ready": dispatch a BACKGROUND subagent with the payload's prompt field, passing currentMemory and unconsolidatedCheckpoints as context
+3. If status is "current": nothing to do, memory is up to date
+
+The subagent writes two files: .memories/MEMORY.md (updated understanding) and .memories/.last-consolidated (timestamp).
+
+Returns: JSON payload with status, current memory, unconsolidated checkpoints, and subagent prompt template.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          workspace: {
+            type: 'string',
+            description: 'Workspace path (defaults to current directory)'
+          }
+        }
+      }
     }
   ];
 }

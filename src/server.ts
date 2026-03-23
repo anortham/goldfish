@@ -16,13 +16,13 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
-import { handleCheckpoint, handleRecall, handlePlan } from './handlers/index.js';
+import { handleCheckpoint, handleRecall, handlePlan, handleConsolidate } from './handlers/index.js';
 import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 
 export const SERVER_VERSION = '5.10.0';
 
 // Re-export for backward compatibility with tests
-export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan };
+export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan, handleConsolidate };
 
 /**
  * Start MCP server (when run directly)
@@ -62,6 +62,8 @@ export async function startServer() {
           return await handleRecall(args);
         case 'plan':
           return await handlePlan(args);
+        case 'consolidate':
+          return await handleConsolidate(args);
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -82,7 +84,7 @@ export async function startServer() {
   await server.connect(transport);
 
   console.error('Goldfish MCP Server started');
-  console.error('Tools: checkpoint, recall, plan');
+  console.error('Tools: checkpoint, recall, plan, consolidate');
 }
 
 // Run server if executed directly
