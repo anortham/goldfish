@@ -76,6 +76,7 @@ export interface RecallOptions {
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   planId?: string;        // Filter to checkpoints associated with this plan
+  includeMemory?: boolean;  // Include MEMORY.md in response. Defaults: true (no search), false (with search). Override explicitly.
   _registryDir?: string;  // Internal: override registry dir for test isolation
   _semanticRuntime?: SemanticRuntime; // Internal: semantic runtime override for test isolation
 }
@@ -95,6 +96,12 @@ export interface RecallResult {
   checkpoints: Checkpoint[];
   activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
+  memory?: string;                     // MEMORY.md content (when includeMemory is true)
+  consolidation?: {
+    needed: boolean;
+    staleCheckpoints: number;
+    lastConsolidated: string | null;    // ISO 8601 UTC or null if never consolidated
+  };
 }
 
 export interface WorkspaceSummary {
@@ -102,6 +109,7 @@ export interface WorkspaceSummary {
   path: string;
   checkpointCount: number;
   lastActivity?: string;  // ISO 8601 UTC
+  memorySummary?: string | null;  // First lines of MEMORY.md (up to 300 chars)
 }
 
 export interface GitContext {
@@ -129,4 +137,26 @@ export interface RegisteredProject {
 
 export interface Registry {
   projects: RegisteredProject[];
+}
+
+export interface ConsolidationState {
+  timestamp: string;              // ISO 8601 UTC - when consolidation last ran
+  checkpointsConsolidated: number; // Running total across all consolidations
+}
+
+export interface MemorySection {
+  slug: string;      // e.g., "key-decisions" (from ## header)
+  header: string;    // e.g., "Key Decisions" (raw header text)
+  content: string;   // Section body (everything between this ## and next ##)
+}
+
+export interface ConsolidationPayload {
+  status: 'ready' | 'current';
+  message?: string;                    // Only when status === 'current'
+  currentMemory?: string;              // Full MEMORY.md content
+  unconsolidatedCheckpoints?: Checkpoint[];
+  activePlan?: string;                 // Plan content if active
+  checkpointCount?: number;
+  lastConsolidated?: ConsolidationState;
+  prompt?: string;                     // Subagent prompt template
 }
