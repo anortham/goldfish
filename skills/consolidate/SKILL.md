@@ -21,7 +21,7 @@ allowed-tools: mcp__goldfish__consolidate, Agent
 mcp__goldfish__consolidate({})
 ```
 
-This returns a JSON payload with `status`, `currentMemory`, `unconsolidatedCheckpoints`, and a `prompt` template.
+Returns a lightweight JSON payload with `status`, `checkpointFiles` (paths), `memoryPath`, `remainingCount`, and a `prompt` template. No checkpoint content is returned.
 
 ### Step 2: Check Status
 
@@ -30,28 +30,46 @@ This returns a JSON payload with `status`, `currentMemory`, `unconsolidatedCheck
 
 ### Step 3: Dispatch Background Subagent
 
-Parse the payload and dispatch a **background** subagent with the consolidation prompt. The subagent writes two files: `.memories/MEMORY.md` and `.memories/.last-consolidated`.
+The `prompt` field already contains everything the subagent needs: file paths to read, synthesis instructions, and output paths to write. Dispatch it directly.
 
 ```
 Agent({
   description: "Consolidate project memory",
-  prompt: `${payload.prompt}\n\n## Payload\n\ncurrentMemory:\n${payload.currentMemory}\n\nunconsolidatedCheckpoints:\n${JSON.stringify(payload.unconsolidatedCheckpoints, null, 2)}${payload.activePlan ? `\n\nactivePlan:\n${payload.activePlan}` : ''}`,
+  prompt: payload.prompt,
   run_in_background: true,
   mode: "bypassPermissions"
 })
 ```
 
-Continue your work. The subagent handles the synthesis in the background.
+### Step 4: Report Remaining
+
+If `remainingCount > 0`, tell the user:
+"Consolidated {checkpointCount} checkpoints. {remainingCount} remain. Run `/consolidate` again to process more, or `/consolidate all` to process everything."
+
+If `remainingCount` is 0, the user does not need to know about batching.
+
+## `/consolidate all` -- Process Everything
+
+When the user passes "all" as an argument, loop until fully caught up:
+
+1. Call `consolidate()`
+2. If `status: "current"`, done. Report total processed.
+3. If `status: "ready"`, dispatch a **foreground** subagent (must wait for `.last-consolidated` to update before next batch).
+4. If `remainingCount > 0`, repeat from step 1.
+5. **Circuit breaker:** Max 10 iterations. If exceeded, stop and tell user how many were processed and how many remain.
+
+Foreground subagents are required because each batch writes `.last-consolidated`, and the next `consolidate()` call needs that timestamp to filter correctly.
 
 ## What the Subagent Does
 
-1. Reads current MEMORY.md as baseline (from the payload)
-2. Processes each checkpoint chronologically, extracting durable facts
-3. Synthesizes into well-structured prose sections (## headers)
-4. Overwrites contradictions (new facts replace old)
-5. Prunes ephemeral details (keeps decisions, drops debugging steps)
-6. Respects the 500-line hard cap
-7. Writes updated MEMORY.md and .last-consolidated
+1. Reads MEMORY.md from disk (if it exists)
+2. Reads each checkpoint file from the provided path list
+3. Reads the active plan from disk (if provided)
+4. Synthesizes into well-structured prose sections (## headers)
+5. Overwrites contradictions (new facts replace old)
+6. Prunes ephemeral details (keeps decisions, drops debugging steps)
+7. Respects the 500-line hard cap
+8. Writes updated MEMORY.md and .last-consolidated
 
 The subagent does NOT modify or delete checkpoints or plans.
 
