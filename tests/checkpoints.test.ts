@@ -1155,6 +1155,18 @@ describe('getCheckpointsForDay', () => {
 
     expect(checkpoints[0]!.id).toMatch(/^checkpoint_[0-9a-f]{8}$/);
   });
+
+  it('populates filePath on each checkpoint', async () => {
+    await saveCheckpoint({ description: 'test checkpoint', workspace: tempDir });
+    const today = new Date().toISOString().split('T')[0];
+    const checkpoints = await getCheckpointsForDay(tempDir, today);
+    expect(checkpoints.length).toBeGreaterThan(0);
+    for (const cp of checkpoints) {
+      expect(cp.filePath).toBeDefined();
+      expect(cp.filePath).toContain(today);
+      expect(cp.filePath!.endsWith('.md')).toBe(true);
+    }
+  });
 });
 
 // ─── getCheckpointsForDateRange ──────────────────────────────────────

@@ -444,8 +444,10 @@ export async function getCheckpointsForDay(
 
   for (const file of mdFiles) {
     try {
-      const content = await readFile(join(dateDir, file), 'utf-8');
+      const filePath = join(dateDir, file);
+      const content = await readFile(filePath, 'utf-8');
       const checkpoint = parseCheckpointFile(content);
+      checkpoint.filePath = filePath;
       checkpoints.push(checkpoint);
     } catch {
       // Skip files that can't be parsed (e.g., corrupted)
@@ -456,8 +458,10 @@ export async function getCheckpointsForDay(
   // Legacy: read old Julie JSON checkpoint files
   for (const file of jsonFiles) {
     try {
-      const content = await readFile(join(dateDir, file), 'utf-8');
+      const filePath = join(dateDir, file);
+      const content = await readFile(filePath, 'utf-8');
       const checkpoint = parseJsonCheckpoint(content);
+      checkpoint.filePath = filePath;
       checkpoints.push(checkpoint);
     } catch {
       continue;
