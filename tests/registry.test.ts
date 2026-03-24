@@ -191,6 +191,22 @@ describe('Unregister project', () => {
     expect((await getRegistry(GOLDFISH_DIR)).projects).toHaveLength(0);
   });
 
+  it('creates goldfish directory if needed', async () => {
+    // Remove the pre-created goldfish dir
+    await rm(GOLDFISH_DIR, { recursive: true, force: true });
+
+    const nestedDir = join(TEST_DIR, 'nested', '.goldfish');
+    const projectPath = join(TEST_DIR, 'my-project');
+    await mkdir(projectPath, { recursive: true });
+
+    // Should not throw even when the directory doesn't exist yet
+    await unregisterProject(projectPath, nestedDir);
+
+    // Directory should have been created
+    const registry = await getRegistry(nestedDir);
+    expect(registry).toEqual({ projects: [] });
+  });
+
   it('is no-op for unregistered project', async () => {
     const projectPath = join(TEST_DIR, 'my-project');
     await mkdir(projectPath, { recursive: true });

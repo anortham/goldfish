@@ -75,7 +75,7 @@ async function withAbortSignal<T>(promise: Promise<T>, signal?: AbortSignal): Pr
   })
 }
 
-function normalizeEmbedding(value: unknown): number[] {
+export function normalizeEmbedding(value: unknown): number[] {
   if (Array.isArray(value)) {
     if (value.every(item => typeof item === 'number')) {
       return value as number[]

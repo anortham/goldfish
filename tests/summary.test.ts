@@ -47,6 +47,22 @@ describe('Summary generation', () => {
       expect(summary!.length).toBeLessThanOrEqual(150);
     });
 
+    it('strips leading markdown header prefixes from summaries', () => {
+      const description = '## Implemented new authentication flow with OAuth2 integration and token refresh. This is a major change that impacts all service-to-service communication. Added comprehensive test coverage for all edge cases.';
+      const summary = generateSummary(description);
+
+      expect(summary).toBeDefined();
+      expect(summary).not.toMatch(/^#+\s*/);
+    });
+
+    it('strips leading # from first line even with multiple levels', () => {
+      const description = '### Deep nested header that is long enough to trigger summary generation because it has many words and exceeds the threshold of one hundred and fifty characters easily.';
+      const summary = generateSummary(description);
+
+      expect(summary).toBeDefined();
+      expect(summary).not.toMatch(/^#+\s*/);
+    });
+
     it('handles multi-line descriptions', () => {
       const description = `Refactored authentication system to use JWT tokens.
 

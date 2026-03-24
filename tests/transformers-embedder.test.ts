@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { createTransformersEmbedder } from '../src/transformers-embedder'
+import { createTransformersEmbedder, normalizeEmbedding } from '../src/transformers-embedder'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
@@ -150,5 +150,52 @@ describe('createTransformersEmbedder', () => {
 
     resolvers[2]!([[3, 0]])
     await expect(thirdCall).resolves.toEqual([[3, 0]])
+  })
+})
+
+describe('normalizeEmbedding', () => {
+  it('returns a plain number array as-is', () => {
+    expect(normalizeEmbedding([0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3])
+  })
+
+  it('unwraps single-element nested arrays', () => {
+    expect(normalizeEmbedding([[0.4, 0.5, 0.6]])).toEqual([0.4, 0.5, 0.6])
+  })
+
+  it('converts Float32Array via .data property', () => {
+    const typedArray = new Float32Array([0.1, 0.2, 0.3])
+    const result = normalizeEmbedding({ data: typedArray })
+    expect(result).toHaveLength(3)
+    expect(Math.abs(result[0]! - 0.1)).toBeLessThan(0.001)
+    expect(Math.abs(result[1]! - 0.2)).toBeLessThan(0.001)
+    expect(Math.abs(result[2]! - 0.3)).toBeLessThan(0.001)
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('converts Int32Array via .data property', () => {
+    const typedArray = new Int32Array([1, 2, 3])
+    const result = normalizeEmbedding({ data: typedArray })
+    expect(result).toEqual([1, 2, 3])
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('unwraps tolist() output (HuggingFace Tensor)', () => {
+    const tensor = { tolist: () => [0.7, 0.8, 0.9] }
+    expect(normalizeEmbedding(tensor)).toEqual([0.7, 0.8, 0.9])
+  })
+
+  it('unwraps nested tolist() returning single-element array', () => {
+    const tensor = { tolist: () => [[0.4, 0.5]] }
+    expect(normalizeEmbedding(tensor)).toEqual([0.4, 0.5])
+  })
+
+  it('unwraps .data array property', () => {
+    expect(normalizeEmbedding({ data: [0.1, 0.2] })).toEqual([0.1, 0.2])
+  })
+
+  it('throws for unsupported shapes', () => {
+    expect(() => normalizeEmbedding('string')).toThrow('Unsupported transformer embedding output')
+    expect(() => normalizeEmbedding(42)).toThrow('Unsupported transformer embedding output')
+    expect(() => normalizeEmbedding(null)).toThrow('Unsupported transformer embedding output')
   })
 })

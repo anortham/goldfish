@@ -102,3 +102,75 @@
 - Does the SessionStart hook fire consistently? Any startup delay issues?
 - Is the ExitPlanMode -> plan save hook working as expected?
 - Should skills be more or less prescriptive?
+
+---
+
+## v6.2.2 -- Audit Fixes (2026-03-24)
+
+### Fixed
+- [x] **Plan handler: `planId` vs `id` parameter mismatch** - LLMs (Copilot) send `planId`, handler expected `id`. Hard failure ("Plan ID is required"). Added alias support, active plan fallback for get/update/complete, and top-level update properties.
+- [x] **PostToolUse hook missing `activate: true`** - ExitPlanMode hook didn't tell agents to activate plans. Plans could be saved but invisible to recall.
+- [x] **Instructions: misleading consolidation parameters** - Referenced non-existent `currentMemory` and `unconsolidatedCheckpoints` parameters. Fixed to describe the actual `prompt` field workflow.
+- [x] **Plan tool description: undocumented behaviors** - Updated action descriptions to document active plan fallback and top-level update properties.
+
+### Deep Review Findings (2026-03-24)
+
+Findings from 5-agent review team, fixed by 4-agent fix team. 467 tests, 0 failures (40 new tests added).
+
+#### Bugs (all fixed)
+
+- [x] **`lock.ts` - Infinite loop on undeletable stale locks.** `attempts` now increments unconditionally.
+- [x] **`semantic.ts` - `Math.min(...spread)` RangeError.** Replaced with reduce loop.
+- [x] **`plans.ts` - TOCTOU race in `savePlan`.** Wrapped in `withLock`.
+- [x] **`plans.ts` - No plan ID sanitization (path traversal).** Added `validatePlanId()` rejecting `/`, `\`, `..`, `\0`.
+
+#### Performance (all fixed)
+
+- [x] **`recall.ts` - `recallFromWorkspace` loads ALL checkpoints unconditionally.** Deferred stale count to lazy heuristic.
+- [x] **`recall.ts` - `limit: 0` single-workspace doesn't short-circuit.** Added early return.
+- [x] **`semantic.ts` - Embeddings computed one-at-a-time.** Batched up to 8 items per embed call.
+- [x] **`recall.ts` - Cross-workspace non-search path wastes work.** Uses lightweight checkpoint load.
+- [x] **`consolidate` handler - Pretty-printed JSON wastes tokens.** Switched to compact JSON.
+
+#### Quality / Correctness (all fixed)
+
+- [x] **`handlers/plan.ts` - Em dash in `formatPlanList`.** Replaced with ` - `.
+- [x] **`types.ts` - `PlanAction` dead type.** Deleted.
+- [x] **`handlers/consolidate.ts` - 30-day age limit silently drops old checkpoints.** Added `skippedOldCount` to response.
+- [x] **`tools.ts` - `all` parameter description misleading.** Updated to "Raise batch cap from 50 to 100."
+- [x] **`memory.ts` - `readConsolidationState` swallows all errors.** Now catches only ENOENT and parse errors.
+- [x] **`summary.ts` - Summaries preserve markdown `##` prefix.** Strips leading `#` chars.
+- [x] **`checkpoints.ts` - Unsafe type assertion on `tags`.** Added `Array.isArray()` guard.
+- [x] **`git.ts` - Git context from cwd, not workspace path.** Added optional `cwd` parameter.
+- [x] **`recall.ts` - Synthetic memory section timestamp skews ranking.** Falls back to oldest checkpoint timestamp.
+
+#### Platform (all fixed)
+
+- [x] **`registry.ts` - `unregisterProject` missing `mkdir`.** Added.
+- [x] **`registry.ts` - Mixed path separators on Windows.** Uses template literal.
+
+#### Plugin / Skills / Docs (all fixed)
+
+- [x] **Recall skill consolidation instructions.** Replaced with pointer to `/consolidate` skill.
+- [x] **Plan skill missing `planId` alias docs.** Added.
+- [x] **Recall skill missing `includeMemory` docs.** Added.
+- [x] **Stale `.mcp.json` reference in CLAUDE.md.** Removed.
+- [x] **Duplicate stale-checkpoint counting logic in hooks.** Extracted to `hooks/count-stale.ts`.
+
+#### Test Gaps (all filled)
+
+- [x] **`handleConsolidate` tests.** 4 new tests.
+- [x] **Stale lock infinite loop test.** chmod-based test.
+- [x] **`save` with `planId` alias test.** Added.
+- [x] **Math.min/max with 200k checkpoints test.** Added.
+- [x] **`normalizeEmbedding` typed array tests.** 8 new tests.
+- [x] **`parseSince("0m")`/`parseSince("0d")` tests.** Added.
+- [x] **`activate` with no ID and no active plan test.** Added.
+- [x] **Concurrent `savePlan` same ID test.** Added (proves TOCTOU fix works).
+
+#### Remaining (low priority, no evidence of impact)
+
+- [ ] **Checkpoint handler: optional metadata aliases** - `next` vs `next_steps`, `symbols` vs `affected_symbols`. Silent data loss, no user reports.
+- [ ] **All handler functions typed as `args: any`.** Zero compile-time checking. Judgment call.
+- [x] **`checkpoints.ts` - Corrupted checkpoint files silently skipped.** Now logs warning via logger with file path and error message.
+- [ ] **No tests for hook scripts.** Hooks have non-trivial logic but are standalone scripts. Low priority.

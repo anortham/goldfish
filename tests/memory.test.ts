@@ -120,6 +120,23 @@ describe('readConsolidationState', () => {
     const result = await readConsolidationState(tempDir);
     expect(result).toBeNull();
   });
+
+  it('throws on permission errors (not ENOENT or parse error)', async () => {
+    const memoriesDir = join(tempDir, '.memories');
+    await mkdir(memoriesDir, { recursive: true });
+    const filePath = join(memoriesDir, '.last-consolidated');
+    await writeFile(filePath, '{"timestamp":"2026-01-01T00:00:00.000Z","checkpointsConsolidated":1}');
+    // Make file unreadable
+    const { chmod } = await import('fs/promises');
+    await chmod(filePath, 0o000);
+
+    try {
+      await expect(readConsolidationState(tempDir)).rejects.toThrow();
+    } finally {
+      // Restore permissions for cleanup
+      await chmod(filePath, 0o644);
+    }
+  });
 });
 
 describe('writeConsolidationState', () => {

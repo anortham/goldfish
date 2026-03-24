@@ -94,6 +94,16 @@ function generatePlanId(title: string): string {
 }
 
 /**
+ * Validate that a plan ID is safe for use in file paths.
+ * Rejects IDs containing path separators or traversal sequences.
+ */
+function validatePlanId(id: string): void {
+  if (id.includes('/') || id.includes('\\') || id.includes('..') || id.includes('\0')) {
+    throw new Error(`Invalid plan ID '${id}': must not contain path separators or traversal sequences`);
+  }
+}
+
+/**
  * Save a new plan
  */
 export async function savePlan(input: PlanInput): Promise<Plan> {
@@ -102,6 +112,7 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
 
   const now = new Date().toISOString();
   const id = input.id || generatePlanId(input.title);
+  validatePlanId(id);
 
   const plan: Plan = {
     id,
@@ -113,31 +124,33 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
     tags: input.tags || []
   };
 
-  // Write plan file atomically
+  // Write plan file atomically under lock to prevent TOCTOU race
   const planPath = join(getPlansDir(projectPath), `${id}.md`);
   const content = formatPlanFile(plan);
 
-  // Check for duplicate ID before writing
-  try {
-    await readFile(planPath, 'utf-8');
-    throw new Error(`Plan with ID '${id}' already exists`);
-  } catch (error: any) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-
-  // Atomic write: temp file then rename
-  const tempPath = `${planPath}.tmp.${Date.now()}`;
-  await writeFile(tempPath, content, 'utf-8');
-  try {
-    await rename(tempPath, planPath);
-  } catch (error: any) {
-    if (error.code === 'ENOENT' && process.platform === 'win32') {
-      await writeFile(planPath, content, 'utf-8');
-      try { await unlink(tempPath); } catch {}
-    } else {
-      throw error;
+  await withLock(planPath, async () => {
+    // Check for duplicate ID before writing
+    try {
+      await readFile(planPath, 'utf-8');
+      throw new Error(`Plan with ID '${id}' already exists`);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') throw error;
     }
-  }
+
+    // Atomic write: temp file then rename
+    const tempPath = `${planPath}.tmp.${Date.now()}`;
+    await writeFile(tempPath, content, 'utf-8');
+    try {
+      await rename(tempPath, planPath);
+    } catch (error: any) {
+      if (error.code === 'ENOENT' && process.platform === 'win32') {
+        await writeFile(planPath, content, 'utf-8');
+        try { await unlink(tempPath); } catch {}
+      } else {
+        throw error;
+      }
+    }
+  });
 
   // Auto-activate if requested (default: false)
   if (input.activate) {
@@ -151,6 +164,7 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
  * Get a plan by ID
  */
 export async function getPlan(projectPath: string, id: string): Promise<Plan | null> {
+  validatePlanId(id);
   const planPath = join(getPlansDir(projectPath), `${id}.md`);
 
   try {
@@ -226,6 +240,7 @@ export async function getActivePlan(projectPath: string): Promise<Plan | null> {
  * Set the active plan for a workspace
  */
 export async function setActivePlan(projectPath: string, planId: string): Promise<void> {
+  validatePlanId(planId);
   // Verify plan exists
   const plan = await getPlan(projectPath, planId);
   if (!plan) {
@@ -257,6 +272,7 @@ export async function updatePlan(
   id: string,
   updates: PlanUpdate
 ): Promise<void> {
+  validatePlanId(id);
   const planPath = join(getPlansDir(projectPath), `${id}.md`);
 
   // Use file lock to prevent race conditions on concurrent updates
@@ -299,6 +315,7 @@ export async function updatePlan(
  * Delete a plan
  */
 export async function deletePlan(projectPath: string, id: string): Promise<void> {
+  validatePlanId(id);
   const planPath = join(getPlansDir(projectPath), `${id}.md`);
   const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 

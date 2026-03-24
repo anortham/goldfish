@@ -18,6 +18,7 @@ import { registerProject } from './registry';
 import { getActivePlan } from './plans';
 import { buildRetrievalDigest, DIGEST_VERSION } from './digests';
 import { upsertPendingSemanticRecord } from './semantic-cache';
+import { getLogger } from './logger';
 
 type SemanticQueueInput = {
   checkpointId: string;
@@ -273,7 +274,9 @@ export function parseCheckpointFile(content: string): Checkpoint {
     description: body
   };
 
-  const tags = frontmatter.tags as string[] | undefined;
+  const tags = Array.isArray(frontmatter.tags)
+    ? normalizeStringArray(frontmatter.tags)
+    : undefined;
   if (tags) checkpoint.tags = tags;
   if (git) checkpoint.git = git;
   if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
@@ -460,8 +463,8 @@ export async function getCheckpointsForDay(
       const checkpoint = parseCheckpointFile(content);
       checkpoint.filePath = filePath;
       checkpoints.push(checkpoint);
-    } catch {
-      // Skip files that can't be parsed (e.g., corrupted)
+    } catch (err: any) {
+      getLogger().warn(`skipping corrupted checkpoint: ${join(dateDir, file)} (${err?.message ?? 'unknown error'})`);
       continue;
     }
   }

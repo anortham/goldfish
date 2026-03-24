@@ -102,6 +102,9 @@ export async function unregisterProject(projectPath: string, registryDir?: strin
   const absolutePath = normalizePath(projectPath);
   const filePath = join(dir, 'registry.json');
 
+  // Ensure directory exists before acquiring lock (lock file needs the dir)
+  await mkdir(dir, { recursive: true });
+
   await withLock(filePath, async () => {
     const registry = await getRegistry(dir);
 
@@ -133,7 +136,7 @@ export async function listRegisteredProjects(registryDir?: string): Promise<Regi
 
   for (const project of registry.projects) {
     try {
-      const memoriesPath = join(project.path, '.memories');
+      const memoriesPath = `${project.path}/.memories`;
       const stats = await stat(memoriesPath);
       if (stats.isDirectory()) {
         validProjects.push(project);

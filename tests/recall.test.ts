@@ -19,7 +19,7 @@ let restoreCheckpointDeps: (() => void) | undefined;
 const TEST_DEFAULT_RUNTIME = {
   isReady: () => false,
   getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
-  embedTexts: async () => [[1, 0]]
+  embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
 };
 
 beforeAll(() => {
@@ -267,7 +267,7 @@ describe('Search functionality', () => {
       limit: 2,
       _semanticRuntime: {
         isReady: () => true,
-        embedTexts: async () => [[1, 0]]
+        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
       }
     });
 
@@ -308,7 +308,7 @@ describe('Search functionality', () => {
       limit: 5,
       _semanticRuntime: {
         isReady: () => true,
-        embedTexts: async () => [[1, 0]]
+        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
       }
     });
 
@@ -439,25 +439,20 @@ describe('Search functionality', () => {
     const semanticDigest = initialSemanticState.records.find(record => record.checkpointId === semanticRescue.id)!.digest;
 
     let warm = false;
-    const embedCalls: string[] = [];
+    const embedCalls: string[][] = [];
 
     const runtime = {
       isReady: () => warm,
       getModelInfo: () => ({ id: 'test-model', version: '1' }),
       embedTexts: async (texts: string[]) => {
-        const text = texts[0]!;
-        embedCalls.push(text);
+        embedCalls.push([...texts]);
         warm = true;
 
-        if (text === 'login timeout issue') {
-          return [[1, 0]];
-        }
-
-        if (text.includes('Resolved idle session expiry')) {
-          return [[1, 0]];
-        }
-
-        return [[0, 1]];
+        return texts.map(text => {
+          if (text === 'login timeout issue') return [1, 0];
+          if (text.includes('Resolved idle session expiry')) return [1, 0];
+          return [0, 1];
+        });
       }
     };
 
@@ -486,12 +481,12 @@ describe('Search functionality', () => {
     ]);
     expect(afterFirstSearch.records.filter(record => record.status === 'ready')).toHaveLength(2);
     expect(afterSecondSearch.records.filter(record => record.status === 'ready')).toHaveLength(2);
-    expect(embedCalls).toEqual([
-      'login timeout issue',
-      lexicalDigest,
-      semanticDigest,
-      'login timeout issue'
-    ]);
+    // First call: query embedding for search. Second call: batched maintenance for both digests. Third call: query embedding for second search.
+    expect(embedCalls).toHaveLength(3);
+    expect(embedCalls[0]).toEqual(['login timeout issue']);
+    expect(embedCalls[1]).toContain(lexicalDigest);
+    expect(embedCalls[1]).toContain(semanticDigest);
+    expect(embedCalls[2]).toEqual(['login timeout issue']);
   });
 
   it('invalidates incompatible ready records before search ranking', async () => {
@@ -513,7 +508,7 @@ describe('Search functionality', () => {
       _semanticRuntime: {
         isReady: () => false,
         getModelInfo: () => ({ id: 'new-model', version: '2' }),
-        embedTexts: async () => [[1, 0]]
+        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
       }
     });
 
@@ -660,7 +655,7 @@ describe('Search functionality', () => {
       limit: 10,
       _semanticRuntime: {
         isReady: () => false,
-        embedTexts: async () => [[1, 0]]
+        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
       }
     });
 
@@ -684,7 +679,7 @@ describe('Search functionality', () => {
       limit: 10,
       _semanticRuntime: {
         isReady: () => false,
-        embedTexts: async () => [[1, 0]]
+        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
       }
     });
 
@@ -825,7 +820,7 @@ describe('Cross-workspace functionality', () => {
       _registryDir: registryDir,
       _semanticRuntime: {
         isReady: () => true,
-        embedTexts: async () => [[1, 0]]
+        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
       }
     });
 
@@ -1100,6 +1095,19 @@ describe('parseSince - human-friendly time span parser', () => {
     expect(() => parseSince('h')).toThrow(/Invalid since format/);
   });
 
+  it('handles zero-value durations (0m, 0h, 0d)', () => {
+    const now = new Date();
+
+    const zeroMinutes = parseSince('0m');
+    expect(Math.abs(zeroMinutes.getTime() - now.getTime())).toBeLessThan(100);
+
+    const zeroHours = parseSince('0h');
+    expect(Math.abs(zeroHours.getTime() - now.getTime())).toBeLessThan(100);
+
+    const zeroDays = parseSince('0d');
+    expect(Math.abs(zeroDays.getTime() - now.getTime())).toBeLessThan(100);
+  });
+
   it('handles single digit values', () => {
     const now = new Date();
     const result = parseSince('1h');
@@ -1302,6 +1310,33 @@ describe('recall with limit parameter', () => {
 
     expect(result.checkpoints).toHaveLength(0);
     expect(result.activePlan).toBeDefined();
+  });
+
+  it('limit: 0 single-workspace returns plan and consolidation but skips checkpoints', async () => {
+    await savePlan({
+      id: 'plan-shortcircuit',
+      title: 'Short Circuit Plan',
+      content: 'Plan content',
+      workspace: TEST_DIR_A,
+      activate: true
+    });
+
+    await writeConsolidationState(TEST_DIR_A, {
+      timestamp: new Date('2020-01-01T00:00:00Z').toISOString(),
+      checkpointsConsolidated: 3
+    });
+    await writeMemory(TEST_DIR_A, '## Memory\nSome content');
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      limit: 0
+    });
+
+    expect(result.checkpoints).toHaveLength(0);
+    expect(result.activePlan).toBeDefined();
+    expect(result.activePlan!.id).toBe('plan-shortcircuit');
+    // Consolidation state should still be returned
+    expect(result.consolidation).toBeDefined();
   });
 });
 
@@ -1895,6 +1930,41 @@ describe('Memory section search integration', () => {
     });
 
     expect(result.matchedMemorySections).toBeUndefined();
+  });
+
+  it('memory sections use oldest checkpoint timestamp when no consolidation state exists', async () => {
+    await writeMemory(TEST_DIR_A, [
+      '## System Architecture',
+      '',
+      'Microservices communicating via gRPC.',
+    ].join('\n'));
+
+    // Create checkpoints with known timestamps
+    const oldCheckpoint = await saveCheckpoint({
+      description: 'Old architecture decision about gRPC',
+      tags: ['architecture'],
+      workspace: TEST_DIR_A
+    });
+
+    const newCheckpoint = await saveCheckpoint({
+      description: 'New gRPC performance optimization',
+      tags: ['performance'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'gRPC',
+      limit: 10
+    });
+
+    // Memory section should appear in results but not dominate newer checkpoints
+    // via a synthetic "now" timestamp
+    expect(result.matchedMemorySections).toBeDefined();
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+    // The newest actual checkpoint should rank above the memory section
+    // (memory section shouldn't get artificial recency boost from Date.now())
+    expect(result.checkpoints[0]!.id).toBe(newCheckpoint.id);
   });
 
   it('memory section IDs use the expected prefix', async () => {

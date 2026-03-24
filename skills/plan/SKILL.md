@@ -45,7 +45,7 @@ Structure your plan content with clear sections:
 
 - **activate: true** — set this so the plan appears at the top of every `recall()` response. Without activation, future sessions won't see the plan and the strategic direction is effectively lost.
 - **tags** — categorize for search. Use consistent tags across checkpoints and plans.
-- **id** — auto-generated from title. Only override if you need a specific slug.
+- **id** (or **planId**) — auto-generated from title. Either name works; `planId` is an alias for `id`.
 
 ## Managing Plan Lifecycle
 
@@ -55,6 +55,8 @@ mcp__goldfish__plan({ action: "list" })
 ```
 
 ### Update a plan (add progress, change scope)
+
+Properties can go in the `updates` object or as top-level parameters:
 ```
 mcp__goldfish__plan({
   action: "update",
@@ -62,6 +64,15 @@ mcp__goldfish__plan({
   updates: {
     content: "## Goals\n\n...(updated content with progress noted)..."
   }
+})
+```
+
+Top-level shorthand (equivalent):
+```
+mcp__goldfish__plan({
+  action: "update",
+  id: "auth-system-overhaul",
+  content: "## Goals\n\n...(updated content with progress noted)..."
 })
 ```
 

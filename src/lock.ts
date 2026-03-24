@@ -6,6 +6,7 @@
  */
 
 import { writeFile, unlink } from 'fs/promises';
+import { getLogger } from './logger';
 
 const MAX_LOCK_AGE_MS = 30000; // 30 seconds - locks older than this are considered stale
 const LOCK_RETRY_DELAY_MS = 10;
@@ -39,6 +40,13 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
       };
     } catch (error: any) {
       if (error.code === 'EEXIST' || error.code === 'EPERM') {
+        // Increment attempts unconditionally to prevent infinite loops
+        // (e.g. when a stale lock can't be deleted due to permissions)
+        attempts++;
+        if (attempts >= MAX_LOCK_ATTEMPTS) {
+          throw new Error(`Failed to acquire lock for ${filePath} after ${MAX_LOCK_ATTEMPTS} attempts`);
+        }
+
         // Lock file exists - check if it's stale
         try {
           const existingLock = JSON.parse(await Bun.file(lockPath).text());
@@ -46,26 +54,21 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
 
           if (age > MAX_LOCK_AGE_MS) {
             // Stale lock - remove it and retry
+            getLogger().warn(`stale lock detected: ${lockPath} (age=${Math.round(age / 1000)}s, pid=${existingLock.pid})`);
             try {
               await unlink(lockPath);
             } catch {
-              // Lock might have been removed by another process
+              // Lock might have been removed by another process, or
+              // we lack permissions. Either way, attempts is already
+              // incremented so we won't loop forever.
             }
           } else {
             // Valid lock - wait and retry
-            attempts++;
-            if (attempts >= MAX_LOCK_ATTEMPTS) {
-              throw new Error(`Failed to acquire lock for ${filePath} after ${MAX_LOCK_ATTEMPTS} attempts`);
-            }
             await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
           }
         } catch {
           // Can't read lock file (I/O contention, partial write, antivirus scan).
           // Do NOT delete it; it may be validly held. Just wait and retry.
-          attempts++;
-          if (attempts >= MAX_LOCK_ATTEMPTS) {
-            throw new Error(`Failed to acquire lock for ${filePath} after ${MAX_LOCK_ATTEMPTS} attempts`);
-          }
           await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
         }
       } else {

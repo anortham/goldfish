@@ -23,7 +23,7 @@ export function generateSummary(description: string): string | undefined {
 
   // Extract first sentence (split on period followed by space, or newline)
   const sentences = description.split(/\.(?:\s|$)|\n/);
-  let firstSentence = sentences[0]?.trim() || '';
+  let firstSentence = (sentences[0]?.trim() || '').replace(/^#+\s*/, '');
 
   // If first sentence is still too long, truncate it
   if (firstSentence.length > MAX_SUMMARY_LENGTH) {

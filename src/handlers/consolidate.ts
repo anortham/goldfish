@@ -55,6 +55,7 @@ export async function handleConsolidate(args: any) {
   const recent = unconsolidated.filter(
     c => new Date(c.timestamp).getTime() >= ageLimit
   );
+  const skippedOldCount = unconsolidated.length - recent.length;
 
   // Exclude legacy .json files (subagent only understands .md format)
   const mdOnly = recent.filter(c => c.filePath?.endsWith('.md'));
@@ -63,10 +64,13 @@ export async function handleConsolidate(args: any) {
   if (mdOnly.length === 0) {
     const payload: ConsolidationPayload = {
       status: 'current',
-      message: 'Memory is up to date. No unconsolidated checkpoints.'
+      message: skippedOldCount > 0
+        ? `${skippedOldCount} checkpoint(s) older than 30 days were skipped. No recent unconsolidated checkpoints.`
+        : 'Memory is up to date. No unconsolidated checkpoints.',
+      ...(skippedOldCount > 0 && { skippedOldCount })
     };
     return {
-      content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }]
+      content: [{ type: 'text' as const, text: JSON.stringify(payload) }]
     };
   }
 
@@ -108,10 +112,11 @@ export async function handleConsolidate(args: any) {
     checkpointCount,
     remainingCount,
     previousTotal,
+    ...(skippedOldCount > 0 && { skippedOldCount }),
     prompt
   };
 
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }]
+    content: [{ type: 'text' as const, text: JSON.stringify(payload) }]
   };
 }

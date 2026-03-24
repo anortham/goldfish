@@ -10,6 +10,7 @@ import {
   parsePlanFile,
   formatPlanFile
 } from '../src/plans';
+import { handlePlan } from '../src/handlers/plan';
 import { acquireLock } from '../src/lock';
 import type { Plan, PlanInput } from '../src/types';
 import { getPlansDir, ensureMemoriesDir } from '../src/workspace';
@@ -186,6 +187,86 @@ Plan with BOM.`;
     const plan = parsePlanFile(content);
     expect(plan.id).toBe('bom-plan');
     expect(plan.content).toBe('Plan with BOM.');
+  });
+});
+
+describe('Plan ID sanitization', () => {
+  it('rejects plan IDs that escape the plans directory (path traversal)', async () => {
+    await expect(
+      savePlan({
+        id: '../../etc/passwd',
+        title: 'Escape attempt',
+        content: 'Content',
+        workspace: TEST_DIR
+      })
+    ).rejects.toThrow(/invalid.*plan.*id/i);
+  });
+
+  it('rejects plan IDs with embedded path separators', async () => {
+    await expect(
+      savePlan({
+        id: 'foo/bar',
+        title: 'Separator in ID',
+        content: 'Content',
+        workspace: TEST_DIR
+      })
+    ).rejects.toThrow(/invalid.*plan.*id/i);
+  });
+
+  it('rejects plan IDs with backslash separators', async () => {
+    await expect(
+      savePlan({
+        id: 'foo\\bar',
+        title: 'Backslash in ID',
+        content: 'Content',
+        workspace: TEST_DIR
+      })
+    ).rejects.toThrow(/invalid.*plan.*id/i);
+  });
+
+  it('allows normal plan IDs', async () => {
+    const plan = await savePlan({
+      id: 'my-valid-plan-123',
+      title: 'Valid Plan',
+      content: 'Content',
+      workspace: TEST_DIR
+    });
+    expect(plan.id).toBe('my-valid-plan-123');
+  });
+});
+
+describe('Plan save locking (TOCTOU)', () => {
+  it('prevents concurrent saves with the same ID', async () => {
+    const results = await Promise.allSettled([
+      savePlan({ id: 'race-test', title: 'First', content: 'A', workspace: TEST_DIR }),
+      savePlan({ id: 'race-test', title: 'Second', content: 'B', workspace: TEST_DIR })
+    ]);
+
+    const fulfilled = results.filter(r => r.status === 'fulfilled');
+    const rejected = results.filter(r => r.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+  });
+});
+
+describe('Plan save with planId alias', () => {
+  it('saves plan with planId alias for id', async () => {
+    const result = await handlePlan({
+      action: 'save',
+      title: 'PlanId Alias Test',
+      content: 'Content',
+      planId: 'alias-save-test',
+      workspace: TEST_DIR
+    });
+
+    const text = result.content[0]!.text;
+    expect(text).toContain('alias-save-test');
+
+    // Verify the plan was actually saved with that ID
+    const plan = await getPlan(TEST_DIR, 'alias-save-test');
+    expect(plan).toBeTruthy();
+    expect(plan!.title).toBe('PlanId Alias Test');
   });
 });
 

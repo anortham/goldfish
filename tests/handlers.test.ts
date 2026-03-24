@@ -645,9 +645,52 @@ describe('Readable markdown responses', () => {
         expect(text).toContain('Updated:');
         expect(text).toContain('Plan content');
       });
+
+      it('falls back to active plan when no id provided', async () => {
+        await savePlan({
+          id: 'active-plan',
+          title: 'Active Plan',
+          content: 'Active content',
+          workspace: TEST_DIR,
+          activate: true
+        });
+
+        const result = await handlePlan({
+          action: 'get',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toContain('# Active Plan');
+        expect(text).toContain('Active content');
+      });
+
+      it('throws helpful error when no id and no active plan', async () => {
+        expect(handlePlan({
+          action: 'get',
+          workspace: TEST_DIR
+        })).rejects.toThrow('No active plan found');
+      });
     });
 
     describe('list action', () => {
+      it('does not contain em dashes in plan list output', async () => {
+        await savePlan({
+          id: 'emdash-plan',
+          title: 'Em Dash Test',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        const result = await handlePlan({
+          action: 'list',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).not.toContain('\u2014'); // em dash
+      });
+
       it('returns list of plans', async () => {
         await savePlan({
           id: 'plan-1',
@@ -727,7 +770,60 @@ describe('Readable markdown responses', () => {
       });
     });
 
+    describe('planId alias', () => {
+      it('accepts planId as alias for id across all actions', async () => {
+        await savePlan({
+          id: 'alias-test',
+          title: 'Alias Test',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        // get with planId
+        const getResult = await handlePlan({
+          action: 'get',
+          planId: 'alias-test',
+          workspace: TEST_DIR
+        });
+        expect(getResult.content[0]!.text).toContain('# Alias Test');
+
+        // activate with planId
+        const activateResult = await handlePlan({
+          action: 'activate',
+          planId: 'alias-test',
+          workspace: TEST_DIR
+        });
+        expect(activateResult.content[0]!.text).toContain('Plan activated: alias-test');
+
+        // update with planId
+        const updateResult = await handlePlan({
+          action: 'update',
+          planId: 'alias-test',
+          updates: { title: 'Updated' },
+          workspace: TEST_DIR
+        });
+        expect(updateResult.content[0]!.text).toContain('Plan updated: alias-test');
+
+        // complete with planId
+        const completeResult = await handlePlan({
+          action: 'complete',
+          planId: 'alias-test',
+          workspace: TEST_DIR
+        });
+        expect(completeResult.content[0]!.text).toContain('Plan completed: alias-test');
+      });
+    });
+
     describe('activate action', () => {
+      it('throws when no ID provided and no active plan', async () => {
+        await expect(
+          handlePlan({
+            action: 'activate',
+            workspace: TEST_DIR
+          })
+        ).rejects.toThrow('Plan ID is required');
+      });
+
       it('returns one-liner confirmation', async () => {
         await savePlan({
           id: 'test-plan',
@@ -766,6 +862,52 @@ describe('Readable markdown responses', () => {
         const text = result.content[0]!.text;
         expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan updated: test-plan/);
       });
+
+      it('constructs updates from top-level properties when updates object is missing', async () => {
+        await savePlan({
+          id: 'toplevel-test',
+          title: 'Original Title',
+          content: 'Original content',
+          workspace: TEST_DIR
+        });
+
+        const result = await handlePlan({
+          action: 'update',
+          planId: 'toplevel-test',
+          content: 'Updated content from top level',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toContain('Plan updated: toplevel-test');
+
+        // Verify the content was actually updated
+        const getResult = await handlePlan({
+          action: 'get',
+          id: 'toplevel-test',
+          workspace: TEST_DIR
+        });
+        expect(getResult.content[0]!.text).toContain('Updated content from top level');
+      });
+
+      it('falls back to active plan when no id provided', async () => {
+        await savePlan({
+          id: 'active-update-test',
+          title: 'Active Plan',
+          content: 'Original',
+          workspace: TEST_DIR,
+          activate: true
+        });
+
+        const result = await handlePlan({
+          action: 'update',
+          updates: { content: 'Updated via active' },
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toContain('Plan updated: active-update-test');
+      });
     });
 
     describe('complete action', () => {
@@ -785,6 +927,24 @@ describe('Readable markdown responses', () => {
 
         const text = result.content[0]!.text;
         expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan completed: test-plan/);
+      });
+
+      it('falls back to active plan when no id provided', async () => {
+        await savePlan({
+          id: 'active-complete-test',
+          title: 'Active Plan',
+          content: 'Content',
+          workspace: TEST_DIR,
+          activate: true
+        });
+
+        const result = await handlePlan({
+          action: 'complete',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toContain('Plan completed: active-complete-test');
       });
     });
   });

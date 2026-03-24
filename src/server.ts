@@ -19,8 +19,9 @@ import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handlePlan, handleConsolidate } from './handlers/index.js';
 import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
+import { getLogger } from './logger.js';
 
-export const SERVER_VERSION = '6.2.1';
+export const SERVER_VERSION = '6.3.0';
 
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan, handleConsolidate };
@@ -54,21 +55,34 @@ export async function startServer() {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    const log = getLogger();
+    const start = performance.now();
 
     try {
+      let result;
       switch (name) {
         case 'checkpoint':
-          return await handleCheckpoint(args);
+          result = await handleCheckpoint(args);
+          break;
         case 'recall':
-          return await handleRecall(args);
+          result = await handleRecall(args);
+          break;
         case 'plan':
-          return await handlePlan(args);
+          result = await handlePlan(args);
+          break;
         case 'consolidate':
-          return await handleConsolidate(args);
+          result = await handleConsolidate(args);
+          break;
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
+
+      const ms = (performance.now() - start).toFixed(1);
+      log.info(`tool.call name=${name} duration=${ms}ms`);
+      return result;
     } catch (error: any) {
+      const ms = (performance.now() - start).toFixed(1);
+      log.error(`tool.call name=${name} duration=${ms}ms`, error);
       return {
         content: [
           {
@@ -83,6 +97,10 @@ export async function startServer() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  const log = getLogger();
+  log.info(`server.start version=${SERVER_VERSION} workspace=${process.cwd()}`);
+  log.cleanup(); // Fire-and-forget old log cleanup
 
   console.error('Goldfish MCP Server started');
   console.error('Tools: checkpoint, recall, plan, consolidate');

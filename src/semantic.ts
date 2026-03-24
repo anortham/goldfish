@@ -162,9 +162,13 @@ export async function buildHybridRanking(input: BuildHybridRankingInput): Promis
   const lexicalRanks = new Map(input.lexicalOrder.map((checkpointId, index) => [checkpointId, index]))
   const originalIndexes = new Map(input.checkpoints.map((checkpoint, index) => [checkpoint.id, index]))
   const readyRecordsById = new Map(input.readyRecords.map(record => [record.checkpointId, record]))
-  const timestamps = input.checkpoints.map(checkpoint => new Date(checkpoint.timestamp).getTime())
-  const oldest = Math.min(...timestamps)
-  const newest = Math.max(...timestamps)
+  let oldest = Infinity
+  let newest = -Infinity
+  for (const checkpoint of input.checkpoints) {
+    const ts = new Date(checkpoint.timestamp).getTime()
+    if (ts < oldest) oldest = ts
+    if (ts > newest) newest = ts
+  }
 
   let queryEmbedding = input.queryEmbedding
   if (!queryEmbedding && input.readyRecords.length > 0) {
@@ -223,6 +227,8 @@ export async function buildHybridRanking(input: BuildHybridRankingInput): Promis
   })
 }
 
+const EMBED_BATCH_SIZE = 8
+
 export async function processPendingSemanticWork(
   input: ProcessPendingSemanticWorkInput
 ): Promise<ProcessPendingSemanticWorkResult> {
@@ -231,7 +237,7 @@ export async function processPendingSemanticWork(
   const hasTimeBudget = input.maxMs !== undefined
   let processed = 0
 
-  for (const item of input.pending) {
+  while (processed < input.pending.length) {
     if (processed >= input.maxItems) {
       return {
         processed,
@@ -247,6 +253,15 @@ export async function processPendingSemanticWork(
         stopped: 'max-ms'
       }
     }
+
+    // Build batch: up to EMBED_BATCH_SIZE items, capped by maxItems
+    const batchEnd = Math.min(
+      processed + EMBED_BATCH_SIZE,
+      input.pending.length,
+      input.maxItems
+    )
+    const batch = input.pending.slice(processed, batchEnd)
+    const texts = batch.map(item => item.digest)
 
     let embeddingsResult: TimedEmbeddingResult
 
@@ -267,7 +282,7 @@ export async function processPendingSemanticWork(
           resolve({ status: 'timeout' })
         }, remainingMs)
 
-        void input.embed([item.digest], controller.signal)
+        void input.embed(texts, controller.signal)
           .then(embeddings => {
             clearTimeout(timeout)
             resolve({ status: 'ok', embeddings })
@@ -279,7 +294,7 @@ export async function processPendingSemanticWork(
       })
     } else {
       try {
-        const embeddings = await input.embed([item.digest])
+        const embeddings = await input.embed(texts)
         embeddingsResult = { status: 'ok', embeddings }
       } catch (error) {
         embeddingsResult = { status: 'error', error }
@@ -299,14 +314,16 @@ export async function processPendingSemanticWork(
     }
 
     const embeddings = embeddingsResult.embeddings
-    const embedding = embeddings[0]
 
-    if (!embedding) {
-      throw new Error(`Missing embedding for '${item.checkpointId}'`)
+    for (let i = 0; i < batch.length; i += 1) {
+      const embedding = embeddings[i]
+      if (!embedding) {
+        throw new Error(`Missing embedding for '${batch[i]!.checkpointId}'`)
+      }
+
+      await input.save(batch[i]!.checkpointId, embedding)
+      processed += 1
     }
-
-    await input.save(item.checkpointId, embedding)
-    processed += 1
 
     if (hasTimeBudget && (now() - startedAt) >= input.maxMs!) {
       return {

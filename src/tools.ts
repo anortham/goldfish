@@ -221,11 +221,11 @@ NEVER ask permission to save or update a plan. Just do it.
 
 Actions (use without asking permission):
 - save: Create new plan (MANDATORY after ExitPlanMode). Always activate unless you have a reason not to.
-- get: Retrieve specific plan
+- get: Retrieve specific plan. Falls back to active plan if no id provided.
 - list: See all plans (filterable by status)
 - activate: Set as active plan (shows in recall). Only ONE plan can be active per workspace.
-- update: Update plan content or status. Updates accept: title, content, status, tags.
-- complete: Mark plan as done (sets status to 'completed')
+- update: Update plan content or status. Pass fields in an updates object, or directly as top-level parameters (title, content, status, tags). Falls back to active plan if no id provided.
+- complete: Mark plan as done (sets status to 'completed'). Falls back to active plan if no id provided.
 
 IMPORTANT: Only ONE plan can be active per workspace. After saving a plan, ACTIVATE it so it appears in recall(). Plans are saved to {project}/.memories/plans/ as markdown files with YAML frontmatter.
 
@@ -240,7 +240,11 @@ Returns: Plan details, status updates, or list of plans.`,
           },
           id: {
             type: 'string',
-            description: 'Plan ID (auto-generated from title if not provided)'
+            description: 'Plan ID (auto-generated from title if not provided). Alias: planId'
+          },
+          planId: {
+            type: 'string',
+            description: 'Alias for id. Either id or planId can be used.'
           },
           title: {
             type: 'string',
@@ -309,7 +313,7 @@ Returns: JSON with status, checkpointCount, remainingCount, memoryPath, lastCons
           },
           all: {
             type: 'boolean',
-            description: 'Process all unconsolidated checkpoints in one batch instead of capping at 50. Use for initial consolidation or catching up after a reset.'
+            description: 'Raise batch cap from 50 to 100 checkpoints. Use for initial consolidation or catching up.'
           }
         }
       }

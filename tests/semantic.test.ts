@@ -138,6 +138,36 @@ describe('buildHybridRanking', () => {
   })
 })
 
+describe('buildHybridRanking with large checkpoint count', () => {
+  it('does not throw RangeError when checkpoint count exceeds call stack limit', async () => {
+    const count = 200_000
+    const checkpoints: Checkpoint[] = Array.from({ length: count }, (_, i) => ({
+      id: `cp-${i}`,
+      timestamp: new Date(1700000000000 + i * 1000).toISOString(),
+      description: `checkpoint ${i}`
+    }))
+
+    // Empty lexicalOrder so only recency scoring differentiates checkpoints
+    const ranked = await buildHybridRanking({
+      query: 'test query',
+      checkpoints,
+      lexicalOrder: [],
+      digests: {},
+      readyRecords: [],
+      runtime: {
+        isReady: () => false,
+        embedTexts: async () => [[1, 0]]
+      }
+    })
+
+    expect(ranked).toHaveLength(count)
+    // Verify recency scoring works: newest checkpoint ranks above oldest
+    const newestIndex = ranked.findIndex(r => r.checkpoint.id === `cp-${count - 1}`)
+    const oldestIndex = ranked.findIndex(r => r.checkpoint.id === 'cp-0')
+    expect(newestIndex).toBeLessThan(oldestIndex)
+  })
+})
+
 describe('processPendingSemanticWork', () => {
   it('stops after maxItems', async () => {
     const saved: string[] = []
@@ -162,15 +192,19 @@ describe('processPendingSemanticWork', () => {
 
   it('stops when maxMs is exceeded according to the injected clock', async () => {
     const saved: string[] = []
-    const nowValues = [0, 4, 9, 12, 20]
+    // Clock sequence: startedAt=0, loop check=4, remainingMs check=5, (embed batch 1),
+    // post-batch check=12 (>=10 -> stop before batch 2)
+    const nowValues = [0, 4, 5, 12, 20]
+
+    // 10 items: batch 1 = items 0..7 (8 items), batch 2 = items 8..9 (2 items)
+    const pending = Array.from({ length: 10 }, (_, i) => ({
+      checkpointId: `item-${i}`,
+      digest: `digest ${i}`
+    }))
 
     const result = await processPendingSemanticWork({
-      pending: [
-        { checkpointId: 'one', digest: 'first digest' },
-        { checkpointId: 'two', digest: 'second digest' },
-        { checkpointId: 'three', digest: 'third digest' }
-      ],
-      maxItems: 10,
+      pending,
+      maxItems: 20,
       maxMs: 10,
       now: () => nowValues.shift() ?? 20,
       embed: async (texts: string[]) => texts.map(() => [42]),
@@ -179,8 +213,9 @@ describe('processPendingSemanticWork', () => {
       }
     })
 
-    expect(saved).toEqual(['one'])
-    expect(result).toEqual({ processed: 1, remaining: 2, stopped: 'max-ms' })
+    // First batch of 8 items processes, then time check triggers before second batch
+    expect(saved).toHaveLength(8)
+    expect(result).toEqual({ processed: 8, remaining: 2, stopped: 'max-ms' })
   })
 
   it('returns max-ms without saving when a single item overruns the budget', async () => {
@@ -250,6 +285,38 @@ describe('processPendingSemanticWork', () => {
 
     expect(aborted).toBe(true)
     expect(result).toEqual({ processed: 0, remaining: 1, stopped: 'max-ms' })
+  })
+
+  it('batches multiple items into fewer embed calls', async () => {
+    const saved: string[] = []
+    const embedCalls: string[][] = []
+
+    const result = await processPendingSemanticWork({
+      pending: [
+        { checkpointId: 'one', digest: 'first' },
+        { checkpointId: 'two', digest: 'second' },
+        { checkpointId: 'three', digest: 'third' },
+        { checkpointId: 'four', digest: 'fourth' },
+        { checkpointId: 'five', digest: 'fifth' },
+        { checkpointId: 'six', digest: 'sixth' },
+        { checkpointId: 'seven', digest: 'seventh' }
+      ],
+      maxItems: 10,
+      embed: async (texts: string[]) => {
+        embedCalls.push([...texts])
+        return texts.map(() => [1])
+      },
+      save: async (checkpointId: string) => {
+        saved.push(checkpointId)
+      }
+    })
+
+    expect(saved).toHaveLength(7)
+    expect(result.processed).toBe(7)
+    // Should use fewer embed calls than items (batching)
+    expect(embedCalls.length).toBeLessThan(7)
+    // Each call should have multiple texts (except possibly the last)
+    expect(embedCalls[0]!.length).toBeGreaterThan(1)
   })
 
   it('processes all items without timeout when maxMs is undefined', async () => {

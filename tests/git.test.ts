@@ -109,6 +109,35 @@ describe('Git context', () => {
     expect(context.files!.every(f => !f.startsWith('.memories/'))).toBe(true);
   });
 
+  it('uses optional cwd parameter instead of process.cwd()', async () => {
+    // Create a separate git repo in a temp directory
+    const targetDir = await mkdtemp(join(tmpdir(), 'git-cwd-'));
+    try {
+      await Bun.spawn(['git', 'init'], {
+        cwd: targetDir,
+        stdout: 'ignore',
+        stderr: 'ignore'
+      }).exited;
+
+      await writeFile(join(targetDir, 'target-file.txt'), 'hello');
+      await Bun.spawn(['git', 'add', 'target-file.txt'], { cwd: targetDir }).exited;
+      await Bun.spawn(
+        ['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'init'],
+        { cwd: targetDir, stdout: 'ignore', stderr: 'ignore' }
+      ).exited;
+
+      // Create an untracked file in the target repo
+      await writeFile(join(targetDir, 'new-in-target.txt'), 'content');
+
+      // Call getGitContext with the cwd parameter (NOT changing process.cwd())
+      const context = getGitContext(targetDir);
+      expect(context.files).toBeDefined();
+      expect(context.files).toContain('new-in-target.txt');
+    } finally {
+      await rm(targetDir, { recursive: true, force: true });
+    }
+  });
+
   it('caps file list at MAX_GIT_FILES entries', async () => {
     originalCwd = process.cwd();
     repoDir = await mkdtemp(join(tmpdir(), 'git-cap-'));

@@ -412,21 +412,45 @@ async function recallFromWorkspace(
   matchedMemorySections?: MemorySection[];
   consolidation?: { needed: boolean; staleCheckpoints: number; lastConsolidated: string | null };
 }> {
-  // Load all checkpoints once; reuse for both staleness counting and display.
-  const allWorkspaceCheckpoints = await getAllCheckpoints(workspace);
+  // Short-circuit: limit=0 means plan/consolidation only, skip all checkpoint I/O
+  const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
+  if (limit === 0) {
+    const activePlan = await getActivePlan(workspace);
 
-  // Apply date filtering and plan filtering to get the display candidate set.
+    const shouldIncludeMemory = options.includeMemory !== undefined
+      ? options.includeMemory
+      : !options.search;
+    const memoryContent = shouldIncludeMemory ? await readMemory(workspace) : null;
+    const consolidationState = await readConsolidationState(workspace);
+
+    let memoryExists = false;
+    try {
+      await stat(join(workspace, '.memories', 'MEMORY.md'));
+      memoryExists = true;
+    } catch { /* doesn't exist */ }
+
+    const consolidation = (consolidationState || memoryExists) ? {
+      needed: false,
+      staleCheckpoints: 0,
+      lastConsolidated: consolidationState?.timestamp ?? null
+    } : undefined;
+
+    return {
+      checkpoints: [],
+      activePlan,
+      ...(memoryContent !== null && shouldIncludeMemory ? { memory: memoryContent } : {}),
+      ...(consolidation ? { consolidation } : {})
+    };
+  }
+
+  // Load checkpoints for display. Only loads all when needed for date filtering or search.
   let checkpoints: Checkpoint[];
   if (hasDateParams(options)) {
     const { from, to } = getDateRange(options);
-    const fromTime = new Date(from).getTime();
-    const toTime = new Date(to).getTime();
-    checkpoints = allWorkspaceCheckpoints.filter(cp => {
-      const t = new Date(cp.timestamp).getTime();
-      return t >= fromTime && t <= toTime;
-    });
+    checkpoints = await getCheckpointsForDateRange(workspace, from, to);
   } else {
-    checkpoints = allWorkspaceCheckpoints;
+    const earlyLimit = options.search ? undefined : limit;
+    checkpoints = await getAllCheckpoints(workspace, earlyLimit);
   }
 
   if (options.planId) {
@@ -451,7 +475,10 @@ async function recallFromWorkspace(
 
     const syntheticSectionCheckpoints: Checkpoint[] = memorySections.map(section => ({
       id: `${MEMORY_SECTION_PREFIX}${section.slug}`,
-      timestamp: cachedConsolidationState?.timestamp ?? new Date().toISOString(),
+      timestamp: cachedConsolidationState?.timestamp
+        ?? (checkpoints.length > 0
+          ? checkpoints.reduce((oldest, cp) => cp.timestamp < oldest ? cp.timestamp : oldest, checkpoints[0]!.timestamp)
+          : new Date().toISOString()),
       description: section.content,
       tags: ['memory'],
       type: 'checkpoint' as const,
@@ -504,8 +531,7 @@ async function recallFromWorkspace(
     );
   }
 
-  const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
-  checkpoints = limit > 0 ? checkpoints.slice(0, limit) : [];
+  checkpoints = checkpoints.slice(0, limit);
   checkpoints = checkpoints.map(checkpoint => presentCheckpoint(checkpoint, options));
 
   // Get active plan
@@ -528,16 +554,19 @@ async function recallFromWorkspace(
     memoryExists = true;
   } catch { /* doesn't exist */ }
 
-  // Count stale checkpoints (checkpoints newer than last consolidation)
+  // Count stale checkpoints (checkpoints newer than last consolidation).
+  // Only load all checkpoints when we actually need to count them.
   let staleCheckpoints = 0;
   if (consolidationState) {
+    const allForCount = await getAllCheckpoints(workspace);
     const lastTimestamp = new Date(consolidationState.timestamp).getTime();
-    staleCheckpoints = allWorkspaceCheckpoints.filter(
+    staleCheckpoints = allForCount.filter(
       cp => new Date(cp.timestamp).getTime() > lastTimestamp
     ).length;
   } else if (consolidationState === null && memoryExists) {
     // No consolidation state but MEMORY.md exists: treat all checkpoints as stale.
-    staleCheckpoints = allWorkspaceCheckpoints.length;
+    const allForCount = await getAllCheckpoints(workspace);
+    staleCheckpoints = allForCount.length;
   }
 
   const consolidation = (consolidationState || memoryExists) ? {
@@ -701,13 +730,14 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   }
 
   // Fetch from all registered projects in parallel.
-  // Per-project limit = global limit (each project may contribute all top results).
+  // Lightweight path: only load checkpoints and memory, skip plan/consolidation per project.
   const projectResults = await Promise.all(
     projects.map(async (project) => {
-      const { checkpoints } = await recallFromWorkspace(project.path, {
-        ...options,
-        limit: globalLimit
-      });
+      let checkpoints = await loadWorkspaceCheckpoints(project.path, { ...options, limit: globalLimit });
+      checkpoints = checkpoints
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, globalLimit)
+        .map(checkpoint => presentCheckpoint(checkpoint, options));
       const projectMemory = await readMemory(project.path);
       return { project, checkpoints, projectMemory };
     })

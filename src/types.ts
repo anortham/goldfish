@@ -120,17 +120,6 @@ export interface GitContext {
   files?: string[];       // Changed files
 }
 
-export interface PlanAction {
-  action: 'save' | 'get' | 'list' | 'activate' | 'update' | 'complete';
-  id?: string;
-  title?: string;
-  content?: string;
-  workspace?: string;
-  activate?: boolean;
-  status?: 'active' | 'completed' | 'archived';
-  updates?: PlanUpdate;
-}
-
 export interface RegisteredProject {
   path: string;       // Absolute path to project root
   name: string;       // Normalized workspace name (via normalizeWorkspace)
@@ -161,5 +150,6 @@ export interface ConsolidationPayload {
   checkpointCount?: number;            // Number of checkpoints in this batch
   remainingCount?: number;             // Unconsolidated checkpoints beyond this batch
   previousTotal?: number;              // Running total for incrementing checkpointsConsolidated
+  skippedOldCount?: number;            // Checkpoints older than age limit that were excluded
   prompt?: string;                     // Subagent instructions (checkpoint file paths embedded)
 }

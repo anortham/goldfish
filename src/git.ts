@@ -16,29 +16,27 @@ const EXCLUDED_PREFIXES = ['.memories/'];
 /**
  * Get current git context (branch, commit, changed files)
  * Returns undefined values if not in a git repository
+ *
+ * @param cwd - Optional working directory for git commands (defaults to process.cwd())
  */
-export function getGitContext(): GitContext {
+export function getGitContext(cwd?: string): GitContext {
+  const spawnOpts = { stdio: ['ignore', 'pipe', 'ignore'] as const, cwd };
+
   try {
     // Get current branch
-    const branchResult = spawnSync(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
-      stdio: ['ignore', 'pipe', 'ignore']
-    });
+    const branchResult = spawnSync(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], spawnOpts);
     const branch = branchResult.success
       ? branchResult.stdout.toString().trim()
       : undefined;
 
     // Get current commit (short hash)
-    const commitResult = spawnSync(['git', 'rev-parse', '--short', 'HEAD'], {
-      stdio: ['ignore', 'pipe', 'ignore']
-    });
+    const commitResult = spawnSync(['git', 'rev-parse', '--short', 'HEAD'], spawnOpts);
     const commit = commitResult.success
       ? commitResult.stdout.toString().trim()
       : undefined;
 
     // Get changed files (staged + unstaged, excluding untracked)
-    const filesResult = spawnSync(['git', 'diff', '--name-only', 'HEAD'], {
-      stdio: ['ignore', 'pipe', 'ignore']
-    });
+    const filesResult = spawnSync(['git', 'diff', '--name-only', 'HEAD'], spawnOpts);
     const filesSet = new Set<string>();
 
     if (filesResult.success) {
@@ -52,7 +50,7 @@ export function getGitContext(): GitContext {
     // Include untracked files as well
     const untrackedResult = spawnSync(
       ['git', 'ls-files', '--others', '--exclude-standard'],
-      { stdio: ['ignore', 'pipe', 'ignore'] }
+      spawnOpts
     );
     if (untrackedResult.success) {
       for (const file of untrackedResult.stdout.toString().trim().split('\n')) {

@@ -1,4 +1,3 @@
-import { existsSync } from 'fs'
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { withLock } from './lock'
@@ -380,7 +379,13 @@ export async function pruneOrphanedSemanticCaches(): Promise<void> {
         continue
       }
 
-      if (!existsSync(manifest.workspacePath)) {
+      let workspaceExists = false
+      try {
+        await stat(manifest.workspacePath)
+        workspaceExists = true
+      } catch { /* doesn't exist */ }
+
+      if (!workspaceExists) {
         // Workspace path no longer exists — delete
         await rm(dirPath, { recursive: true, force: true })
         continue

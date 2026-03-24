@@ -144,4 +144,49 @@ describe('File locking', () => {
     const { unlink } = await import('fs/promises');
     await unlink(lockPath);
   });
+
+  it('does not loop forever when a stale lock cannot be deleted', async () => {
+    const lockPath = `${TEST_FILE}.lock`;
+    const { chmod } = await import('fs/promises');
+
+    // Create a stale lock (older than 30 seconds)
+    const staleLock = {
+      pid: 99999,
+      timestamp: Date.now() - 60000 // 60 seconds ago
+    };
+    await writeFile(lockPath, JSON.stringify(staleLock));
+
+    // Make the directory read-only so unlink fails on the lock file
+    await chmod(TEST_DIR, 0o555);
+
+    try {
+      // Race the lock acquisition against a short timeout.
+      // With the bug fixed, acquireLock should throw (not hang).
+      const result = await Promise.race([
+        acquireLock(TEST_FILE).then(
+          (release) => { release(); return 'acquired' as const; },
+          (err) => ({ error: err as Error })
+        ),
+        new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 3000))
+      ]);
+
+      // Restore permissions before assertions
+      await chmod(TEST_DIR, 0o755);
+
+      if (result === 'timeout') {
+        throw new Error('acquireLock hung (infinite loop on undeletable stale lock)');
+      }
+
+      if (result === 'acquired') {
+        throw new Error('acquireLock should not succeed when lock file cannot be deleted');
+      }
+
+      // Should have thrown with a proper error message
+      expect(result.error.message).toMatch(/Failed to acquire lock/);
+    } catch (error) {
+      // Restore permissions in case of unexpected errors
+      await chmod(TEST_DIR, 0o755).catch(() => {});
+      throw error;
+    }
+  });
 });

@@ -22,7 +22,7 @@
         "matcher": "ExitPlanMode",
         "hooks": [{
           "type": "prompt",
-          "prompt": "A plan was just approved. Save it to Goldfish for cross-session persistence using the plan tool with action 'save'. Extract the plan title and content from the plan file that was written."
+          "prompt": "A plan was just approved. Save it to Goldfish for cross-session persistence using the plan tool with action 'save' and activate set to true. Extract the plan title and content from the plan file that was written. Always set activate: true so the plan appears in future recall() responses."
         }]
       }
     ]

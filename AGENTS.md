@@ -53,8 +53,7 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 
 Goldfish is a **Claude Code plugin** with:
 
-- **`.claude-plugin/plugin.json`** - Plugin manifest for auto-discovery
-- **`.mcp.json`** - MCP server auto-registration
+- **`.claude-plugin/plugin.json`** - Plugin manifest (auto-discovery + MCP server registration)
 - **`skills/`** - 5 Claude Code skills (slash commands)
 - **`hooks/`** - 3 Claude Code hooks (lifecycle automation)
 

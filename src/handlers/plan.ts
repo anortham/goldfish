@@ -2,7 +2,7 @@
  * Plan tool handler
  */
 
-import { savePlan, getPlan, listPlans, setActivePlan, updatePlan } from '../plans.js';
+import { savePlan, getPlan, getActivePlan, listPlans, setActivePlan, updatePlan } from '../plans.js';
 import { getFishEmoji } from '../emoji.js';
 import { resolveWorkspace } from '../workspace.js';
 import type { Plan } from '../types.js';
@@ -31,7 +31,7 @@ function formatPlanFull(plan: Plan): string {
 function formatPlanList(plans: Plan[]): string {
   const lines: string[] = [];
   for (const plan of plans) {
-    lines.push(`- **${plan.id}**: ${plan.title} (${plan.status}) — updated ${plan.updated}`);
+    lines.push(`- **${plan.id}**: ${plan.title} (${plan.status}) - updated ${plan.updated}`);
   }
   return lines.join('\n');
 }
@@ -46,6 +46,20 @@ function textResponse(text: string) {
 }
 
 /**
+ * Resolve plan ID from args, accepting both 'id' and 'planId' (common LLM alias).
+ * Falls back to the active plan when neither is provided.
+ * Returns null if no ID can be resolved.
+ */
+async function resolveId(args: any, workspace: string): Promise<string | null> {
+  const id = args.id || args.planId;
+  if (id) return id;
+
+  // Fall back to active plan
+  const active = await getActivePlan(workspace);
+  return active?.id ?? null;
+}
+
+/**
  * Handle plan tool calls
  */
 export async function handlePlan(args: any) {
@@ -56,6 +70,7 @@ export async function handlePlan(args: any) {
   switch (action) {
     case 'save': {
       const { title, content, activate, id, tags } = args;
+      const planId = id || args.planId;
       if (!title || !content) {
         throw new Error('Title and content are required for save action');
       }
@@ -65,7 +80,7 @@ export async function handlePlan(args: any) {
         content,
         workspace,
         activate: activate ?? false,
-        ...(id && { id }),
+        ...(planId && { id: planId }),
         ...(tags && { tags })
       });
 
@@ -74,8 +89,8 @@ export async function handlePlan(args: any) {
     }
 
     case 'get': {
-      const { id } = args;
-      if (!id) throw new Error('Plan ID is required');
+      const id = await resolveId(args, workspace);
+      if (!id) throw new Error('No active plan found. Provide a plan ID or activate a plan first.');
 
       const plan = await getPlan(workspace, id);
       if (!plan) throw new Error(`Plan '${id}' not found`);
@@ -102,16 +117,31 @@ export async function handlePlan(args: any) {
     }
 
     case 'activate': {
-      const { id } = args;
-      if (!id) throw new Error('Plan ID is required');
+      const id = args.id || args.planId;
+      if (!id) throw new Error('Plan ID is required for activate action');
 
       await setActivePlan(workspace, id);
       return textResponse(`${fish} Plan activated: ${id}`);
     }
 
     case 'update': {
-      const { id, updates } = args;
-      if (!id) throw new Error('Plan ID is required');
+      const id = await resolveId(args, workspace);
+      if (!id) throw new Error('No active plan found. Provide a plan ID or activate a plan first.');
+
+      // Accept updates as explicit object, or construct from top-level properties
+      let { updates } = args;
+      if (!updates) {
+        const topLevel: Record<string, any> = {};
+        if (args.title) topLevel.title = args.title;
+        if (args.content) topLevel.content = args.content;
+        if (args.status) topLevel.status = args.status;
+        if (args.tags) topLevel.tags = args.tags;
+
+        if (Object.keys(topLevel).length > 0) {
+          updates = topLevel;
+        }
+      }
+
       if (!updates) throw new Error('Updates are required');
 
       await updatePlan(workspace, id, updates);
@@ -119,8 +149,8 @@ export async function handlePlan(args: any) {
     }
 
     case 'complete': {
-      const { id } = args;
-      if (!id) throw new Error('Plan ID is required');
+      const id = await resolveId(args, workspace);
+      if (!id) throw new Error('No active plan found. Provide a plan ID or activate a plan first.');
 
       await updatePlan(workspace, id, { status: 'completed' });
       return textResponse(`${fish} Plan completed: ${id}`);

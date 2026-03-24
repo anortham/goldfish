@@ -56,10 +56,17 @@ export async function writeMemory(workspace: string, content: string): Promise<v
  */
 export async function readConsolidationState(workspace: string): Promise<ConsolidationState | null> {
   const filePath = join(memoriesDir(workspace), CONSOLIDATION_STATE_FILE);
+  let raw: string;
   try {
-    const raw = await readFile(filePath, 'utf-8');
+    raw = await readFile(filePath, 'utf-8');
+  } catch (err: unknown) {
+    if (isEnoent(err)) return null;
+    throw err;
+  }
+  try {
     return JSON.parse(raw) as ConsolidationState;
   } catch {
+    // Malformed JSON, treat as absent
     return null;
   }
 }

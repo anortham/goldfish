@@ -327,6 +327,80 @@ describe('handleConsolidate', () => {
     expect(parsed.prompt).not.toContain('## Current State');
   });
 
+  it('includes skipped count when old checkpoints are filtered by age limit', async () => {
+    const { writeFile, mkdir } = await import('fs/promises');
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    const dateStr = oldDate.toISOString().split('T')[0];
+    const dateDir = join(TEST_DIR, '.memories', dateStr);
+    await mkdir(dateDir, { recursive: true });
+    const oldCheckpointContent = [
+      '---',
+      `id: checkpoint_skipped001`,
+      `timestamp: ${oldDate.toISOString()}`,
+      'tags: [old]',
+      '---',
+      '## Skipped checkpoint',
+      'Old checkpoint that was skipped.'
+    ].join('\n');
+    await writeFile(join(dateDir, '120000_skip1.md'), oldCheckpointContent);
+
+    // Also create a recent one so status is "ready"
+    await saveCheckpoint({ description: 'recent work', workspace: TEST_DIR });
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('ready');
+    expect(parsed.checkpointCount).toBe(1);
+    // Should report skipped old checkpoints
+    expect(parsed.skippedOldCount).toBe(1);
+  });
+
+  it('includes skipped count in "current" response when only old checkpoints remain', async () => {
+    const { writeFile, mkdir } = await import('fs/promises');
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    const dateStr = oldDate.toISOString().split('T')[0];
+    const dateDir = join(TEST_DIR, '.memories', dateStr);
+    await mkdir(dateDir, { recursive: true });
+    const oldCheckpointContent = [
+      '---',
+      `id: checkpoint_skipped002`,
+      `timestamp: ${oldDate.toISOString()}`,
+      'tags: [old]',
+      '---',
+      '## Ancient checkpoint',
+      'Way too old.'
+    ].join('\n');
+    await writeFile(join(dateDir, '120000_skip2.md'), oldCheckpointContent);
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('current');
+    expect(parsed.skippedOldCount).toBe(1);
+    expect(parsed.message).toContain('older than 30 days');
+  });
+
+  it('uses compact JSON (no pretty-printing)', async () => {
+    await saveCheckpoint({ description: 'compact test', workspace: TEST_DIR });
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const text = result.content[0].text;
+
+    // Compact JSON should not have newlines inside it (no pretty-printing)
+    // A pretty-printed JSON has multiple lines
+    const lineCount = text.split('\n').length;
+    expect(lineCount).toBe(1);
+  });
+
+  it('returns "current" with no skipped count when workspace is empty', async () => {
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('current');
+    expect(parsed.skippedOldCount).toBeUndefined();
+  });
+
   it('returns current when all unconsolidated checkpoints are older than 30 days', async () => {
     const { writeFile, mkdir } = await import('fs/promises');
     const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);

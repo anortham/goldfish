@@ -66,8 +66,8 @@ Everything is transparent, git-committable, and human-readable.
 MEMORY.md is the project's consolidated understanding, built from checkpoints. When recall flags \`consolidation.needed: true\`, dispatch a background consolidation subagent:
 
 1. Call \`consolidate()\` to get the payload
-2. Dispatch a background subagent with the payload's \`prompt\` field
-3. Pass \`currentMemory\` and \`unconsolidatedCheckpoints\` as context to the subagent
+2. If status is "ready": dispatch a background subagent with the payload's \`prompt\` field. The prompt contains all file paths and instructions the subagent needs.
+3. If status is "current": nothing to do, memory is up to date
 4. Continue your work - the subagent handles the rest
 
 Consolidation happens automatically via hooks, but you can trigger it manually any time.

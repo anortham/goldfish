@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { statSync } from 'fs';
 import { join } from 'path';
+import { countStaleCheckpoints } from './count-stale';
 
 const workspace = process.cwd();
 const memoriesDir = join(workspace, '.memories');
@@ -14,28 +15,7 @@ try {
     hasMemory = true;
   } catch { /* no memory */ }
 
-  let lastTimestamp = 0;
-  try {
-    const raw = readFileSync(join(memoriesDir, '.last-consolidated'), 'utf-8');
-    const state = JSON.parse(raw);
-    lastTimestamp = new Date(state.timestamp).getTime();
-  } catch { /* no state */ }
-
-  // Count stale checkpoints (uses file mtime as approximation;
-  // actual consolidation tool uses checkpoint YAML timestamps for precision)
-  try {
-    const entries = readdirSync(memoriesDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name.startsWith('.') || !/^\d{4}-\d{2}-\d{2}$/.test(entry.name)) continue;
-      const dateDir = join(memoriesDir, entry.name);
-      const files = readdirSync(dateDir);
-      for (const file of files) {
-        if (!file.endsWith('.md')) continue;
-        const mtime = statSync(join(dateDir, file)).mtimeMs;
-        if (mtime > lastTimestamp) staleCount++;
-      }
-    }
-  } catch { /* no dirs */ }
+  staleCount = countStaleCheckpoints(memoriesDir);
 } catch { /* no memories dir */ }
 
 let message = 'Use the goldfish recall tool to restore context from previous sessions. Call recall() with default parameters.';

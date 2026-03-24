@@ -639,6 +639,123 @@ Structured metadata test checkpoint
     expect(parsed.confidence).toBe(original.confidence);
     expect(parsed.unknowns).toEqual(original.unknowns);
   });
+
+  it('throws on syntactically broken YAML frontmatter', () => {
+    const content = `---
+id: checkpoint_broken01
+timestamp: "2026-02-14T10:00:00.000Z"
+tags: [unclosed bracket
+  - oops
+---
+
+Malformed YAML.`;
+
+    expect(() => parseCheckpointFile(content)).toThrow();
+  });
+
+  it('treats non-array tags as undefined', () => {
+    const content = `---
+id: checkpoint_badtags1
+timestamp: "2026-02-14T10:00:00.000Z"
+tags: "just-a-string"
+---
+
+Tags is a string, not an array.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.tags).toBeUndefined();
+  });
+
+  it('treats numeric tags value as undefined', () => {
+    const content = `---
+id: checkpoint_badtags2
+timestamp: "2026-02-14T10:00:00.000Z"
+tags: 42
+---
+
+Tags is a number.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.tags).toBeUndefined();
+  });
+
+  it('normalizeConfidence returns undefined for 0', () => {
+    const content = `---
+id: checkpoint_conf0
+timestamp: "2026-02-14T10:00:00.000Z"
+confidence: 0
+---
+
+Zero confidence.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.confidence).toBeUndefined();
+  });
+
+  it('normalizeConfidence returns undefined for 6', () => {
+    const content = `---
+id: checkpoint_conf6
+timestamp: "2026-02-14T10:00:00.000Z"
+confidence: 6
+---
+
+Over-max confidence.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.confidence).toBeUndefined();
+  });
+
+  it('normalizeConfidence returns 1 for boundary value 1', () => {
+    const content = `---
+id: checkpoint_conf1
+timestamp: "2026-02-14T10:00:00.000Z"
+confidence: 1
+---
+
+Min confidence.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.confidence).toBe(1);
+  });
+
+  it('normalizeConfidence returns 5 for boundary value 5', () => {
+    const content = `---
+id: checkpoint_conf5
+timestamp: "2026-02-14T10:00:00.000Z"
+confidence: 5
+---
+
+Max confidence.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.confidence).toBe(5);
+  });
+
+  it('normalizeConfidence rounds 3.7 to 4', () => {
+    const content = `---
+id: checkpoint_conf37
+timestamp: "2026-02-14T10:00:00.000Z"
+confidence: 3.7
+---
+
+Float confidence.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.confidence).toBe(4);
+  });
+
+  it('normalizeConfidence returns undefined for NaN-like string', () => {
+    const content = `---
+id: checkpoint_confnan
+timestamp: "2026-02-14T10:00:00.000Z"
+confidence: not-a-number
+---
+
+NaN confidence.`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.confidence).toBeUndefined();
+  });
 });
 
 // ─── parseJsonCheckpoint (old Julie JSON format) ────────────────────
