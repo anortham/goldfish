@@ -11,6 +11,12 @@ import { handleConsolidate } from '../src/handlers/consolidate';
 let TEST_DIR: string;
 let restoreDeps: (() => void) | undefined;
 
+/** Extract checkpoint file paths from the consolidation prompt text */
+function extractFilesFromPrompt(prompt: string): string[] {
+  const matches = prompt.matchAll(/\d+\.\s+`([^`]+\.md)`/g);
+  return [...matches].map(m => m[1]);
+}
+
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'goldfish-consolidate-'));
   await ensureMemoriesDir(TEST_DIR);
@@ -43,17 +49,22 @@ describe('handleConsolidate', () => {
     expect(parsed.checkpointFiles).toBeUndefined();
   });
 
-  it('returns file paths instead of checkpoint content', async () => {
+  it('does not include checkpointFiles in payload (paths are in prompt only)', async () => {
     await saveCheckpoint({ description: 'first checkpoint', workspace: TEST_DIR });
 
     const result = await handleConsolidate({ workspace: TEST_DIR });
     const parsed = JSON.parse(result.content[0].text);
 
     expect(parsed.status).toBe('ready');
-    expect(Array.isArray(parsed.checkpointFiles)).toBe(true);
-    expect(parsed.checkpointFiles.length).toBe(1);
-    expect(parsed.checkpointFiles[0]).toContain(`${sep}.memories${sep}`);
-    expect(parsed.checkpointFiles[0]).toEndWith('.md');
+    expect(parsed.checkpointCount).toBe(1);
+    // checkpointFiles must NOT be in the payload (they live in the prompt)
+    expect(parsed.checkpointFiles).toBeUndefined();
+
+    // But the prompt should contain the file path
+    const files = extractFilesFromPrompt(parsed.prompt);
+    expect(files.length).toBe(1);
+    expect(files[0]).toContain(`${sep}.memories${sep}`);
+    expect(files[0]).toEndWith('.md');
 
     // Content fields must NOT be present
     expect(parsed.unconsolidatedCheckpoints).toBeUndefined();
@@ -71,7 +82,7 @@ describe('handleConsolidate', () => {
     expect(parsed.lastConsolidatedPath).toBe(join(TEST_DIR, '.memories', '.last-consolidated'));
   });
 
-  it('returns checkpointFiles in chronological (oldest-first) order', async () => {
+  it('lists checkpoint files in chronological (oldest-first) order in prompt', async () => {
     await saveCheckpoint({ description: 'first', workspace: TEST_DIR });
     // Sleep past second boundary so filenames differ in HHMMSS portion
     await new Promise(resolve => setTimeout(resolve, 1100));
@@ -80,11 +91,13 @@ describe('handleConsolidate', () => {
     const result = await handleConsolidate({ workspace: TEST_DIR });
     const parsed = JSON.parse(result.content[0].text);
 
-    expect(parsed.checkpointFiles.length).toBe(2);
+    expect(parsed.checkpointCount).toBe(2);
+    const files = extractFilesFromPrompt(parsed.prompt);
+    expect(files.length).toBe(2);
     // Read both files and verify timestamps are in order
     const { readFile } = await import('fs/promises');
-    const content1 = await readFile(parsed.checkpointFiles[0], 'utf-8');
-    const content2 = await readFile(parsed.checkpointFiles[1], 'utf-8');
+    const content1 = await readFile(files[0], 'utf-8');
+    const content2 = await readFile(files[1], 'utf-8');
     const ts1 = content1.match(/timestamp: (.+)/)?.[1] ?? '';
     const ts2 = content2.match(/timestamp: (.+)/)?.[1] ?? '';
     expect(new Date(ts1).getTime()).toBeLessThan(new Date(ts2).getTime());
@@ -108,7 +121,7 @@ describe('handleConsolidate', () => {
     const parsed = JSON.parse(result.content[0].text);
 
     expect(parsed.status).toBe('ready');
-    expect(parsed.checkpointFiles.length).toBe(1);
+    expect(parsed.checkpointCount).toBe(1);
     expect(parsed.previousTotal).toBe(1);
   });
 
@@ -148,7 +161,8 @@ describe('handleConsolidate', () => {
     // The prompt should contain a concrete ISO timestamp from the last checkpoint
     // Read the last checkpoint file to get its actual timestamp
     const { readFile } = await import('fs/promises');
-    const lastFile = parsed.checkpointFiles[parsed.checkpointFiles.length - 1];
+    const files = extractFilesFromPrompt(parsed.prompt);
+    const lastFile = files[files.length - 1];
     const content = await readFile(lastFile, 'utf-8');
     const match = content.match(/timestamp: (.+)/);
     expect(match).toBeTruthy();
@@ -158,9 +172,23 @@ describe('handleConsolidate', () => {
     expect(parsed.prompt).toContain(lastCheckpointTs);
   });
 
-  it('returns all checkpoints in one batch when all: true', async () => {
-    // Create more checkpoints than the default batch cap (50)
-    // We'll create 55 to prove the cap is bypassed
+  it('caps all: true at 100 checkpoints per batch', async () => {
+    // Create 110 checkpoints to prove the cap
+    const promises = [];
+    for (let i = 0; i < 110; i++) {
+      promises.push(saveCheckpoint({ description: `checkpoint ${i}`, workspace: TEST_DIR }));
+    }
+    await Promise.all(promises);
+
+    const result = await handleConsolidate({ workspace: TEST_DIR, all: true });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('ready');
+    expect(parsed.checkpointCount).toBe(100);
+    expect(parsed.remainingCount).toBe(10);
+  });
+
+  it('returns all checkpoints in one batch when all: true and under cap', async () => {
     const promises = [];
     for (let i = 0; i < 55; i++) {
       promises.push(saveCheckpoint({ description: `checkpoint ${i}`, workspace: TEST_DIR }));
@@ -171,7 +199,7 @@ describe('handleConsolidate', () => {
     const parsed = JSON.parse(result.content[0].text);
 
     expect(parsed.status).toBe('ready');
-    expect(parsed.checkpointFiles.length).toBe(55);
+    expect(parsed.checkpointCount).toBe(55);
     expect(parsed.remainingCount).toBe(0);
   });
 
@@ -186,11 +214,11 @@ describe('handleConsolidate', () => {
     const parsed = JSON.parse(result.content[0].text);
 
     expect(parsed.status).toBe('ready');
-    expect(parsed.checkpointFiles.length).toBe(50);
+    expect(parsed.checkpointCount).toBe(50);
     expect(parsed.remainingCount).toBe(5);
   });
 
-  it('excludes legacy .json checkpoint files from checkpointFiles', async () => {
+  it('excludes legacy .json checkpoint files', async () => {
     // Save a normal .md checkpoint
     await saveCheckpoint({ description: 'md checkpoint', workspace: TEST_DIR });
 
@@ -206,8 +234,9 @@ describe('handleConsolidate', () => {
     const result = await handleConsolidate({ workspace: TEST_DIR });
     const parsed = JSON.parse(result.content[0].text);
 
-    // Should only have the .md file
-    for (const f of parsed.checkpointFiles) {
+    // Prompt should only reference .md files
+    const files = extractFilesFromPrompt(parsed.prompt);
+    for (const f of files) {
       expect(f).toEndWith('.md');
     }
   });
@@ -270,9 +299,10 @@ describe('handleConsolidate', () => {
     const parsed = JSON.parse(result.content[0].text);
 
     expect(parsed.status).toBe('ready');
-    expect(parsed.checkpointFiles.length).toBe(1);
-    // The old checkpoint should not be in the batch
-    for (const f of parsed.checkpointFiles) {
+    expect(parsed.checkpointCount).toBe(1);
+    // The old checkpoint should not appear in the prompt
+    const files = extractFilesFromPrompt(parsed.prompt);
+    for (const f of files) {
       expect(f).not.toContain(dateStr);
     }
   });

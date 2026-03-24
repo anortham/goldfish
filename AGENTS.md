@@ -309,18 +309,38 @@ If you can't answer "yes" to 1, 2, 4 and "no" to 3, **DON'T ADD IT.**
 ## Testing
 
 ```bash
-# Run all tests
+# Run all tests (final check only, ~8s)
 bun test
 
 # Watch mode (use during development)
 bun test --watch
 
-# Single test
+# Single test file
+bun test tests/workspace.test.ts
+
+# Single test by name pattern
 bun test tests/workspace.test.ts -t "normalizes full path"
 
 # Coverage
 bun test --coverage
 ```
+
+### Targeted Test Groups
+
+Run the group matching your change instead of the full suite. Use the full suite as a final check.
+
+| Group | Command | Covers |
+|-------|---------|--------|
+| Storage & utils | `bun test workspace lock git summary digests` | Paths, file ops, utilities |
+| Checkpoints | `bun test checkpoints` | Checkpoint CRUD, formatting, parsing |
+| Plans | `bun test plans` | Plan CRUD, activation |
+| Memory | `bun test consolidate memory` | Consolidation, MEMORY.md state |
+| Semantic | `bun test semantic transformers` | Embeddings, ranking, cache |
+| Recall | `bun test recall` | Search, filtering, hybrid ranking |
+| Handlers | `bun test handlers` | MCP tool handler responses |
+| Server & registry | `bun test server registry` | Server startup, cross-project registry |
+
+These work because bun matches filenames containing the given substring.
 
 **Every feature MUST have tests. No exceptions.**
 

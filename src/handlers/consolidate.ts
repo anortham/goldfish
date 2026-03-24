@@ -14,6 +14,7 @@ import { join } from 'path';
 import type { ConsolidationPayload } from '../types.js';
 
 const CONSOLIDATION_BATCH_CAP = 50;
+const CONSOLIDATION_ALL_CAP = 100;
 const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
 
 /**
@@ -69,8 +70,9 @@ export async function handleConsolidate(args: any) {
     };
   }
 
-  // Batch: take all if requested, otherwise cap at CONSOLIDATION_BATCH_CAP
-  const batch = args?.all ? mdOnly : mdOnly.slice(0, CONSOLIDATION_BATCH_CAP);
+  // Batch: cap at 100 with all flag, 50 without (prevents MCP response overflow)
+  const batchCap = args?.all ? CONSOLIDATION_ALL_CAP : CONSOLIDATION_BATCH_CAP;
+  const batch = mdOnly.slice(0, batchCap);
   const remainingCount = mdOnly.length - batch.length;
   const checkpointFiles = batch.map(c => c.filePath!);
 
@@ -100,7 +102,6 @@ export async function handleConsolidate(args: any) {
 
   const payload: ConsolidationPayload = {
     status: 'ready',
-    checkpointFiles,
     memoryPath,
     lastConsolidatedPath,
     activePlanPath,

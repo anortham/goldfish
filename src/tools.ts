@@ -299,7 +299,7 @@ Workflow:
 
 The subagent reads checkpoint files directly from disk and writes two files: .memories/MEMORY.md and .memories/.last-consolidated.
 
-Returns: JSON with status, checkpointFiles (paths), memoryPath, lastConsolidatedPath, remainingCount, and subagent prompt.`,
+Returns: JSON with status, checkpointCount, remainingCount, memoryPath, lastConsolidatedPath, and subagent prompt.`,
       inputSchema: {
         type: 'object',
         properties: {

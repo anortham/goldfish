@@ -21,7 +21,7 @@ allowed-tools: mcp__goldfish__consolidate, Agent
 mcp__goldfish__consolidate({})
 ```
 
-Returns a lightweight JSON payload with `status`, `checkpointFiles` (paths), `memoryPath`, `remainingCount`, and a `prompt` template. No checkpoint content is returned.
+Returns a lightweight JSON payload with `status`, `checkpointCount`, `remainingCount`, and a `prompt` template. No checkpoint content is returned. Checkpoint file paths are embedded in the prompt (not in the payload) to keep the response compact.
 
 ### Step 2: Check Status
 
