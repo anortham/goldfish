@@ -554,19 +554,27 @@ async function recallFromWorkspace(
     memoryExists = true;
   } catch { /* doesn't exist */ }
 
-  // Count stale checkpoints (checkpoints newer than last consolidation).
-  // Only load all checkpoints when we actually need to count them.
+  // Count stale checkpoints (checkpoints newer than last consolidation AND
+  // within the 30-day age window). This matches what the consolidate handler
+  // actually processes, preventing inflated counts from old checkpoints.
+  const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
+  const ageLimit = Date.now() - CONSOLIDATION_AGE_LIMIT_DAYS * 24 * 60 * 60 * 1000;
   let staleCheckpoints = 0;
   if (consolidationState) {
     const allForCount = await getAllCheckpoints(workspace);
     const lastTimestamp = new Date(consolidationState.timestamp).getTime();
     staleCheckpoints = allForCount.filter(
-      cp => new Date(cp.timestamp).getTime() > lastTimestamp
+      cp => {
+        const cpTime = new Date(cp.timestamp).getTime();
+        return cpTime > lastTimestamp && cpTime >= ageLimit;
+      }
     ).length;
   } else if (consolidationState === null && memoryExists) {
-    // No consolidation state but MEMORY.md exists: treat all checkpoints as stale.
+    // No consolidation state but MEMORY.md exists: treat recent checkpoints as stale.
     const allForCount = await getAllCheckpoints(workspace);
-    staleCheckpoints = allForCount.length;
+    staleCheckpoints = allForCount.filter(
+      cp => new Date(cp.timestamp).getTime() >= ageLimit
+    ).length;
   }
 
   const consolidation = (consolidationState || memoryExists) ? {

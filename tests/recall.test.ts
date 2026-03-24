@@ -1857,6 +1857,83 @@ Sparks is the MCP server entry point.
     expect(result.consolidation!.lastConsolidated).toBeNull();
   });
 
+  it('excludes checkpoints older than 30 days from stale count', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+
+    // Consolidation happened 60 days ago
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    await writeConsolidationState(TEST_DIR_A, {
+      timestamp: sixtyDaysAgo.toISOString(),
+      checkpointsConsolidated: 5
+    });
+
+    // Write a checkpoint from 45 days ago (older than 30-day limit, should NOT count)
+    const fortyFiveDaysAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    const oldDate = fortyFiveDaysAgo.toISOString().split('T')[0]!;
+    const oldDateDir = join(TEST_DIR_A, '.memories', oldDate);
+    await mkdir(oldDateDir, { recursive: true });
+    await writeFile(join(oldDateDir, '120000_oldcheck.md'), [
+      '---',
+      'id: checkpoint_old',
+      `timestamp: "${fortyFiveDaysAgo.toISOString()}"`,
+      '---',
+      '',
+      'Old checkpoint beyond 30-day window'
+    ].join('\n'), 'utf-8');
+
+    // Write a checkpoint from 5 days ago (within 30-day limit, SHOULD count)
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const recentDate = fiveDaysAgo.toISOString().split('T')[0]!;
+    const recentDateDir = join(TEST_DIR_A, '.memories', recentDate);
+    await mkdir(recentDateDir, { recursive: true });
+    await writeFile(join(recentDateDir, '120000_newcheck.md'), [
+      '---',
+      'id: checkpoint_new',
+      `timestamp: "${fiveDaysAgo.toISOString()}"`,
+      '---',
+      '',
+      'Recent checkpoint within 30-day window'
+    ].join('\n'), 'utf-8');
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.consolidation).toBeDefined();
+    expect(result.consolidation!.needed).toBe(true);
+    // Only the recent checkpoint should count as stale, not the old one
+    expect(result.consolidation!.staleCheckpoints).toBe(1);
+  });
+
+  it('reports consolidation not needed when all unconsolidated checkpoints are older than 30 days', async () => {
+    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
+
+    // Consolidation happened 60 days ago
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    await writeConsolidationState(TEST_DIR_A, {
+      timestamp: sixtyDaysAgo.toISOString(),
+      checkpointsConsolidated: 5
+    });
+
+    // Only old checkpoints exist (beyond 30-day window)
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+    const oldDate = fortyDaysAgo.toISOString().split('T')[0]!;
+    const oldDateDir = join(TEST_DIR_A, '.memories', oldDate);
+    await mkdir(oldDateDir, { recursive: true });
+    await writeFile(join(oldDateDir, '120000_ancient.md'), [
+      '---',
+      'id: checkpoint_ancient',
+      `timestamp: "${fortyDaysAgo.toISOString()}"`,
+      '---',
+      '',
+      'Ancient checkpoint beyond 30-day window'
+    ].join('\n'), 'utf-8');
+
+    const result = await recall({ workspace: TEST_DIR_A });
+
+    expect(result.consolidation).toBeDefined();
+    expect(result.consolidation!.needed).toBe(false);
+    expect(result.consolidation!.staleCheckpoints).toBe(0);
+  });
+
   it('returns no consolidation field when neither MEMORY.md nor consolidation state exist', async () => {
     await saveCheckpoint({
       description: 'Bare workspace with no memory or consolidation',
