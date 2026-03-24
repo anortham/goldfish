@@ -33,7 +33,7 @@ export function buildConsolidationPrompt(
     ? `\`${activePlanPath}\`\n   - Use it to understand project direction. Do not modify it.`
     : 'No active plan.';
 
-  return `You are a memory consolidation subagent. Your job is to synthesize developer checkpoints into a durable, well-structured MEMORY.md.
+  return `You are a memory consolidation subagent. Your job is to distill developer checkpoints into a lean MEMORY.md that captures only what cannot be derived from the codebase, git log, or tools.
 
 ## Inputs
 
@@ -51,31 +51,42 @@ ${fileList}
 
 ## Synthesis Instructions
 
-1. **Use currentMemory as baseline.** Start from the existing MEMORY.md structure and content. Do not discard what is already there unless it is contradicted or obsoleted by newer checkpoints.
+**Litmus test: if you can derive it from the codebase, git log, or tools, it doesn't belong in MEMORY.md.**
 
-2. **Read each unconsolidated checkpoint.** Extract durable facts, decisions, discoveries, architectural choices, and current state. Process them in chronological order (oldest first).
+MEMORY.md exists for things that are hard to reconstruct. Apply this test to every line you write.
 
-3. **Use the active plan for context.** If provided, let the plan inform which areas are in active flux and which sections deserve more detail.
+### KEEP (hard to reconstruct)
 
-4. **Synthesize, do not append.** Do not dump checkpoints verbatim. Extract what matters and integrate it into the appropriate sections.
+- **Decisions + rationale**: why a choice was made, what alternatives were rejected
+- **Open questions**: unresolved uncertainties, things still being evaluated
+- **Deferred work with context**: what's blocked, why, and what's needed to unblock
+- **Gotchas**: non-obvious things discovered through experience that would burn time again
 
-5. **Overwrite contradictions.** New facts replace old ones. If a checkpoint says "we switched from X to Y", update the relevant section to reflect Y and remove stale mentions of X.
+### KILL (derivable from code, git, or tools)
 
-6. **Prune ephemeral details.** Keep: decisions, architecture, key discoveries, current state, active concerns, open questions. Drop: debugging steps, false starts, commands run, transient errors resolved.
+- Architecture descriptions (read the code)
+- Module/file inventories (use search tools)
+- Phase histories and changelogs (git log)
+- Feature lists (read the files)
+- Infrastructure/config details (read configs)
+- Current state summaries (git status, tests)
 
-7. **Preserve document voice.** Write in clear prose. Avoid bullet soup; use bullets only when items are genuinely list-like. Keep sections cohesive and readable.
+### How to Synthesize
 
-8. **Hard cap: 500 lines.** If the document would exceed 500 lines, compress old or resolved sections. Summarize instead of listing. Archive resolved concerns.
+1. **Start from existing MEMORY.md.** Keep entries that still pass the litmus test. Remove anything that doesn't.
+2. **Read checkpoints in order** (oldest first). Extract only decisions, rationale, open questions, deferred work, and gotchas.
+3. **Overwrite contradictions.** New facts replace old ones. If a checkpoint says "we switched from X to Y", update to reflect Y and remove X.
+4. **Age out old entries.** Drop entries about work older than 30 days to make room for recent decisions. If something from 30+ days ago is still relevant, it probably belongs in CLAUDE.md, not here.
+5. **Synthesize, do not append.** Never dump checkpoints verbatim. Integrate what matters.
+6. **No prescribed sections.** Let content dictate structure. Use whatever headers make sense for the current entries. Do NOT include a title line or frontmatter. The document starts directly with a \`##\` header.
 
-9. **Use ## headers for sections.** Standard sections include (use what's relevant, add others as needed):
-   - \`## Project Overview\`
-   - \`## Architecture\`
-   - \`## Key Decisions\`
-   - \`## Current State\`
-   - \`## Active Concerns\`
-   - \`## Open Questions\`
+### Line Budget (Traffic Light)
 
-   Do NOT include a title line or frontmatter. The document starts directly with a \`##\` header.
+- **Green**: under 25 lines. Healthy. Room to add.
+- **Yellow**: 25-40 lines. Don't add without removing something.
+- **Red**: over 40 lines. Must remove something before adding.
+
+If the document is over 40 lines, you are almost certainly including derivable information. Re-apply the litmus test aggressively.
 
 ## Output: Write Two Files
 
@@ -83,7 +94,7 @@ ${fileList}
 \`${memoryPath}\`
 
 - No frontmatter, no title. Pure markdown starting with a \`##\` header.
-- Must not exceed 500 lines.
+- Target under 25 lines. Never exceed 40 lines.
 
 **File 2:** Write the consolidation state JSON to:
 \`${lastConsolidatedPath}\`

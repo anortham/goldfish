@@ -276,6 +276,26 @@ describe('handleConsolidate', () => {
     }
   });
 
+  it('prompt contains litmus test and traffic light budget', async () => {
+    await saveCheckpoint({ description: 'test checkpoint', workspace: TEST_DIR });
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    // Litmus test present
+    expect(parsed.prompt).toContain('derive it from the codebase');
+
+    // Traffic light budget present
+    expect(parsed.prompt).toContain('25');
+    expect(parsed.prompt).toContain('40');
+
+    // Old bloat-inducing patterns gone
+    expect(parsed.prompt).not.toContain('500 lines');
+    expect(parsed.prompt).not.toContain('## Project Overview');
+    expect(parsed.prompt).not.toContain('## Architecture');
+    expect(parsed.prompt).not.toContain('## Current State');
+  });
+
   it('returns current when all unconsolidated checkpoints are older than 30 days', async () => {
     const { writeFile, mkdir } = await import('fs/promises');
     const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
