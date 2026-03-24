@@ -346,6 +346,16 @@ These work because bun matches filenames containing the given substring.
 
 ---
 
+## Version Bumping
+
+The version must be updated in three files (a test enforces they stay in sync):
+
+1. `package.json` (`version` field)
+2. `.claude-plugin/plugin.json` (`version` field)
+3. `src/server.ts` (`SERVER_VERSION` constant)
+
+---
+
 ## Tech Stack
 
 - **Runtime:** Bun (for speed + built-in test runner)
