@@ -243,4 +243,59 @@ describe('handleConsolidate', () => {
 
     expect(parsed.activePlanPath).toBeUndefined();
   });
+
+  it('excludes checkpoints older than 30 days', async () => {
+    // Create a checkpoint with a timestamp 45 days ago by writing the file directly
+    const { writeFile, mkdir } = await import('fs/promises');
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    const dateStr = oldDate.toISOString().split('T')[0];
+    const dateDir = join(TEST_DIR, '.memories', dateStr);
+    await mkdir(dateDir, { recursive: true });
+    const oldCheckpointContent = [
+      '---',
+      `id: checkpoint_old001`,
+      `timestamp: ${oldDate.toISOString()}`,
+      'tags: [old]',
+      '---',
+      '## Old checkpoint',
+      'This is from 45 days ago.'
+    ].join('\n');
+    await writeFile(join(dateDir, '120000_old1.md'), oldCheckpointContent);
+
+    // Create a recent checkpoint normally
+    await saveCheckpoint({ description: 'recent work', workspace: TEST_DIR });
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('ready');
+    expect(parsed.checkpointFiles.length).toBe(1);
+    // The old checkpoint should not be in the batch
+    for (const f of parsed.checkpointFiles) {
+      expect(f).not.toContain(dateStr);
+    }
+  });
+
+  it('returns current when all unconsolidated checkpoints are older than 30 days', async () => {
+    const { writeFile, mkdir } = await import('fs/promises');
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    const dateStr = oldDate.toISOString().split('T')[0];
+    const dateDir = join(TEST_DIR, '.memories', dateStr);
+    await mkdir(dateDir, { recursive: true });
+    const oldCheckpointContent = [
+      '---',
+      `id: checkpoint_old002`,
+      `timestamp: ${oldDate.toISOString()}`,
+      'tags: [old]',
+      '---',
+      '## Ancient checkpoint',
+      'Way too old to consolidate.'
+    ].join('\n');
+    await writeFile(join(dateDir, '120000_old2.md'), oldCheckpointContent);
+
+    const result = await handleConsolidate({ workspace: TEST_DIR });
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.status).toBe('current');
+  });
 });

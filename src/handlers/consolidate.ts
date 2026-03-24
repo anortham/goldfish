@@ -14,6 +14,7 @@ import { join } from 'path';
 import type { ConsolidationPayload } from '../types.js';
 
 const CONSOLIDATION_BATCH_CAP = 50;
+const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
 
 /**
  * Handle the consolidate tool call.
@@ -48,8 +49,14 @@ export async function handleConsolidate(args: any) {
     );
   }
 
+  // Filter to checkpoints within the age window
+  const ageLimit = Date.now() - CONSOLIDATION_AGE_LIMIT_DAYS * 24 * 60 * 60 * 1000;
+  const recent = unconsolidated.filter(
+    c => new Date(c.timestamp).getTime() >= ageLimit
+  );
+
   // Exclude legacy .json files (subagent only understands .md format)
-  const mdOnly = unconsolidated.filter(c => c.filePath?.endsWith('.md'));
+  const mdOnly = recent.filter(c => c.filePath?.endsWith('.md'));
 
   // Nothing to consolidate
   if (mdOnly.length === 0) {
