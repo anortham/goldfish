@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { join } from 'path';
+import { join, sep } from 'path';
 import { tmpdir } from 'os';
 import { mkdtemp, rm } from 'fs/promises';
 import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
@@ -15,7 +15,8 @@ beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'goldfish-consolidate-'));
   await ensureMemoriesDir(TEST_DIR);
   restoreDeps = __setCheckpointDependenciesForTests({
-    queueSemanticRecord: async () => {}
+    queueSemanticRecord: async () => {},
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
   });
 });
 
@@ -51,7 +52,7 @@ describe('handleConsolidate', () => {
     expect(parsed.status).toBe('ready');
     expect(Array.isArray(parsed.checkpointFiles)).toBe(true);
     expect(parsed.checkpointFiles.length).toBe(1);
-    expect(parsed.checkpointFiles[0]).toContain('.memories/');
+    expect(parsed.checkpointFiles[0]).toContain(`${sep}.memories${sep}`);
     expect(parsed.checkpointFiles[0]).toEndWith('.md');
 
     // Content fields must NOT be present
@@ -127,7 +128,7 @@ describe('handleConsolidate', () => {
     const parsed = JSON.parse(result.content[0].text);
 
     expect(parsed.prompt).toContain('Read the following files');
-    expect(parsed.prompt).toContain('.memories/');
+    expect(parsed.prompt).toContain(`${sep}.memories${sep}`);
     expect(parsed.prompt).toContain('MEMORY.md');
   });
 
@@ -224,7 +225,7 @@ describe('handleConsolidate', () => {
     const parsed = JSON.parse(result.content[0].text);
 
     expect(parsed.activePlanPath).toBeDefined();
-    expect(parsed.activePlanPath).toContain('.memories/plans/');
+    expect(parsed.activePlanPath).toContain(`${sep}.memories${sep}plans${sep}`);
     expect(parsed.activePlanPath).toEndWith('.md');
   });
 

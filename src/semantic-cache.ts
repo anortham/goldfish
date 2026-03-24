@@ -1,5 +1,5 @@
 import { existsSync } from 'fs'
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises'
+import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { withLock } from './lock'
 import type { SemanticModelInfo } from './types'
@@ -108,7 +108,19 @@ async function readRecords(recordsPath: string): Promise<SemanticRecord[]> {
 async function writeFileAtomically(filePath: string, content: string): Promise<void> {
   const tempPath = `${filePath}.tmp.${Date.now()}`
   await writeFile(tempPath, content, 'utf-8')
-  await rename(tempPath, filePath)
+  try {
+    await rename(tempPath, filePath)
+  } catch (error: any) {
+    // Windows can transiently fail rename with ENOENT under concurrent load
+    // (antivirus scanning, filesystem caching). Since all callers hold a lock,
+    // fall back to direct write which is safe under serialized access.
+    if (error.code === 'ENOENT' && process.platform === 'win32') {
+      await writeFile(filePath, content, 'utf-8')
+      try { await unlink(tempPath) } catch {}
+    } else {
+      throw error
+    }
+  }
 }
 
 async function writeSemanticState(paths: ReturnType<typeof getPaths>, state: SemanticState): Promise<void> {

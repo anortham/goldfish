@@ -60,12 +60,13 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
             await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
           }
         } catch {
-          // Can't read lock file - assume it's invalid and remove it
-          try {
-            await unlink(lockPath);
-          } catch {
-            // Lock might have been removed by another process
+          // Can't read lock file (I/O contention, partial write, antivirus scan).
+          // Do NOT delete it; it may be validly held. Just wait and retry.
+          attempts++;
+          if (attempts >= MAX_LOCK_ATTEMPTS) {
+            throw new Error(`Failed to acquire lock for ${filePath} after ${MAX_LOCK_ATTEMPTS} attempts`);
           }
+          await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
         }
       } else {
         // Some other error - propagate it

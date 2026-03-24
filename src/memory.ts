@@ -2,7 +2,7 @@
  * Memory module: file I/O for MEMORY.md and .last-consolidated
  */
 
-import { readFile, writeFile, mkdir, rename } from 'fs/promises';
+import { readFile, writeFile, mkdir, rename, unlink } from 'fs/promises';
 import { join } from 'path';
 import type { ConsolidationState, MemorySection } from './types';
 
@@ -38,7 +38,16 @@ export async function writeMemory(workspace: string, content: string): Promise<v
   const filePath = join(dir, MEMORY_FILE);
   const tempPath = `${filePath}.tmp.${Date.now()}`;
   await writeFile(tempPath, content, 'utf-8');
-  await rename(tempPath, filePath);
+  try {
+    await rename(tempPath, filePath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT' && process.platform === 'win32') {
+      await writeFile(filePath, content, 'utf-8');
+      try { await unlink(tempPath); } catch {}
+    } else {
+      throw error;
+    }
+  }
 }
 
 /**
@@ -64,8 +73,18 @@ export async function writeConsolidationState(workspace: string, state: Consolid
   await mkdir(dir, { recursive: true });
   const filePath = join(dir, CONSOLIDATION_STATE_FILE);
   const tempPath = `${filePath}.tmp.${Date.now()}`;
-  await writeFile(tempPath, JSON.stringify(state, null, 2), 'utf-8');
-  await rename(tempPath, filePath);
+  const content = JSON.stringify(state, null, 2);
+  await writeFile(tempPath, content, 'utf-8');
+  try {
+    await rename(tempPath, filePath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT' && process.platform === 'win32') {
+      await writeFile(filePath, content, 'utf-8');
+      try { await unlink(tempPath); } catch {}
+    } else {
+      throw error;
+    }
+  }
 }
 
 /**

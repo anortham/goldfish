@@ -128,7 +128,16 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
   // Atomic write: temp file then rename
   const tempPath = `${planPath}.tmp.${Date.now()}`;
   await writeFile(tempPath, content, 'utf-8');
-  await rename(tempPath, planPath);
+  try {
+    await rename(tempPath, planPath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT' && process.platform === 'win32') {
+      await writeFile(planPath, content, 'utf-8');
+      try { await unlink(tempPath); } catch {}
+    } else {
+      throw error;
+    }
+  }
 
   // Auto-activate if requested (default: false)
   if (input.activate) {
@@ -228,7 +237,16 @@ export async function setActivePlan(projectPath: string, planId: string): Promis
   // Write atomically
   const tempPath = `${activePlanPath}.tmp.${Date.now()}`;
   await writeFile(tempPath, planId, 'utf-8');
-  await rename(tempPath, activePlanPath);
+  try {
+    await rename(tempPath, activePlanPath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT' && process.platform === 'win32') {
+      await writeFile(activePlanPath, planId, 'utf-8');
+      try { await unlink(tempPath); } catch {}
+    } else {
+      throw error;
+    }
+  }
 }
 
 /**
@@ -264,7 +282,16 @@ export async function updatePlan(
     const content = formatPlanFile(updatedPlan);
     const tempPath = `${planPath}.tmp.${Date.now()}`;
     await writeFile(tempPath, content, 'utf-8');
-    await rename(tempPath, planPath);
+    try {
+      await rename(tempPath, planPath);
+    } catch (error: any) {
+      if (error.code === 'ENOENT' && process.platform === 'win32') {
+        await writeFile(planPath, content, 'utf-8');
+        try { await unlink(tempPath); } catch {}
+      } else {
+        throw error;
+      }
+    }
   });
 }
 

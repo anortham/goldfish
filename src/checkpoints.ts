@@ -6,7 +6,7 @@
  */
 
 import { join } from 'path';
-import { readFile, writeFile, readdir, rename, mkdir } from 'fs/promises';
+import { readFile, writeFile, readdir, rename, unlink, mkdir } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { createHash } from 'crypto';
 import type { Checkpoint, CheckpointInput } from './types';
@@ -29,10 +29,12 @@ type SemanticQueueInput = {
 
 interface CheckpointDependencies {
   queueSemanticRecord: (workspace: string, input: SemanticQueueInput) => Promise<void>;
+  getGitContext: () => import('./types').GitContext;
 }
 
 const defaultCheckpointDependencies: CheckpointDependencies = {
-  queueSemanticRecord: upsertPendingSemanticRecord
+  queueSemanticRecord: upsertPendingSemanticRecord,
+  getGitContext
 };
 
 let checkpointDependencies: CheckpointDependencies = defaultCheckpointDependencies;
@@ -330,7 +332,7 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
 
   // Create checkpoint with current timestamp
   const timestamp = new Date().toISOString();
-  const gitContext = getGitContext();
+  const gitContext = checkpointDependencies.getGitContext();
 
   // Generate deterministic ID
   const id = generateCheckpointId(timestamp, input.description);
@@ -392,7 +394,16 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
     const tempPath = `${filePath}.tmp.${Date.now()}`;
     const content = formatCheckpoint(checkpoint);
     await writeFile(tempPath, content, 'utf-8');
-    await rename(tempPath, filePath);
+    try {
+      await rename(tempPath, filePath);
+    } catch (error: any) {
+      if (error.code === 'ENOENT' && process.platform === 'win32') {
+        await writeFile(filePath, content, 'utf-8');
+        try { await unlink(tempPath); } catch {}
+      } else {
+        throw error;
+      }
+    }
   });
 
   // Auto-register project in cross-project registry (fire-and-forget)

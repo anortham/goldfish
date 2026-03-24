@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { handleCheckpoint } from '../src/handlers/checkpoint';
 import { handleRecall } from '../src/handlers/recall';
 import { handlePlan } from '../src/handlers/plan';
-import { getCheckpointsForDay, saveCheckpoint } from '../src/checkpoints';
+import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
 import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir } from '../src/workspace';
@@ -19,6 +19,7 @@ import { join } from 'path';
  */
 
 let TEST_DIR: string;
+let restoreDeps: (() => void) | undefined;
 
 const TEST_DEFAULT_RUNTIME = {
   isReady: () => false,
@@ -36,10 +37,15 @@ afterAll(() => {
 
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-handlers-'));
+  restoreDeps = __setCheckpointDependenciesForTests({
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+  });
   await ensureMemoriesDir(TEST_DIR);
 });
 
 afterEach(async () => {
+  restoreDeps?.();
+  restoreDeps = undefined;
   await rm(TEST_DIR, { recursive: true, force: true });
 });
 

@@ -1,6 +1,6 @@
 import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { recall, searchCheckpoints, parseSince, MEMORY_SECTION_PREFIX } from '../src/recall';
-import { saveCheckpoint } from '../src/checkpoints';
+import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
 import { writeMemory, writeConsolidationState } from '../src/memory';
 import { savePlan } from '../src/plans';
@@ -14,6 +14,7 @@ import type { Checkpoint } from '../src/types';
 
 let TEST_DIR_A: string;
 let TEST_DIR_B: string;
+let restoreCheckpointDeps: (() => void) | undefined;
 
 const TEST_DEFAULT_RUNTIME = {
   isReady: () => false,
@@ -34,9 +35,13 @@ beforeEach(async () => {
   TEST_DIR_B = await mkdtemp(join(tmpdir(), 'test-recall-b-'));
   await ensureMemoriesDir(TEST_DIR_A);
   await ensureMemoriesDir(TEST_DIR_B);
+  restoreCheckpointDeps = __setCheckpointDependenciesForTests({
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+  });
 });
 
 afterEach(async () => {
+  restoreCheckpointDeps?.();
   await rm(TEST_DIR_A, { recursive: true, force: true });
   await rm(TEST_DIR_B, { recursive: true, force: true });
 });

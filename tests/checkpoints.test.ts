@@ -56,7 +56,9 @@ beforeEach(async () => {
   process.env.HOME = tempHome;
   delete process.env.USERPROFILE;
   await mkdir(tempHome, { recursive: true });
-  restoreCheckpointDependencies = undefined;
+  restoreCheckpointDependencies = __setCheckpointDependenciesForTests({
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+  });
   await ensureMemoriesDir(tempDir);
 });
 

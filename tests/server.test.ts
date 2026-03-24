@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { saveCheckpoint } from '../src/checkpoints';
+import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
 import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir } from '../src/workspace';
@@ -11,6 +11,7 @@ import { join } from 'path';
 // in tests is complex. We'll validate tool handlers work correctly.
 
 let TEST_DIR: string;
+let restoreDeps: (() => void) | undefined;
 
 const TEST_DEFAULT_RUNTIME = {
   isReady: () => false,
@@ -28,10 +29,15 @@ afterAll(() => {
 
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-server-'));
+  restoreDeps = __setCheckpointDependenciesForTests({
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+  });
   await ensureMemoriesDir(TEST_DIR);
 });
 
 afterEach(async () => {
+  restoreDeps?.();
+  restoreDeps = undefined;
   await rm(TEST_DIR, { recursive: true, force: true });
 });
 
