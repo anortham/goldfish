@@ -53,8 +53,8 @@ export async function handleCheckpoint(args: any) {
 
   if (confidence !== undefined) {
     const parsed = Number(confidence);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
-      throw new Error('confidence must be an integer between 1 and 5');
+    if (!Number.isFinite(parsed) || Math.round(parsed) < 1 || Math.round(parsed) > 5) {
+      throw new Error('confidence must be a number between 1 and 5');
     }
   }
 

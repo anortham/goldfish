@@ -746,4 +746,31 @@ describe('Plan deletion', () => {
     const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan?.id).toBe('other-plan');
   });
+
+  it('concurrent setActivePlan and deletePlan do not lose the new active plan', async () => {
+    // Create plan-a (will be deleted) and plan-b (will become active)
+    await savePlan({ id: 'plan-a', title: 'A', content: 'A', workspace: TEST_DIR, activate: true });
+    await savePlan({ id: 'plan-b', title: 'B', content: 'B', workspace: TEST_DIR });
+
+    // Run deletePlan(plan-a) and setActivePlan(plan-b) concurrently.
+    // Without locking on .active-plan, deletePlan can read "plan-a",
+    // then setActivePlan writes "plan-b", then deletePlan unlinks .active-plan,
+    // losing plan-b's activation.
+    //
+    // Run multiple times to increase chance of triggering the race.
+    for (let i = 0; i < 10; i++) {
+      // Reset state: recreate plan-a, set it active
+      await savePlan({ id: `race-del-${i}`, title: 'Del', content: 'Del', workspace: TEST_DIR, activate: true });
+      await savePlan({ id: `race-keep-${i}`, title: 'Keep', content: 'Keep', workspace: TEST_DIR });
+
+      // Race: delete the active plan while switching active to the other
+      await Promise.all([
+        deletePlan(TEST_DIR, `race-del-${i}`),
+        setActivePlan(TEST_DIR, `race-keep-${i}`)
+      ]);
+
+      const active = await getActivePlan(TEST_DIR);
+      expect(active?.id).toBe(`race-keep-${i}`);
+    }
+  });
 });

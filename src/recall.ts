@@ -731,15 +731,16 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
 
   // Fetch from all registered projects in parallel.
   // Lightweight path: only load checkpoints and memory, skip plan/consolidation per project.
+  // Load without limit so checkpointCount in summaries reflects total matches.
   const projectResults = await Promise.all(
     projects.map(async (project) => {
-      let checkpoints = await loadWorkspaceCheckpoints(project.path, { ...options, limit: globalLimit });
-      checkpoints = checkpoints
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, { ...options, limit: undefined });
+      allCheckpoints.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const presented = allCheckpoints
         .slice(0, globalLimit)
         .map(checkpoint => presentCheckpoint(checkpoint, options));
       const projectMemory = await readMemory(project.path);
-      return { project, checkpoints, projectMemory };
+      return { project, checkpoints: presented, totalCount: allCheckpoints.length, projectMemory };
     })
   );
 
@@ -747,8 +748,8 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   const allCheckpoints: Checkpoint[] = [];
   const workspaceSummaries: WorkspaceSummary[] = [];
 
-  for (const { project, checkpoints, projectMemory } of projectResults) {
-    if (checkpoints.length > 0) {
+  for (const { project, checkpoints, totalCount, projectMemory } of projectResults) {
+    if (totalCount > 0) {
       // Tag each checkpoint with its project name
       const tagged = checkpoints.map(c => ({ ...c, workspace: project.name }));
       allCheckpoints.push(...tagged);
@@ -756,7 +757,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
       const summary: WorkspaceSummary = {
         name: project.name,
         path: project.path,
-        checkpointCount: checkpoints.length,
+        checkpointCount: totalCount,
         memorySummary: getMemorySummary(projectMemory)
       };
       // Get last activity from the most recent checkpoint

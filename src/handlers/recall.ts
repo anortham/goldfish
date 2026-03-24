@@ -137,10 +137,7 @@ function formatActivePlan(plan: Plan): string {
  * Handle recall tool calls
  */
 export async function handleRecall(args: any) {
-  const recallArgs = args.search && !args.full && args.limit === undefined
-    ? { ...args, limit: 3 }
-    : args;
-  const result = await recallFunc(recallArgs);
+  const result = await recallFunc(args);
 
   // Capture diagnostic info
   const resolvedPath = resolveWorkspacePath(args.workspace);

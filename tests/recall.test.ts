@@ -830,6 +830,22 @@ describe('Cross-workspace functionality', () => {
     ]);
   });
 
+  it('checkpointCount reflects total matching checkpoints, not the limited return set', async () => {
+    // Add 2 more checkpoints to project A (3 total)
+    await saveCheckpoint({ description: 'Second A', workspace: projectA });
+    await saveCheckpoint({ description: 'Third A', workspace: projectA });
+
+    const result = await recall({ workspace: 'all', days: 1, limit: 1, _registryDir: registryDir });
+
+    // Only 1 checkpoint returned due to limit
+    expect(result.checkpoints).toHaveLength(1);
+
+    // But workspace summary should report all matching checkpoints
+    const wsA = result.workspaces!.find(ws => ws.path === projectA);
+    expect(wsA).toBeDefined();
+    expect(wsA!.checkpointCount).toBe(3);
+  });
+
   it('returns empty when no projects registered', async () => {
     // Use a fresh empty registry
     const emptyRegistryDir = await mkdtemp(join(tmpdir(), 'test-empty-registry-'));

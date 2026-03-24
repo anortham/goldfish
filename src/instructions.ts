@@ -42,7 +42,7 @@ Use \`type\` to classify: \`"decision"\` (include \`decision\` + \`alternatives\
 
 ## Recall
 
-Recall restores context from previous sessions. It runs automatically at session start via the SessionStart hook. Users can also invoke \`/recall\` manually for targeted queries.
+Recall restores context from previous sessions. The SessionStart hook prompts you to call recall() at the start of each session. Users can also invoke \`/recall\` manually for targeted queries.
 
 **Recall tips:**
 - \`full: true\` for git metadata (branches, files, commits)
@@ -70,7 +70,7 @@ MEMORY.md is the project's consolidated understanding, built from checkpoints. W
 3. If status is "current": nothing to do, memory is up to date
 4. Continue your work - the subagent handles the rest
 
-Consolidation happens automatically via hooks, but you can trigger it manually any time.
+Hooks will prompt you to consolidate when needed (e.g., before context compaction), but you can also trigger it manually any time.
 
 ## Source Control
 

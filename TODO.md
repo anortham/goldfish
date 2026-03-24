@@ -174,3 +174,21 @@ Findings from 5-agent review team, fixed by 4-agent fix team. 467 tests, 0 failu
 - [ ] **All handler functions typed as `args: any`.** Zero compile-time checking. Judgment call.
 - [x] **`checkpoints.ts` - Corrupted checkpoint files silently skipped.** Now logs warning via logger with file path and error message.
 - [ ] **No tests for hook scripts.** Hooks have non-trivial logic but are standalone scripts. Low priority.
+
+## v6.3.0 -- Review Findings (2026-03-24)
+
+### Critical
+
+- [x] **`lock.ts` stale-lock takeover breaks mutual exclusion.** Fixed: release function now checks a unique nonce before unlinking. If the lock was stolen, the original holder's release is a no-op.
+
+### Important
+
+- [x] **`saveCheckpoint()` records git context from server cwd, not the target workspace.** Fixed: `getGitContext(projectPath)` now passes the resolved workspace path. Interface updated to accept optional `cwd`.
+- [x] **Active plan updates are not synchronized on `.active-plan`.** Fixed: both `setActivePlan()` and `deletePlan()`'s active-plan clearing now lock on `.active-plan`.
+- [x] **Instructions claim automatic recall/consolidation, but hooks only print reminders.** Fixed: instructions now accurately describe hooks as prompting the agent to act, not running tools directly.
+
+### Minor
+
+- [x] **Cross-workspace summaries underreport checkpoint counts when `limit` is low.** Fixed: non-search path now loads all matching checkpoints for counting before slicing to the limit.
+- [x] **Checkpoint `confidence` schema and handler validation disagree.** Fixed: handler now rounds non-integers (consistent with `normalizeConfidence`), only rejects out-of-range values.
+- [x] **Recall docs advertise a default of 5 results, but search-mode handler silently drops to 3.** Fixed: removed the undocumented override; search mode now uses the same default limit (5) as non-search mode.

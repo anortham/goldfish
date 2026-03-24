@@ -145,6 +145,41 @@ describe('File locking', () => {
     await unlink(lockPath);
   });
 
+  it('stale-lock takeover: original holder release does not delete new lock', async () => {
+    const lockPath = `${TEST_FILE}.lock`;
+
+    // A acquires the lock
+    const releaseA = await acquireLock(TEST_FILE);
+    expect(await Bun.file(lockPath).exists()).toBe(true);
+
+    // Simulate A's lock becoming stale by overwriting with old timestamp
+    const staleLock = {
+      pid: process.pid,
+      timestamp: Date.now() - 60000, // 60 seconds ago
+      nonce: JSON.parse(await Bun.file(lockPath).text()).nonce // preserve original nonce if present
+    };
+    await writeFile(lockPath, JSON.stringify(staleLock));
+
+    // B acquires the lock (detects stale, takes over)
+    const releaseB = await acquireLock(TEST_FILE);
+    expect(await Bun.file(lockPath).exists()).toBe(true);
+
+    // Read B's lock data so we can verify it survives A's release
+    const lockDataBeforeRelease = await Bun.file(lockPath).text();
+
+    // A releases: must NOT delete B's lock
+    await releaseA();
+    expect(await Bun.file(lockPath).exists()).toBe(true);
+
+    // B's lock data should be untouched
+    const lockDataAfterRelease = await Bun.file(lockPath).text();
+    expect(lockDataAfterRelease).toBe(lockDataBeforeRelease);
+
+    // B releases normally
+    await releaseB();
+    expect(await Bun.file(lockPath).exists()).toBe(false);
+  });
+
   it('does not loop forever when a stale lock cannot be deleted', async () => {
     const lockPath = `${TEST_FILE}.lock`;
     const { chmod } = await import('fs/promises');

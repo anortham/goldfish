@@ -986,6 +986,27 @@ describe('saveCheckpoint', () => {
     }
   });
 
+  it('passes workspace path to getGitContext', async () => {
+    let receivedCwd: string | undefined;
+    const restore = __setCheckpointDependenciesForTests({
+      getGitContext: (cwd?: string) => {
+        receivedCwd = cwd;
+        return { branch: 'test-branch', commit: 'abc1234' };
+      }
+    });
+
+    try {
+      await saveCheckpoint({
+        description: 'Git cwd test',
+        workspace: tempDir
+      });
+
+      expect(receivedCwd).toBe(tempDir);
+    } finally {
+      restore();
+    }
+  });
+
   it('file content is valid YAML frontmatter + markdown body', async () => {
     const checkpoint = await saveCheckpoint({
       description: 'Content validation test',

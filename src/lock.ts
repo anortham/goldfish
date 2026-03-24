@@ -5,7 +5,8 @@
  * in concurrent file operations.
  */
 
-import { writeFile, unlink } from 'fs/promises';
+import { writeFile, unlink, readFile } from 'fs/promises';
+import { randomBytes } from 'crypto';
 import { getLogger } from './logger';
 
 const MAX_LOCK_AGE_MS = 30000; // 30 seconds - locks older than this are considered stale
@@ -18,9 +19,11 @@ const MAX_LOCK_ATTEMPTS = 3000; // 30 seconds total (10ms * 3000)
  */
 export async function acquireLock(filePath: string): Promise<() => Promise<void>> {
   const lockPath = `${filePath}.lock`;
+  const nonce = randomBytes(8).toString('hex');
   const lockData = JSON.stringify({
     pid: process.pid,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    nonce
   });
 
   let attempts = 0;
@@ -30,12 +33,15 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
       // Try to create lock file exclusively (fails if exists)
       await writeFile(lockPath, lockData, { flag: 'wx' });
 
-      // Lock acquired! Return release function
+      // Lock acquired! Return release function that only deletes if nonce matches
       return async () => {
         try {
-          await unlink(lockPath);
+          const current = JSON.parse(await readFile(lockPath, 'utf-8'));
+          if (current.nonce === nonce) {
+            await unlink(lockPath);
+          }
         } catch {
-          // Lock file may have been cleaned up already
+          // Lock file may have been cleaned up already or is unreadable
         }
       };
     } catch (error: any) {

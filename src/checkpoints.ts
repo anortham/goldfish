@@ -30,7 +30,7 @@ type SemanticQueueInput = {
 
 interface CheckpointDependencies {
   queueSemanticRecord: (workspace: string, input: SemanticQueueInput) => Promise<void>;
-  getGitContext: () => import('./types').GitContext;
+  getGitContext: (cwd?: string) => import('./types').GitContext;
 }
 
 const defaultCheckpointDependencies: CheckpointDependencies = {
@@ -335,7 +335,7 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
 
   // Create checkpoint with current timestamp
   const timestamp = new Date().toISOString();
-  const gitContext = checkpointDependencies.getGitContext();
+  const gitContext = checkpointDependencies.getGitContext(projectPath);
 
   // Generate deterministic ID
   const id = generateCheckpointId(timestamp, input.description);

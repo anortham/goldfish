@@ -249,19 +249,21 @@ export async function setActivePlan(projectPath: string, planId: string): Promis
 
   const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
-  // Write atomically
-  const tempPath = `${activePlanPath}.tmp.${Date.now()}`;
-  await writeFile(tempPath, planId, 'utf-8');
-  try {
-    await rename(tempPath, activePlanPath);
-  } catch (error: any) {
-    if (error.code === 'ENOENT' && process.platform === 'win32') {
-      await writeFile(activePlanPath, planId, 'utf-8');
-      try { await unlink(tempPath); } catch {}
-    } else {
-      throw error;
+  await withLock(activePlanPath, async () => {
+    // Write atomically
+    const tempPath = `${activePlanPath}.tmp.${Date.now()}`;
+    await writeFile(tempPath, planId, 'utf-8');
+    try {
+      await rename(tempPath, activePlanPath);
+    } catch (error: any) {
+      if (error.code === 'ENOENT' && process.platform === 'win32') {
+        await writeFile(activePlanPath, planId, 'utf-8');
+        try { await unlink(tempPath); } catch {}
+      } else {
+        throw error;
+      }
     }
-  }
+  });
 }
 
 /**
@@ -327,14 +329,16 @@ export async function deletePlan(projectPath: string, id: string): Promise<void>
 
     await unlink(planPath);
 
-    // Check and clear active plan inside the lock to avoid TOCTOU race
-    try {
-      const activePlanId = (await readFile(activePlanPath, 'utf-8')).trim();
-      if (activePlanId === id) {
-        await unlink(activePlanPath);
+    // Lock .active-plan to avoid racing with setActivePlan
+    await withLock(activePlanPath, async () => {
+      try {
+        const activePlanId = (await readFile(activePlanPath, 'utf-8')).trim();
+        if (activePlanId === id) {
+          await unlink(activePlanPath);
+        }
+      } catch {
+        // No active plan file — nothing to clear
       }
-    } catch {
-      // No active plan file — nothing to clear
-    }
+    });
   });
 }

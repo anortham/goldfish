@@ -191,14 +191,30 @@ describe('Readable markdown responses', () => {
       expect(text).not.toMatch(/💡/);
     });
 
-    it('rejects invalid confidence values', async () => {
+    it('rejects out-of-range confidence values', async () => {
       await expect(
         handleCheckpoint({
           description: 'Invalid confidence checkpoint',
           confidence: 7,
           workspace: TEST_DIR
         })
-      ).rejects.toThrow('confidence must be an integer between 1 and 5');
+      ).rejects.toThrow('confidence must be a number between 1 and 5');
+    });
+
+    it('rounds non-integer confidence to nearest integer', async () => {
+      // Should not throw (previously rejected non-integers)
+      await handleCheckpoint({
+        description: 'Fractional confidence checkpoint',
+        confidence: 3.7,
+        workspace: TEST_DIR
+      });
+
+      // Verify the saved checkpoint has rounded confidence
+      const today = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+      const saved = checkpoints.find(c => c.description === 'Fractional confidence checkpoint');
+      expect(saved).toBeDefined();
+      expect(saved!.confidence).toBe(4);
     });
 
     it('throws error for missing description', async () => {
@@ -499,8 +515,8 @@ describe('Readable markdown responses', () => {
       expect(text).not.toContain('Unknowns:');
     });
 
-    it('tightens non-full search defaults to 3 checkpoint sections', async () => {
-      for (let i = 0; i < 4; i++) {
+    it('search mode uses same default limit (5) as non-search mode', async () => {
+      for (let i = 0; i < 6; i++) {
         await saveCheckpoint({
           description: `Searchable checkpoint ${i}`,
           workspace: TEST_DIR
@@ -513,7 +529,7 @@ describe('Readable markdown responses', () => {
       });
 
       const text = result.content[0]!.text;
-      expect(text.match(/^### /gm)?.length).toBe(3);
+      expect(text.match(/^### /gm)?.length).toBe(5);
     });
 
     it('respects explicit limit for search requests', async () => {
