@@ -306,6 +306,8 @@ describe('Tool descriptions', () => {
     for (const tool of tools) {
       expect(tool.description).toBeTruthy();
       expect(tool.description!.length).toBeGreaterThan(50);
+      // Claude Code caps MCP tool descriptions at 2000 characters
+      expect(tool.description!.length).toBeLessThanOrEqual(2000);
       expect(tool.inputSchema).toBeDefined();
     }
   });
@@ -407,6 +409,8 @@ describe('Server instructions', () => {
 
     expect(instructions).toBeTruthy();
     expect(instructions.length).toBeGreaterThan(100);
+    // Claude Code caps MCP server instructions at 2000 characters
+    expect(instructions.length).toBeLessThanOrEqual(2000);
   });
 
   it('includes guidance on when to use tools', async () => {
@@ -419,15 +423,18 @@ describe('Server instructions', () => {
     expect(instructions).toContain('plan');
   });
 
-  it('includes IMPACT in checkpoint template', async () => {
+  it('defers checkpoint formatting guidance to tool description', async () => {
     const { getInstructions } = await import('../src/server');
+    const { getTools } = await import('../src/tools');
 
     const instructions = getInstructions();
+    const checkpointTool = getTools().find(t => t.name === 'checkpoint')!;
 
-    expect(instructions).toContain('WHAT');
-    expect(instructions).toContain('WHY');
-    expect(instructions).toContain('HOW');
-    expect(instructions).toContain('IMPACT');
+    // Instructions reference the tool, not duplicate content
+    expect(instructions).toContain('checkpoint tool description');
+    // Quality guidance lives in the tool description
+    expect(checkpointTool.description).toContain('WHAT');
+    expect(checkpointTool.description).toContain('IMPACT');
   });
 
   it('includes plan activate guidance', async () => {
@@ -439,15 +446,19 @@ describe('Server instructions', () => {
     expect(instructions).toContain('activate: true');
   });
 
-  it('includes recall workflow tips', async () => {
+  it('defers recall parameter tips to tool description', async () => {
     const { getInstructions } = await import('../src/server');
+    const { getTools } = await import('../src/tools');
 
     const instructions = getInstructions();
+    const recallTool = getTools().find(t => t.name === 'recall')!;
 
-    expect(instructions).toContain('full: true');
-    expect(instructions).toContain('workspace: "all"');
-    expect(instructions).toContain('search:');
-    expect(instructions).toContain('limit: 0');
+    // Instructions keep behavioral guidance
+    expect(instructions).toContain('Trust recalled context');
+    // Parameter details live in the tool description
+    expect(recallTool.description).toContain('full:');
+    expect(recallTool.description).toContain('workspace:');
+    expect(recallTool.description).toContain('search:');
   });
 });
 

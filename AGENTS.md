@@ -267,6 +267,14 @@ MCP tool descriptions are **directive about quality, encouraging about frequency
 
 Recalibrated twice: first after overuse (100+ checkpoints/day, rapid-fire duplicates), then after underuse (agents stopped checkpointing autonomously because the "Do NOT" list was too prominent and specific while positive triggers were vague).
 
+### Character Limits (Claude Code MCP Cap)
+
+Claude Code enforces a **2,000 character cap** on both server instructions (`getInstructions()`) and individual tool descriptions. Content beyond 2k is silently truncated. A test in `server.test.ts` enforces this.
+
+- **Server instructions** carry behavioral framing (when/why to use tools). Detailed "how to use" guidance belongs in tool descriptions.
+- **Tool descriptions** carry usage details, parameter tips, and examples for their specific tool.
+- Don't duplicate content between instructions and tool descriptions. If instructions reference a tool's quality guidance, point to the tool description ("see the checkpoint tool description") rather than repeating it.
+
 ---
 
 ## Adding New Features
