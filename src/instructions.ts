@@ -15,12 +15,12 @@ export function getInstructions(): string {
 
 Checkpoint your work so future sessions have context. **When in doubt, checkpoint** — a few extra checkpoints are better than lost context.
 
-**Checkpoint after:**
+**Checkpoint when:**
 - Completing a feature, bug fix, or refactor step
 - Making a key decision or discovery
-- Committing or pushing completed work
 - Reaching a natural stopping point in a session
 - Before context compaction (PreCompact hook handles this automatically)
+- **Before a git commit** (so the checkpoint file is included in the commit)
 
 Space out checkpoints so each one captures a distinct piece of progress — one per logical milestone is the right cadence. See the checkpoint tool description for formatting guidance.
 

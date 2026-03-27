@@ -21,7 +21,7 @@ import { handleCheckpoint, handleRecall, handlePlan, handleConsolidate } from '.
 import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 import { getLogger } from './logger.js';
 
-export const SERVER_VERSION = '6.3.3';
+export const SERVER_VERSION = '6.3.4';
 
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan, handleConsolidate };
