@@ -2,7 +2,7 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|clear",
+        "matcher": "startup|clear|compact",
         "hooks": [{
           "type": "command",
           "command": "bun run ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.ts"

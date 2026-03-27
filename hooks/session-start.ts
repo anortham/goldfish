@@ -30,4 +30,19 @@ if (hasMemory && staleCount > 0) {
 
 message += ' If there is an active plan or recent checkpoints, briefly summarize them so the user knows you have context. If nothing is found, continue without comment.';
 
-console.log(message);
+// Behavioral context injected via additionalContext (uncapped, unlike server instructions).
+// This supplements the 2k-capped server instructions with guidance that benefits from
+// being front-loaded every session.
+const additionalContext = `Goldfish reminders for this session:
+- Checkpoint BEFORE git commits, not after. The checkpoint file must be included in the commit so it's available on other machines.
+- Always commit .memories/ to source control. Never add it to .gitignore.
+- Never ask permission to checkpoint or save plans. Just do it.`;
+
+console.log(JSON.stringify({
+  hookSpecificOutput: {
+    hookEventName: 'SessionStart',
+    additionalContext,
+  },
+}));
+// Plain text message for the main hook output
+console.error(message);
