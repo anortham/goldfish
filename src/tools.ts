@@ -21,7 +21,7 @@ Checkpoint when:
 - Reaching a natural stopping point
 - **Before a git commit** (so the checkpoint file is included in the commit)
 
-Space out checkpoints so each captures distinct progress — one per logical milestone.
+Space out checkpoints so each captures distinct progress — one per logical milestone. If you've already checkpointed in this conversation, capture only what's new: progress, decisions, and discoveries since your last checkpoint. Consolidation merges checkpoints into a complete picture, so repetition is waste.
 
 Write descriptions in MARKDOWN with structure (headers, bullets). Include WHAT, WHY, HOW, and IMPACT. Descriptions power fuzzy search — make them findable.
 

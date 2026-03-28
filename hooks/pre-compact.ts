@@ -11,7 +11,7 @@ try {
   staleCount = countStaleCheckpoints(memoriesDir);
 } catch { /* no memories dir */ }
 
-let message = 'Your conversation is about to be compacted. Use the goldfish checkpoint tool NOW to save your current progress. Include: what you were working on, current state, decisions made, and planned next steps. Do NOT ask permission - just checkpoint.';
+let message = 'Your conversation is about to be compacted. Checkpoint NOW. Focus on: current task state, next steps, and any unresolved decisions or open questions. Do NOT ask permission - just checkpoint.';
 
 if (staleCount > 0) {
   message += `\n\nAfter checkpointing: ${staleCount} unconsolidated checkpoint(s) detected. Call consolidate() and dispatch a background subagent to update the project memory before compaction.`;
