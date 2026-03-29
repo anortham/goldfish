@@ -2089,4 +2089,68 @@ describe('Memory section search integration', () => {
       expect(cp.id.startsWith(MEMORY_SECTION_PREFIX)).toBe(false);
     }
   });
+
+  it('search finds content in YAML memory sections', async () => {
+    await writeMemory(TEST_DIR_A, [
+      'decisions:',
+      '  - "2026-03-20 | Chose Kubernetes for container orchestration"',
+      '  - "2026-03-21 | Selected Helm charts for deployment management"',
+      '',
+      'gotchas:',
+      '  - "2026-03-22 | Integration tests need ephemeral postgres databases"',
+    ].join('\n'));
+
+    await saveCheckpoint({
+      description: 'Added retry logic to payment processor',
+      tags: ['payments'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'Kubernetes',
+      limit: 5
+    });
+
+    expect(result.matchedMemorySections).toBeDefined();
+    expect(result.matchedMemorySections!.length).toBeGreaterThanOrEqual(1);
+    const matched = result.matchedMemorySections!.find(s => s.slug === 'decisions');
+    expect(matched).toBeDefined();
+    expect(matched!.content).toContain('Kubernetes');
+  });
+
+  it('YAML memory sections search uses slug for identification', async () => {
+    await writeMemory(TEST_DIR_A, [
+      'decisions:',
+      '  - "2026-03-20 | Chose PostgreSQL over MySQL for ACID compliance"',
+      '',
+      'gotchas:',
+      '  - "2026-03-21 | Postgres connection pool must be sized for concurrency"',
+      '',
+      'open_questions:',
+      '  - "2026-03-22 | Should we shard the database before launch?"',
+    ].join('\n'));
+
+    await saveCheckpoint({
+      description: 'Set up database connection pooling',
+      tags: ['database'],
+      workspace: TEST_DIR_A
+    });
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: 'Postgres',
+      limit: 5
+    });
+
+    expect(result.matchedMemorySections).toBeDefined();
+    // Matched sections should use YAML slugs (decisions, gotchas, etc.), not markdown headers
+    for (const section of result.matchedMemorySections!) {
+      expect(['decisions', 'open_questions', 'deferred_work', 'gotchas']).toContain(section.slug);
+    }
+    // At least the decisions and gotchas sections mention Postgres
+    const decisionMatch = result.matchedMemorySections!.find(s => s.slug === 'decisions');
+    const gotchaMatch = result.matchedMemorySections!.find(s => s.slug === 'gotchas');
+    expect(decisionMatch ?? gotchaMatch).toBeDefined();
+  });
 });

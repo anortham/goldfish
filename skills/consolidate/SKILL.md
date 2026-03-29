@@ -54,11 +54,11 @@ When the user passes "all" as an argument, loop until fully caught up:
 
 1. Call `consolidate()`
 2. If `status: "current"`, done. Report total processed.
-3. If `status: "ready"`, dispatch a **foreground** subagent (must wait for `.last-consolidated` to update before next batch).
+3. If `status: "ready"`, dispatch a **foreground** subagent (must wait for consolidation state to update before next batch).
 4. If `remainingCount > 0`, repeat from step 1.
 5. **Circuit breaker:** Max 10 iterations. If exceeded, stop and tell user how many were processed and how many remain.
 
-Foreground subagents are required because each batch writes `.last-consolidated`, and the next `consolidate()` call needs that timestamp to filter correctly.
+Foreground subagents are required because each batch writes the consolidation state file, and the next `consolidate()` call needs that timestamp to filter correctly.
 
 ## What the Subagent Does
 
