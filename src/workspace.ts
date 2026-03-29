@@ -31,8 +31,14 @@ export function normalizeWorkspace(pathOrName: string): string {
   else if (name.includes('/') || name.includes('\\')) {
     name = name.replace(/[/\\]+$/, '');
 
-    // Get last path component
-    name = name.replace(/^.*[/\\]/, '');
+    // Detect scoped package paths like /home/dev/@org/my-project → org-my-project
+    const scopedMatch = name.match(/[/\\](@[^/\\]+)[/\\]([^/\\]+)$/);
+    if (scopedMatch) {
+      name = scopedMatch[1].replace(/^@/, '') + '-' + scopedMatch[2];
+    } else {
+      // Get last path component
+      name = name.replace(/^.*[/\\]/, '');
+    }
   }
 
   // Lowercase and sanitize (keep only alphanumeric and dashes)
@@ -109,6 +115,15 @@ export function getSemanticCacheDir(projectPath?: string): string {
     'semantic',
     getSemanticWorkspaceKey(workspacePath)
   );
+}
+
+export function getConsolidationStateDir(): string {
+  return join(getGoldfishHomeDir(), 'consolidation-state');
+}
+
+export function getConsolidationStatePath(projectPath: string): string {
+  const name = normalizeWorkspace(projectPath);
+  return join(getConsolidationStateDir(), `${name}.json`);
 }
 
 /**

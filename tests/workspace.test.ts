@@ -9,6 +9,8 @@ import {
   getModelCacheDir,
   getSemanticWorkspaceKey,
   getSemanticCacheDir,
+  getConsolidationStateDir,
+  getConsolidationStatePath,
 } from '../src/workspace';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
@@ -36,6 +38,13 @@ describe('Workspace normalization', () => {
       .toBe('coa-goldfish-mcp');
     expect(normalizeWorkspace('@modelcontextprotocol/sdk'))
       .toBe('modelcontextprotocol-sdk');
+  });
+
+  it('handles scoped package paths in filesystem paths', () => {
+    expect(normalizeWorkspace('/home/dev/@org/project'))
+      .toBe('org-project');
+    expect(normalizeWorkspace('/Users/dev/source/@org/my-project'))
+      .toBe('org-my-project');
   });
 
   it('lowercases and sanitizes special characters', () => {
@@ -260,5 +269,24 @@ describe('Semantic cache paths', () => {
       .toBe(getSemanticWorkspaceKey(firstPath));
     expect(getSemanticWorkspaceKey(firstPath))
       .not.toBe(getSemanticWorkspaceKey(secondPath));
+  });
+});
+
+describe('getConsolidationStateDir', () => {
+  it('returns path under goldfish home', () => {
+    const result = getConsolidationStateDir();
+    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state'));
+  });
+});
+
+describe('getConsolidationStatePath', () => {
+  it('returns per-workspace JSON file path', () => {
+    const result = getConsolidationStatePath('/Users/dev/source/goldfish');
+    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', 'goldfish.json'));
+  });
+
+  it('normalizes workspace name', () => {
+    const result = getConsolidationStatePath('/Users/dev/source/@org/my-project');
+    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', 'org-my-project.json'));
   });
 });
