@@ -10,7 +10,7 @@ import { stat } from 'fs/promises';
 import { join } from 'path';
 import Fuse from 'fuse.js';
 import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
-import { getCheckpointsForDateRange, getAllCheckpoints } from './checkpoints';
+import { getCheckpointsForDateRange, getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS } from './checkpoints';
 import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } from './digests';
 import { readMemory, readConsolidationState, getMemorySummary, parseMemorySections } from './memory';
 import { getActivePlan } from './plans';
@@ -568,7 +568,6 @@ async function recallFromWorkspace(
   // Count stale checkpoints (checkpoints newer than last consolidation AND
   // within the 30-day age window). This matches what the consolidate handler
   // actually processes, preventing inflated counts from old checkpoints.
-  const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
   const ageLimit = Date.now() - CONSOLIDATION_AGE_LIMIT_DAYS * 24 * 60 * 60 * 1000;
   let staleCheckpoints = 0;
   if (consolidationState) {

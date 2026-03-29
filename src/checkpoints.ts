@@ -20,6 +20,9 @@ import { buildRetrievalDigest, DIGEST_VERSION } from './digests';
 import { upsertPendingSemanticRecord } from './semantic-cache';
 import { getLogger } from './logger';
 
+/** Checkpoints older than this are excluded from consolidation. Shared by recall, consolidate handler, and hooks. */
+export const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
+
 type SemanticQueueInput = {
   checkpointId: string;
   checkpointTimestamp: string;

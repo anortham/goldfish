@@ -6,7 +6,7 @@
  */
 
 import { readConsolidationState } from '../memory.js';
-import { getAllCheckpoints } from '../checkpoints.js';
+import { getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS } from '../checkpoints.js';
 import { getActivePlan } from '../plans.js';
 import { buildConsolidationPrompt } from '../consolidation-prompt.js';
 import { getMemoriesDir, getPlansDir, getConsolidationStatePath, getConsolidationStateDir, resolveWorkspace } from '../workspace.js';
@@ -16,7 +16,6 @@ import type { ConsolidationPayload } from '../types.js';
 
 const CONSOLIDATION_BATCH_CAP = 50;
 const CONSOLIDATION_ALL_CAP = 100;
-const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
 
 /**
  * Handle the consolidate tool call.

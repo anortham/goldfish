@@ -1,10 +1,27 @@
 /**
  * Shared utility for counting unconsolidated checkpoints.
  * Used by session-start and pre-compact hooks.
+ *
+ * Parses frontmatter timestamps (not file mtime) and applies a 30-day
+ * age filter so the count matches what recall and the consolidate handler
+ * actually process.
  */
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { getConsolidationStatePath } from '../src/workspace';
+import { CONSOLIDATION_AGE_LIMIT_DAYS } from '../src/checkpoints';
+
+/** Regex to extract the timestamp field from YAML frontmatter. */
+const TIMESTAMP_RE = /^---\n[\s\S]*?timestamp:\s*"?([^"\n]+)"?\n[\s\S]*?---/;
+
+/**
+ * Extract the ISO 8601 timestamp from a checkpoint file's YAML frontmatter.
+ * Returns null if the file has no parseable frontmatter timestamp.
+ */
+function extractTimestamp(content: string): string | null {
+  const match = content.match(TIMESTAMP_RE);
+  return match ? match[1]!.trim() : null;
+}
 
 export function countStaleCheckpoints(memoriesDir: string): number {
   let staleCount = 0;
@@ -26,6 +43,8 @@ export function countStaleCheckpoints(memoriesDir: string): number {
     } catch { /* no state */ }
   }
 
+  const ageLimit = Date.now() - CONSOLIDATION_AGE_LIMIT_DAYS * 24 * 60 * 60 * 1000;
+
   try {
     const entries = readdirSync(memoriesDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -34,8 +53,17 @@ export function countStaleCheckpoints(memoriesDir: string): number {
       const files = readdirSync(dateDir);
       for (const file of files) {
         if (!file.endsWith('.md')) continue;
-        const mtime = statSync(join(dateDir, file)).mtimeMs;
-        if (mtime > lastTimestamp) staleCount++;
+        try {
+          const content = readFileSync(join(dateDir, file), 'utf-8');
+          const ts = extractTimestamp(content);
+          if (!ts) continue; // Skip files without parseable frontmatter
+          const cpTime = new Date(ts).getTime();
+          if (cpTime > lastTimestamp && cpTime >= ageLimit) {
+            staleCount++;
+          }
+        } catch {
+          // Skip unreadable files
+        }
       }
     }
   } catch { /* no dirs */ }
