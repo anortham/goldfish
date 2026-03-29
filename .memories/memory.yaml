@@ -1,0 +1,22 @@
+decisions:
+  - "2026-03-01 | Checkpoint frequency tuning (recalibrated twice): first rewrite cut over-checkpointing (100+/day), second added positive triggers back after agents stopped entirely because 'Do NOT' lists suppressed the impulse. Current: milestone-focused, positive framing only."
+  - "2026-03-01 | Three-layer structured field enforcement: instructions (strongest) > tool description (hints) > handler nudges (runtime feedback). Rejected making fields required at schema level because agents hit validation errors and drop type entirely."
+  - "2026-03-01 | Duplicate MCP registration removed: deleted .mcp.json; plugin.json is the canonical registration path. Both registering caused ~500 tokens/session of duplicate instructions."
+  - "2026-03-01 | Semantic search runs uncapped on first use. setTimeout(fn, Infinity) overflows the 32-bit int and fires immediately; maxMs is now optional."
+  - "2026-03-01 | Agent teams for parallel code review (v6.3.0): spawned 5 review agents by functional area, then 4 fix agents each owning distinct files. Avoids merge conflicts. Worth repeating for large cross-cutting changes."
+  - "2026-03-28 | Delta checkpoint guidance added to tool description (v6.3.6): agents were writing cumulative 'state of the world' checkpoints. Tool description is the right intervention point (composed before tool call); server-side dedup would be too late."
+  - "2026-03-29 | memory.yaml replaces MEMORY.md (v6.4.0): structured YAML with four fixed section keys, one entry per line, chronologically sorted. Consolidation state moved to ~/.goldfish/consolidation-state/{name}_{hash}.json (machine-local, no VCS conflicts)."
+
+open_questions:
+  - "2026-03-01 | Checkpoint metadata aliases, handler args:any typing, hook script tests are low priority. Monitor for user reports before investing."
+
+deferred_work:
+  - "2026-03-01 | Hook script tests still missing. Low priority, no user reports yet."
+
+gotchas:
+  - "2026-03-01 | GOLDFISH_HOME env var needed for test isolation: workspace.test.ts mutating HOME caused semantic-cache.test.ts failures in full suite runs."
+  - "2026-03-01 | Parameter aliasing matters: Copilot users passed planId but handler expected id, causing silent failures. The v6.3.0 fix added aliases; watch for this in any new tool parameters."
+  - "2026-03-01 | Recurring anti-pattern across all five iterations: trying to unify code intelligence + memory + semantics into one surface creates reliability and identity conflicts. Keep Goldfish as deterministic memory; semantics must stay optional/pluggable."
+  - "2026-03-24 | Stale checkpoint count mismatch: recall() counted all unconsolidated checkpoints (no age filter) while consolidate handler filtered to 30 days. Caused inflated counts and unnecessary consolidation runs. Fixed in v6.3.2."
+  - "2026-03-29 | Workspace collision prevention: path hash suffix on consolidation state filenames prevents two projects with the same directory name from overwriting each other's state."
+  - "2026-03-29 | YAML parsing robustness: malformed JSON in consolidation state must fall through to legacy path; YAML detection needs to handle leading whitespace; summary extraction should use entry text not raw YAML keys."

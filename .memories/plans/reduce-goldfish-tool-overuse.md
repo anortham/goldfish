@@ -3,7 +3,7 @@ id: reduce-goldfish-tool-overuse
 title: Reduce Goldfish Tool Overuse
 status: completed
 created: 2026-02-28T23:44:19.798Z
-updated: 2026-03-23T23:16:00.796Z
+updated: 2026-03-29T16:06:52.958Z
 tags:
   - refactor
   - behavioral-language
