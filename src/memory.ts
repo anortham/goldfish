@@ -36,16 +36,23 @@ function memoriesDir(workspace: string): string {
 
 /**
  * Detect if a content string is YAML memory format.
- * YAML memory starts with one of the four known keys.
+ * Fast path: content starts with one of the four known keys (after trimming).
+ * Slow path: try parsing as YAML and check for known keys (handles leading comments, BOM, etc).
  */
 function isYamlMemory(content: string): boolean {
   const trimmed = content.trimStart();
-  return (
-    trimmed.startsWith('decisions:') ||
-    trimmed.startsWith('open_questions:') ||
-    trimmed.startsWith('deferred_work:') ||
-    trimmed.startsWith('gotchas:')
-  );
+  // Fast path
+  if (SECTION_KEYS.some(key => trimmed.startsWith(`${key}:`))) {
+    return true;
+  }
+  // Slow path: parse as YAML and check for known keys
+  try {
+    const parsed = YAML.parse(content);
+    if (parsed && typeof parsed === 'object') {
+      return SECTION_KEYS.some(key => key in (parsed as Record<string, unknown>));
+    }
+  } catch { /* not valid YAML */ }
+  return false;
 }
 
 /**
@@ -100,7 +107,7 @@ export async function readConsolidationState(workspace: string): Promise<Consoli
     try {
       return JSON.parse(raw) as ConsolidationState;
     } catch {
-      return null; // malformed JSON
+      // Malformed JSON at new path; fall through to legacy fallback
     }
   } catch (err: unknown) {
     if (!isEnoent(err)) throw err;
@@ -244,11 +251,18 @@ export function getMemorySummary(content: string | null): string | null {
   if (!content) return null;
 
   if (isYamlMemory(content)) {
-    const summary = content.trim();
-    if (summary.length > 300) {
-      return summary.slice(0, 300) + '...';
+    const data = parseMemoryYaml(content);
+    const entries: string[] = [];
+    for (const key of SECTION_KEYS) {
+      const items = data[key];
+      if (items) entries.push(...items);
     }
-    return summary || null;
+    if (entries.length === 0) return null;
+    let summary = entries.slice(0, 5).join('; ');
+    if (summary.length > 300) {
+      summary = summary.slice(0, 300) + '...';
+    }
+    return summary;
   }
 
   // Legacy markdown path

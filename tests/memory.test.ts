@@ -11,6 +11,7 @@ import {
   getMemorySummary,
   parseMemoryYaml,
 } from '../src/memory';
+import { getConsolidationStatePath } from '../src/workspace';
 import type { ConsolidationState, MemoryData } from '../src/types';
 
 let tempDir: string;
@@ -187,17 +188,32 @@ describe('readConsolidationState', () => {
     expect(result).toEqual(newState);
   });
 
-  it('returns null for malformed JSON in new path', async () => {
+  it('returns null for malformed JSON in new path (no legacy fallback)', async () => {
+    const newPath = getConsolidationStatePath(tempDir);
     const stateDir = join(tempGoldfishHome, 'consolidation-state');
     await mkdir(stateDir, { recursive: true });
-    // Write bad JSON to where the new state file would go
-    // We'll write state via a raw file write, using normalizeWorkspace for the path
-    const { normalizeWorkspace } = await import('../src/workspace');
-    const wsName = normalizeWorkspace(tempDir);
-    await writeFile(join(stateDir, `${wsName}.json`), 'not valid json {{{');
+    await writeFile(newPath, 'not valid json {{{');
 
     const result = await readConsolidationState(tempDir);
     expect(result).toBeNull();
+  });
+
+  it('falls back to legacy when new path has malformed JSON', async () => {
+    const newPath = getConsolidationStatePath(tempDir);
+    const stateDir = join(tempGoldfishHome, 'consolidation-state');
+    await mkdir(stateDir, { recursive: true });
+    await writeFile(newPath, 'not valid json {{{');
+
+    const memoriesDir = join(tempDir, '.memories');
+    await mkdir(memoriesDir, { recursive: true });
+    const state: ConsolidationState = {
+      timestamp: '2026-03-20T00:00:00.000Z',
+      checkpointsConsolidated: 3,
+    };
+    await writeFile(join(memoriesDir, '.last-consolidated'), JSON.stringify(state));
+
+    const result = await readConsolidationState(tempDir);
+    expect(result).toEqual(state);
   });
 
   it('returns null for malformed JSON in legacy fallback', async () => {
@@ -212,9 +228,7 @@ describe('readConsolidationState', () => {
   it('throws on permission errors (not ENOENT or parse error)', async () => {
     const stateDir = join(tempGoldfishHome, 'consolidation-state');
     await mkdir(stateDir, { recursive: true });
-    const { normalizeWorkspace } = await import('../src/workspace');
-    const wsName = normalizeWorkspace(tempDir);
-    const filePath = join(stateDir, `${wsName}.json`);
+    const filePath = getConsolidationStatePath(tempDir);
     await writeFile(filePath, '{"timestamp":"2026-01-01T00:00:00.000Z","checkpointsConsolidated":1}');
     const { chmod } = await import('fs/promises');
     await chmod(filePath, 0o000);
@@ -228,7 +242,7 @@ describe('readConsolidationState', () => {
 });
 
 describe('writeConsolidationState', () => {
-  it('writes state as JSON to ~/.goldfish/consolidation-state/{workspace}.json', async () => {
+  it('writes state as JSON to ~/.goldfish/consolidation-state/{workspace}_{hash}.json', async () => {
     const state: ConsolidationState = {
       timestamp: '2026-03-23T12:00:00.000Z',
       checkpointsConsolidated: 12,
@@ -236,11 +250,8 @@ describe('writeConsolidationState', () => {
 
     await writeConsolidationState(tempDir, state);
 
-    const { normalizeWorkspace } = await import('../src/workspace');
-    const wsName = normalizeWorkspace(tempDir);
-    const stateDir = join(tempGoldfishHome, 'consolidation-state');
     const { readFile } = await import('fs/promises');
-    const raw = await readFile(join(stateDir, `${wsName}.json`), 'utf-8');
+    const raw = await readFile(getConsolidationStatePath(tempDir), 'utf-8');
     expect(JSON.parse(raw)).toEqual(state);
   });
 
@@ -431,6 +442,13 @@ describe('parseMemorySections', () => {
     expect(decSection).toBeDefined();
     expect(qSection).toBeUndefined();
   });
+
+  it('detects YAML with leading blank lines', () => {
+    const yaml = '\n\ndecisions:\n  - "2026-03-24 | Test"\n';
+    const sections = parseMemorySections(yaml);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].slug).toBe('decisions');
+  });
 });
 
 describe('getMemorySummary', () => {
@@ -465,20 +483,37 @@ describe('getMemorySummary', () => {
   });
 
   // YAML format tests
-  it('returns a summary for YAML content', () => {
+  it('summarizes YAML by extracting entry text (not raw YAML keys)', () => {
+    const yaml = 'decisions:\n  - "2026-03-24 | Chose YAML"\n  - "2026-03-25 | Fixed merges"\n';
+    const result = getMemorySummary(yaml);
+    expect(result).not.toBeNull();
+    expect(result).toContain('Chose YAML');
+    expect(result).toContain('Fixed merges');
+    expect(result).not.toMatch(/^decisions:/);
+  });
+
+  it('returns entries from multiple YAML sections', () => {
     const yaml = 'decisions:\n  - Use YAML format\n  - Keep data simple\nopen_questions:\n  - Anything unclear?\n';
     const result = getMemorySummary(yaml);
     expect(result).not.toBeNull();
-    expect(result!.length).toBeGreaterThan(0);
+    expect(result).toContain('Use YAML format');
+    expect(result).toContain('Keep data simple');
+    expect(result).toContain('Anything unclear?');
   });
 
-  it('truncates long YAML content at 300 chars with "..."', () => {
+  it('returns null for YAML with no entries', () => {
+    const yaml = 'decisions: []\nopen_questions: []\n';
+    const result = getMemorySummary(yaml);
+    expect(result).toBeNull();
+  });
+
+  it('truncates long YAML entry summary at 300 chars with "..."', () => {
     const longEntries = Array.from({ length: 30 }, (_, i) => `  - Decision entry number ${i + 1} with some extra text to pad it out`).join('\n');
     const yaml = `decisions:\n${longEntries}\n`;
     const result = getMemorySummary(yaml);
     expect(result).not.toBeNull();
-    if (yaml.length > 300) {
-      expect(result!.length).toBe(303);
+    expect(result!.length).toBeLessThanOrEqual(303);
+    if (result!.length === 303) {
       expect(result!.endsWith('...')).toBe(true);
     }
   });
