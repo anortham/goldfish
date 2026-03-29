@@ -9,11 +9,26 @@ export function countStaleCheckpoints(memoriesDir: string): number {
   let staleCount = 0;
 
   let lastTimestamp = 0;
+
+  // Try new location first: ~/.goldfish/consolidation-state/{workspace}.json
+  const goldfishHome = process.env.GOLDFISH_HOME || join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.goldfish');
+  const projectPath = memoriesDir.replace(/[/\\]\.memories$/, '');
+  let workspaceName = projectPath.replace(/^.*[/\\]/, '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  if (!workspaceName) workspaceName = 'default';
+  const newStatePath = join(goldfishHome, 'consolidation-state', `${workspaceName}.json`);
+
   try {
-    const raw = readFileSync(join(memoriesDir, '.last-consolidated'), 'utf-8');
+    const raw = readFileSync(newStatePath, 'utf-8');
     const state = JSON.parse(raw);
     lastTimestamp = new Date(state.timestamp).getTime();
-  } catch { /* no state */ }
+  } catch {
+    // Fall back to legacy location
+    try {
+      const raw = readFileSync(join(memoriesDir, '.last-consolidated'), 'utf-8');
+      const state = JSON.parse(raw);
+      lastTimestamp = new Date(state.timestamp).getTime();
+    } catch { /* no state */ }
+  }
 
   try {
     const entries = readdirSync(memoriesDir, { withFileTypes: true });

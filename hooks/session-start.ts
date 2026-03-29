@@ -11,9 +11,14 @@ let staleCount = 0;
 
 try {
   try {
-    statSync(join(memoriesDir, 'MEMORY.md'));
+    statSync(join(memoriesDir, 'memory.yaml'));
     hasMemory = true;
-  } catch { /* no memory */ }
+  } catch {
+    try {
+      statSync(join(memoriesDir, 'MEMORY.md'));
+      hasMemory = true;
+    } catch { /* no memory */ }
+  }
 
   staleCount = countStaleCheckpoints(memoriesDir);
 } catch { /* no memories dir */ }
