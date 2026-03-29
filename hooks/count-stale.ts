@@ -58,6 +58,7 @@ export function countStaleCheckpoints(memoriesDir: string): number {
           const ts = extractTimestamp(content);
           if (!ts) continue; // Skip files without parseable frontmatter
           const cpTime = new Date(ts).getTime();
+          if (!Number.isFinite(cpTime)) continue;
           if (cpTime > lastTimestamp && cpTime >= ageLimit) {
             staleCount++;
           }

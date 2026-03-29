@@ -134,8 +134,12 @@ describe('countStaleCheckpoints', () => {
   });
 
   it('handles checkpoint at exactly the age boundary', () => {
-    // Checkpoint at exactly 30 days ago (should be included -- the filter is >=)
-    const boundaryDate = new Date(Date.now() - CONSOLIDATION_AGE_LIMIT_DAYS * 24 * 60 * 60 * 1000);
+    // Use 29 days 23 hours instead of exactly 30 days. The exact boundary is
+    // flaky because Date.now() in the test and Date.now() inside
+    // countStaleCheckpoints differ by a few ms, which can flip the >= check.
+    // A 1-hour buffer puts us safely inside the window without changing what
+    // the test validates (near-boundary inclusion).
+    const boundaryDate = new Date(Date.now() - (CONSOLIDATION_AGE_LIMIT_DAYS * 24 - 1) * 60 * 60 * 1000);
     const dateStr = boundaryDate.toISOString().split('T')[0]!;
     const dateDir = join(memoriesDir, dateStr);
     mkdirSync(dateDir, { recursive: true });
@@ -145,7 +149,7 @@ describe('countStaleCheckpoints', () => {
     );
 
     const count = countStaleCheckpoints(memoriesDir);
-    // At exactly the boundary, cpTime >= ageLimit should be true
+    // Just inside the 30-day window, cpTime >= ageLimit should be true
     expect(count).toBe(1);
   });
 
@@ -169,6 +173,76 @@ describe('countStaleCheckpoints', () => {
 
     const count = countStaleCheckpoints(memoriesDir);
     expect(count).toBe(1);
+  });
+
+  it('agrees with recall filtering logic on the same data', () => {
+    // Verify that the hook's counting matches the documented recall contract:
+    // checkpoint timestamp > lastConsolidated AND checkpoint timestamp >= ageLimit
+    // where ageLimit = Date.now() - 30 days in ms.
+
+    // Consolidation happened 7 days ago
+    const consolidationDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const consolidationMs = consolidationDate.getTime();
+    const statePath = getConsolidationStatePath(TEST_DIR);
+    mkdirSync(getConsolidationStateDir(), { recursive: true });
+    writeFileSync(statePath, JSON.stringify({
+      timestamp: consolidationDate.toISOString(),
+      checkpointsConsolidated: 3
+    }));
+
+    // Create checkpoints with known timestamps covering all categories:
+    const timestamps: { iso: string; label: string }[] = [];
+
+    // (A) 2 days ago: after consolidation, within 30 days -- SHOULD count
+    const a = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    timestamps.push({ iso: a.toISOString(), label: 'recent-after' });
+
+    // (B) 5 days ago: after consolidation, within 30 days -- SHOULD count
+    const b = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    timestamps.push({ iso: b.toISOString(), label: 'mid-after' });
+
+    // (C) 10 days ago: before consolidation, within 30 days -- should NOT count
+    const c = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    timestamps.push({ iso: c.toISOString(), label: 'before-consolidation' });
+
+    // (D) 20 days ago: before consolidation, within 30 days -- should NOT count
+    const d = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
+    timestamps.push({ iso: d.toISOString(), label: 'old-before-consolidation' });
+
+    // (E) 45 days ago: before consolidation, outside 30 days -- should NOT count
+    const e = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    timestamps.push({ iso: e.toISOString(), label: 'very-old' });
+
+    // Write each checkpoint to its date directory
+    for (let i = 0; i < timestamps.length; i++) {
+      const ts = timestamps[i]!;
+      const dateStr = ts.iso.split('T')[0]!;
+      const dateDir = join(memoriesDir, dateStr);
+      mkdirSync(dateDir, { recursive: true });
+      writeFileSync(
+        join(dateDir, `10000${i}_${ts.label}.md`),
+        makeCheckpointContent(ts.iso)
+      );
+    }
+
+    // Run the hook's counting function
+    const hookCount = countStaleCheckpoints(memoriesDir);
+
+    // Compute expected count using recall's documented filtering logic:
+    // cpTime > lastConsolidated AND cpTime >= ageLimit
+    const now = Date.now();
+    const ageLimit = now - CONSOLIDATION_AGE_LIMIT_DAYS * 24 * 60 * 60 * 1000;
+    let recallCount = 0;
+    for (const ts of timestamps) {
+      const cpTime = new Date(ts.iso).getTime();
+      if (cpTime > consolidationMs && cpTime >= ageLimit) {
+        recallCount++;
+      }
+    }
+
+    // Both should agree: only checkpoints A and B qualify
+    expect(recallCount).toBe(2);
+    expect(hookCount).toBe(recallCount);
   });
 
   it('handles malformed frontmatter gracefully', () => {
