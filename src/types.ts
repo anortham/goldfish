@@ -135,17 +135,24 @@ export interface ConsolidationState {
   checkpointsConsolidated: number; // Running total across all consolidations
 }
 
+export interface MemoryData {
+  decisions?: string[];
+  open_questions?: string[];
+  deferred_work?: string[];
+  gotchas?: string[];
+}
+
 export interface MemorySection {
-  slug: string;      // e.g., "key-decisions" (from ## header)
-  header: string;    // e.g., "Key Decisions" (raw header text)
-  content: string;   // Section body (everything between this ## and next ##)
+  slug: string;      // e.g., "decisions" (the YAML key)
+  header: string;    // e.g., "Decisions" (display name)
+  content: string;   // Joined entries as text for search
 }
 
 export interface ConsolidationPayload {
   status: 'ready' | 'current';
   message?: string;                    // Only when status === 'current'
-  memoryPath?: string;                 // Absolute path to .memories/MEMORY.md
-  lastConsolidatedPath?: string;       // Absolute path to .memories/.last-consolidated
+  memoryPath?: string;                 // Absolute path to .memories/memory.yaml
+  lastConsolidatedPath?: string;       // Absolute path to ~/.goldfish/consolidation-state/{workspace}.json
   activePlanPath?: string;             // Absolute path to active plan file, if one exists
   checkpointCount?: number;            // Number of checkpoints in this batch
   remainingCount?: number;             // Unconsolidated checkpoints beyond this batch
