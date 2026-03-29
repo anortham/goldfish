@@ -29,6 +29,21 @@ describe('Registry path', () => {
     // Should be an absolute path starting from home
     expect(isAbsolute(path)).toBe(true);
   });
+
+  it('respects GOLDFISH_HOME env var', () => {
+    const savedHome = process.env.GOLDFISH_HOME;
+    try {
+      process.env.GOLDFISH_HOME = '/tmp/custom-goldfish-home';
+      const path = getRegistryPath();
+      expect(path).toBe(join('/tmp/custom-goldfish-home', 'registry.json'));
+    } finally {
+      if (savedHome === undefined) {
+        delete process.env.GOLDFISH_HOME;
+      } else {
+        process.env.GOLDFISH_HOME = savedHome;
+      }
+    }
+  });
 });
 
 describe('Get registry', () => {

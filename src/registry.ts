@@ -6,10 +6,9 @@
  */
 
 import { join, resolve } from 'path';
-import { homedir } from 'os';
 import { mkdir, writeFile, stat } from 'fs/promises';
 import { withLock } from './lock';
-import { normalizeWorkspace } from './workspace';
+import { normalizeWorkspace, getGoldfishHomeDir } from './workspace';
 import type { Registry, RegisteredProject } from './types';
 
 /**
@@ -23,9 +22,10 @@ function normalizePath(p: string): string {
 
 /**
  * Returns the default registry file path: ~/.goldfish/registry.json
+ * Respects GOLDFISH_HOME env var via getGoldfishHomeDir().
  */
 export function getRegistryPath(): string {
-  return join(homedir(), '.goldfish', 'registry.json');
+  return join(getGoldfishHomeDir(), 'registry.json');
 }
 
 /**
@@ -35,7 +35,7 @@ export function getRegistryPath(): string {
  * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
  */
 export async function getRegistry(registryDir?: string): Promise<Registry> {
-  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const dir = registryDir ?? getGoldfishHomeDir();
   const filePath = join(dir, 'registry.json');
 
   try {
@@ -60,7 +60,7 @@ export async function getRegistry(registryDir?: string): Promise<Registry> {
  * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
  */
 export async function registerProject(projectPath: string, registryDir?: string): Promise<void> {
-  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const dir = registryDir ?? getGoldfishHomeDir();
   const absolutePath = normalizePath(projectPath);
   const filePath = join(dir, 'registry.json');
 
@@ -98,7 +98,7 @@ export async function registerProject(projectPath: string, registryDir?: string)
  * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
  */
 export async function unregisterProject(projectPath: string, registryDir?: string): Promise<void> {
-  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const dir = registryDir ?? getGoldfishHomeDir();
   const absolutePath = normalizePath(projectPath);
   const filePath = join(dir, 'registry.json');
 
@@ -128,7 +128,7 @@ export async function unregisterProject(projectPath: string, registryDir?: strin
  * @returns Projects sorted by name, filtered to only those with .memories/
  */
 export async function listRegisteredProjects(registryDir?: string): Promise<RegisteredProject[]> {
-  const dir = registryDir ?? join(homedir(), '.goldfish');
+  const dir = registryDir ?? getGoldfishHomeDir();
   const registry = await getRegistry(dir);
 
   // Check which projects have .memories/ directories
