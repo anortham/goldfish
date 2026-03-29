@@ -7,7 +7,7 @@
 
 /**
  * @param memoryPath - Absolute path to memory.yaml (may not exist yet)
- * @param lastConsolidatedPath - Absolute path to .last-consolidated
+ * @param lastConsolidatedPath - Absolute path to consolidation state JSON
  * @param checkpointFiles - Absolute paths to checkpoint files, oldest-first
  * @param activePlanPath - Absolute path to active plan, or undefined
  * @param checkpointCount - Number of checkpoint files in this batch

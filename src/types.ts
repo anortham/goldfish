@@ -97,7 +97,7 @@ export interface RecallResult {
   checkpoints: Checkpoint[];
   activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
-  memory?: string;                     // MEMORY.md content (when includeMemory is true)
+  memory?: string;                     // memory.yaml content (when includeMemory is true)
   matchedMemorySections?: MemorySection[];  // Memory sections that matched search query
   consolidation?: {
     needed: boolean;
@@ -111,7 +111,7 @@ export interface WorkspaceSummary {
   path: string;
   checkpointCount: number;
   lastActivity?: string;  // ISO 8601 UTC
-  memorySummary?: string | null;  // First lines of MEMORY.md (up to 300 chars)
+  memorySummary?: string | null;  // First lines of memory.yaml (up to 300 chars)
 }
 
 export interface GitContext {

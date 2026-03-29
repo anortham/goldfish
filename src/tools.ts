@@ -136,10 +136,10 @@ Key parameters (all optional):
 - full: Return full descriptions + all metadata including files, git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - planId: Filter checkpoints to those created under a specific plan
-- includeMemory: Include full MEMORY.md in response. Defaults to true (bootstrap mode, no search). Defaults to false (search mode, with search param). Override explicitly with true/false.
+- includeMemory: Include full memory.yaml in response. Defaults to true (bootstrap mode, no search). Defaults to false (search mode, with search param). Override explicitly with true/false.
 
 Recall now returns three layers:
-1. Consolidated memory (MEMORY.md) - project understanding, included by default
+1. Consolidated memory (memory.yaml) - project understanding, included by default
 2. Delta checkpoints - events since last consolidation, included when stale
 3. Consolidation flag - metadata indicating if consolidation is needed
 

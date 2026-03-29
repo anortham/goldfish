@@ -20,7 +20,7 @@ const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
 /**
  * Handle the consolidate tool call.
  * Returns a metadata-only JSON payload (file paths + prompt) that a subagent
- * uses to read checkpoint files from disk and update MEMORY.md.
+ * uses to read checkpoint files from disk and update memory.yaml.
  */
 export async function handleConsolidate(args: any) {
   const workspace = resolveWorkspace(args?.workspace);
