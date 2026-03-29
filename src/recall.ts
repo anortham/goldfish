@@ -8,7 +8,6 @@
 import { createHash } from 'crypto';
 import { stat } from 'fs/promises';
 import { join } from 'path';
-import Fuse from 'fuse.js';
 import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS } from './checkpoints';
 import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } from './digests';
@@ -16,14 +15,11 @@ import { readMemory, readConsolidationState, getMemorySummary, parseMemorySectio
 import { getActivePlan } from './plans';
 import { listRegisteredProjects } from './registry';
 import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady, upsertPendingSemanticRecord } from './semantic-cache';
-import { buildHybridRanking, processPendingSemanticWork, MINIMUM_SEARCH_RELEVANCE } from './semantic';
+import { rankSearchCheckpoints } from './ranking';
+import type { ReadySemanticRecord } from './ranking';
+import { processPendingSemanticWork } from './semantic';
 import { getDefaultSemanticRuntime } from './transformers-embedder';
 import { resolveWorkspace } from './workspace';
-
-type ReadySemanticRecord = {
-  checkpointId: string;
-  embedding: number[];
-};
 
 type QueryEmbeddingResult =
   | { ok: true; embedding?: number[] }
@@ -86,40 +82,6 @@ export function parseSince(since: string): Date {
   return new Date(now.getTime() - parseInt(amount!) * milliseconds[unitValue]);
 }
 
-/**
- * Search checkpoints using fuzzy matching (fuse.js)
- */
-export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Checkpoint[] {
-  if (!query || checkpoints.length === 0) {
-    return checkpoints;
-  }
-
-  const fuse = new Fuse(checkpoints, {
-    keys: [
-      { name: 'description', weight: 2 },  // Description is most important
-      { name: 'decision', weight: 1.5 },
-      { name: 'impact', weight: 1.3 },
-      { name: 'context', weight: 1.1 },
-      { name: 'alternatives', weight: 0.8 },
-      { name: 'evidence', weight: 0.7 },
-      { name: 'symbols', weight: 0.7 },
-      { name: 'unknowns', weight: 0.6 },
-      { name: 'next', weight: 0.5 },
-      { name: 'tags', weight: 1 },
-      { name: 'git.branch', weight: 0.5 },
-      { name: 'git.files', weight: 0.3 }
-    ],
-    threshold: 0.4,  // 0 = perfect match, 1 = match anything
-    includeScore: true,
-    ignoreLocation: true,  // Search anywhere in the text
-    minMatchCharLength: 2
-  });
-
-  const results = fuse.search(query);
-
-  // Return just the items (sorted by relevance via fuse.js score)
-  return results.map(result => result.item);
-}
 
 /**
  * Calculate date range from recall options
@@ -198,16 +160,6 @@ async function loadWorkspaceCheckpoints(workspace: string, options: RecallOption
   }
 
   return checkpoints;
-}
-
-function buildLexicalSearchCandidates(
-  checkpoints: Checkpoint[],
-  digests: Record<string, string>
-): Checkpoint[] {
-  return checkpoints.map(checkpoint => ({
-    ...checkpoint,
-    description: digests[checkpoint.id] ?? checkpoint.description
-  }));
 }
 
 async function loadReadySemanticRecords(
@@ -309,68 +261,6 @@ async function backfillMissingSemanticRecords(
     }
   } catch {
     // Silently ignore — backfill is best-effort
-  }
-}
-
-async function rankSearchCheckpoints(
-  query: string,
-  checkpoints: Checkpoint[],
-  digests: Record<string, string>,
-  readyRecords: ReadySemanticRecord[],
-  runtime?: RecallOptions['_semanticRuntime'],
-  queryEmbeddingPromise?: Promise<QueryEmbeddingResult>
-): Promise<Checkpoint[]> {
-  const checkpointsById = new Map(checkpoints.map(checkpoint => [checkpoint.id, checkpoint]));
-  const lexicalRanked = searchCheckpoints(
-    query,
-    buildLexicalSearchCandidates(checkpoints, digests)
-  );
-  const lexicalOrder = lexicalRanked.map(checkpoint => checkpoint.id);
-
-  if (!runtime) {
-    return lexicalRanked
-      .map(checkpoint => checkpointsById.get(checkpoint.id))
-      .filter((checkpoint): checkpoint is Checkpoint => Boolean(checkpoint));
-  }
-
-  const candidateIds = new Set<string>([
-    ...lexicalOrder,
-    ...readyRecords.map(record => record.checkpointId)
-  ]);
-  const candidateCheckpoints = checkpoints.filter(checkpoint => candidateIds.has(checkpoint.id));
-
-  if (candidateCheckpoints.length === 0) {
-    return [];
-  }
-
-  try {
-    const queryEmbeddingResult = queryEmbeddingPromise ? await queryEmbeddingPromise : undefined;
-    if (queryEmbeddingResult && !queryEmbeddingResult.ok) {
-      throw queryEmbeddingResult.error;
-    }
-
-    const queryEmbedding = queryEmbeddingResult?.embedding;
-
-    const scored = await buildHybridRanking({
-      query,
-      checkpoints: candidateCheckpoints,
-      lexicalOrder,
-      digests,
-      readyRecords,
-      runtime,
-      ...(queryEmbedding ? { queryEmbedding } : {})
-    });
-
-    return scored
-      .filter(item => item.score >= MINIMUM_SEARCH_RELEVANCE)
-      .map(item => {
-        const original = checkpointsById.get(item.checkpoint.id);
-        return original ?? item.checkpoint;
-      });
-  } catch {
-    return lexicalRanked
-      .map(checkpoint => checkpointsById.get(checkpoint.id))
-      .filter((checkpoint): checkpoint is Checkpoint => Boolean(checkpoint));
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { recall, searchCheckpoints, parseSince, MEMORY_SECTION_PREFIX } from '../src/recall';
+import { recall, parseSince, MEMORY_SECTION_PREFIX } from '../src/recall';
 import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
 import { writeMemory, writeConsolidationState } from '../src/memory';
@@ -972,85 +972,6 @@ describe('Date range filtering', () => {
 
     // No checkpoints should be found — our checkpoint is today, not 30 days ago
     expect(pastResult.checkpoints).toEqual([]);
-  });
-});
-
-describe('Checkpoint search (fuse.js)', () => {
-  const checkpoints: Checkpoint[] = [
-    {
-      id: 'checkpoint_test0001',
-      timestamp: '2025-10-13T10:00:00.000Z',
-      description: 'Fixed authentication bug in JWT validation',
-      tags: ['bug-fix', 'auth', 'jwt']
-    },
-    {
-      id: 'checkpoint_test0002',
-      timestamp: '2025-10-13T11:00:00.000Z',
-      description: 'Added OAuth2 Google integration',
-      tags: ['feature', 'auth', 'oauth']
-    },
-    {
-      id: 'checkpoint_test0003',
-      timestamp: '2025-10-13T12:00:00.000Z',
-      description: 'Refactored database connection pooling',
-      tags: ['refactor', 'database', 'performance']
-    },
-    {
-      id: 'checkpoint_test0004',
-      timestamp: '2025-10-13T13:00:00.000Z',
-      description: 'Documented migration follow-up',
-      tags: ['decision-record'],
-      decision: 'Adopt CQRS for write-heavy order processing path',
-      impact: 'Reduced lock contention under peak load',
-      symbols: ['OrderCommandHandler.handle']
-    }
-  ];
-
-  it('searches across description and tags', () => {
-    const results = searchCheckpoints('auth', checkpoints);
-
-    expect(results.length).toBeGreaterThan(0);
-    expect(results.some(c =>
-      c.description.toLowerCase().includes('auth') ||
-      c.tags?.some(t => t.includes('auth')) ||
-      c.context?.toLowerCase().includes('auth') ||
-      c.decision?.toLowerCase().includes('auth') ||
-      c.impact?.toLowerCase().includes('auth')
-    )).toBe(true);
-  });
-
-  it('returns checkpoints sorted by relevance score', () => {
-    const results = searchCheckpoints('authentication', checkpoints);
-
-    // 'authentication bug' should rank higher than 'OAuth2' for this query
-    expect(results[0]!.description).toContain('authentication');
-  });
-
-  it('handles typos with fuzzy matching', () => {
-    const results = searchCheckpoints('databse', checkpoints);  // Typo
-
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]!.description).toContain('database');
-  });
-
-  it('returns empty array for no matches', () => {
-    const results = searchCheckpoints('nonexistent', checkpoints);
-    expect(results).toEqual([]);
-  });
-
-  it('searches partial words', () => {
-    const results = searchCheckpoints('refact', checkpoints);
-
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]!.description).toContain('Refactored');
-  });
-
-  it('searches across structured decision fields', () => {
-    const results = searchCheckpoints('cqrs', checkpoints);
-
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]!.decision).toBeDefined();
-    expect(results[0]!.decision!.toLowerCase()).toContain('cqrs');
   });
 });
 

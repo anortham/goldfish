@@ -148,6 +148,11 @@ export interface MemorySection {
   content: string;   // Joined entries as text for search
 }
 
+export interface ScoredCheckpoint {
+  checkpoint: Checkpoint
+  score: number
+}
+
 export interface ConsolidationPayload {
   status: 'ready' | 'current';
   message?: string;                    // Only when status === 'current'
