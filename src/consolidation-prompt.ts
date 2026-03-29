@@ -40,8 +40,9 @@ export function buildConsolidationPrompt(
 Read the following files using the Read tool:
 
 1. **Current memory file** (baseline): \`${memoryPath}\`
-   - If the file does not exist, this is the first consolidation. Start from scratch.
-   - The file may be YAML (new format) or markdown (legacy). Either way, use it as baseline context.
+   - If the file does not exist, check for \`MEMORY.md\` in the same directory as a legacy baseline. If found, read it and use its content as your starting context (it will be markdown, not YAML).
+   - If neither file exists, this is the first consolidation. Start from scratch.
+   - The baseline may be YAML (new format) or markdown (legacy). Either way, use it as context.
 
 2. **Checkpoint files** (read in this exact order, oldest first):
 ${fileList}
