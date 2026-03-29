@@ -4,21 +4,17 @@
  */
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
+import { getConsolidationStatePath } from '../src/workspace';
 
 export function countStaleCheckpoints(memoriesDir: string): number {
   let staleCount = 0;
-
   let lastTimestamp = 0;
 
-  // Try new location first: ~/.goldfish/consolidation-state/{workspace}.json
-  const goldfishHome = process.env.GOLDFISH_HOME || join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.goldfish');
   const projectPath = memoriesDir.replace(/[/\\]\.memories$/, '');
-  let workspaceName = projectPath.replace(/^.*[/\\]/, '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
-  if (!workspaceName) workspaceName = 'default';
-  const newStatePath = join(goldfishHome, 'consolidation-state', `${workspaceName}.json`);
 
+  // Try new machine-local path first
   try {
-    const raw = readFileSync(newStatePath, 'utf-8');
+    const raw = readFileSync(getConsolidationStatePath(projectPath), 'utf-8');
     const state = JSON.parse(raw);
     lastTimestamp = new Date(state.timestamp).getTime();
   } catch {

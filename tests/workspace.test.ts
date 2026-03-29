@@ -280,13 +280,23 @@ describe('getConsolidationStateDir', () => {
 });
 
 describe('getConsolidationStatePath', () => {
-  it('returns per-workspace JSON file path', () => {
-    const result = getConsolidationStatePath('/Users/dev/source/goldfish');
-    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', 'goldfish.json'));
+  it('returns per-workspace JSON file path with hash suffix', () => {
+    const projectPath = '/Users/dev/source/goldfish';
+    const key = getSemanticWorkspaceKey(projectPath);
+    const result = getConsolidationStatePath(projectPath);
+    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', `goldfish_${key}.json`));
   });
 
-  it('normalizes workspace name', () => {
-    const result = getConsolidationStatePath('/Users/dev/source/@org/my-project');
-    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', 'org-my-project.json'));
+  it('normalizes workspace name and appends hash suffix', () => {
+    const projectPath = '/Users/dev/source/@org/my-project';
+    const key = getSemanticWorkspaceKey(projectPath);
+    const result = getConsolidationStatePath(projectPath);
+    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', `org-my-project_${key}.json`));
+  });
+
+  it('produces different filenames for two projects with the same directory name', () => {
+    const workPath = '/work/app';
+    const personalPath = '/personal/app';
+    expect(getConsolidationStatePath(workPath)).not.toBe(getConsolidationStatePath(personalPath));
   });
 });

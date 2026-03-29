@@ -123,7 +123,8 @@ export function getConsolidationStateDir(): string {
 
 export function getConsolidationStatePath(projectPath: string): string {
   const name = normalizeWorkspace(projectPath);
-  return join(getConsolidationStateDir(), `${name}.json`);
+  const key = getSemanticWorkspaceKey(projectPath);
+  return join(getConsolidationStateDir(), `${name}_${key}.json`);
 }
 
 /**

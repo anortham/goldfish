@@ -9,7 +9,8 @@ import { readConsolidationState } from '../memory.js';
 import { getAllCheckpoints } from '../checkpoints.js';
 import { getActivePlan } from '../plans.js';
 import { buildConsolidationPrompt } from '../consolidation-prompt.js';
-import { getMemoriesDir, getPlansDir, getConsolidationStatePath, resolveWorkspace } from '../workspace.js';
+import { getMemoriesDir, getPlansDir, getConsolidationStatePath, getConsolidationStateDir, resolveWorkspace } from '../workspace.js';
+import { mkdir } from 'fs/promises';
 import { join } from 'path';
 import type { ConsolidationPayload } from '../types.js';
 
@@ -79,6 +80,9 @@ export async function handleConsolidate(args: any) {
   const batch = mdOnly.slice(0, batchCap);
   const remainingCount = mdOnly.length - batch.length;
   const checkpointFiles = batch.map(c => c.filePath!);
+
+  // Ensure the consolidation-state directory exists so the subagent can write its state file
+  await mkdir(getConsolidationStateDir(), { recursive: true });
 
   // Build paths
   const memoriesDir = getMemoriesDir(workspace);
