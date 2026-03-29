@@ -423,11 +423,17 @@ async function recallFromWorkspace(
     const memoryContent = shouldIncludeMemory ? await readMemory(workspace) : null;
     const consolidationState = await readConsolidationState(workspace);
 
-    let memoryExists = false;
-    try {
-      await stat(join(workspace, '.memories', 'MEMORY.md'));
-      memoryExists = true;
-    } catch { /* doesn't exist */ }
+    let memoryExists = memoryContent !== null;
+    if (!memoryExists) {
+      // Check for memory files even when we didn't read content (shouldIncludeMemory may be false)
+      for (const filename of ['memory.yaml', 'MEMORY.md']) {
+        try {
+          await stat(join(workspace, '.memories', filename));
+          memoryExists = true;
+          break;
+        } catch { /* doesn't exist */ }
+      }
+    }
 
     const consolidation = (consolidationState || memoryExists) ? {
       needed: false,
@@ -468,7 +474,7 @@ async function recallFromWorkspace(
       .then(embeddings => ({ ok: true, embedding: embeddings[0] } as QueryEmbeddingResult))
       .catch(error => ({ ok: false, error } as QueryEmbeddingResult));
 
-    // Load and parse MEMORY.md sections into synthetic checkpoints for search
+    // Load and parse memory sections into synthetic checkpoints for search
     const searchMemoryContent = await readMemory(workspace);
     const memorySections = searchMemoryContent ? parseMemorySections(searchMemoryContent) : [];
     cachedConsolidationState = await readConsolidationState(workspace);
@@ -547,12 +553,17 @@ async function recallFromWorkspace(
     ? cachedConsolidationState
     : await readConsolidationState(workspace);
 
-  // Check if MEMORY.md exists (cheap stat, independent of whether we read its content)
-  let memoryExists = false;
-  try {
-    await stat(join(workspace, '.memories', 'MEMORY.md'));
-    memoryExists = true;
-  } catch { /* doesn't exist */ }
+  // Check if a memory file exists (cheap stat, independent of whether we read its content)
+  let memoryExists = memoryContent !== null;
+  if (!memoryExists) {
+    for (const filename of ['memory.yaml', 'MEMORY.md']) {
+      try {
+        await stat(join(workspace, '.memories', filename));
+        memoryExists = true;
+        break;
+      } catch { /* doesn't exist */ }
+    }
+  }
 
   // Count stale checkpoints (checkpoints newer than last consolidation AND
   // within the 30-day age window). This matches what the consolidate handler
