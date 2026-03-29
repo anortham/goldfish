@@ -6,7 +6,7 @@
  */
 
 /**
- * @param memoryPath - Absolute path to MEMORY.md (may not exist yet)
+ * @param memoryPath - Absolute path to memory.yaml (may not exist yet)
  * @param lastConsolidatedPath - Absolute path to .last-consolidated
  * @param checkpointFiles - Absolute paths to checkpoint files, oldest-first
  * @param activePlanPath - Absolute path to active plan, or undefined
@@ -33,14 +33,15 @@ export function buildConsolidationPrompt(
     ? `\`${activePlanPath}\`\n   - Use it to understand project direction. Do not modify it.`
     : 'No active plan.';
 
-  return `You are a memory consolidation subagent. Your job is to distill developer checkpoints into a lean MEMORY.md that captures only what cannot be derived from the codebase, git log, or tools.
+  return `You are a memory consolidation subagent. Your job is to distill developer checkpoints into a lean memory.yaml that captures only what cannot be derived from the codebase, git log, or tools.
 
 ## Inputs
 
 Read the following files using the Read tool:
 
-1. **Current MEMORY.md** (baseline): \`${memoryPath}\`
+1. **Current memory file** (baseline): \`${memoryPath}\`
    - If the file does not exist, this is the first consolidation. Start from scratch.
+   - The file may be YAML (new format) or markdown (legacy). Either way, use it as baseline context.
 
 2. **Checkpoint files** (read in this exact order, oldest first):
 ${fileList}
@@ -49,11 +50,35 @@ ${fileList}
 
 3. **Active plan** (optional context): ${planSection}
 
+## Output Format: YAML
+
+Write a YAML file with exactly these four section keys (omit sections with no entries):
+
+\`\`\`yaml
+decisions:
+  - "YYYY-MM-DD | description of decision and rationale"
+
+open_questions:
+  - "YYYY-MM-DD | unresolved question or uncertainty"
+
+deferred_work:
+  - "YYYY-MM-DD | what is blocked, why, and what unblocks it"
+
+gotchas:
+  - "YYYY-MM-DD | non-obvious thing discovered through experience"
+\`\`\`
+
+**Format rules:**
+- Each entry is a single quoted string: \`"YYYY-MM-DD | description"\`
+- The date is when the entry was discovered/decided (from checkpoint timestamps)
+- Entries sorted chronologically within each section, newest at the bottom
+- Blank line between sections
+- Omit sections that have no entries (no empty arrays)
+- Section order when present: decisions, open_questions, deferred_work, gotchas
+
 ## Synthesis Instructions
 
-**Litmus test: if you can derive it from the codebase, git log, or tools, it doesn't belong in MEMORY.md.**
-
-MEMORY.md exists for things that are hard to reconstruct. Apply this test to every line you write.
+**Litmus test: if you can derive it from the codebase, git log, or tools, it doesn't belong in memory.yaml.**
 
 ### KEEP (hard to reconstruct)
 
@@ -73,28 +98,29 @@ MEMORY.md exists for things that are hard to reconstruct. Apply this test to eve
 
 ### How to Synthesize
 
-1. **Start from existing MEMORY.md.** Keep entries that still pass the litmus test. Remove anything that doesn't.
+1. **Start from existing memory.** Preserve entries that are still accurate. Do not rewrite entries that haven't changed.
 2. **Read checkpoints in order** (oldest first). Extract only decisions, rationale, open questions, deferred work, and gotchas.
-3. **Overwrite contradictions.** New facts replace old ones. If a checkpoint says "we switched from X to Y", update to reflect Y and remove X.
-4. **Age out old entries.** Drop entries about work older than 30 days to make room for recent decisions. If something from 30+ days ago is still relevant, it probably belongs in CLAUDE.md, not here.
-5. **Synthesize, do not append.** Never dump checkpoints verbatim. Integrate what matters.
-6. **No prescribed sections.** Let content dictate structure. Use whatever headers make sense for the current entries. Do NOT include a title line or frontmatter. The document starts directly with a \`##\` header.
+3. **Overwrite contradictions.** If a checkpoint says "we switched from X to Y", update the existing entry to reflect Y. Remove entries that are no longer true.
+4. **Age out old entries.** Drop entries with dates older than 30 days to make room for recent decisions. If something from 30+ days ago is still relevant, it probably belongs in CLAUDE.md, not here.
+5. **Add new entries.** Append new entries at the bottom of their section (chronological order).
+6. **Remove stale entries.** Delete entries that are resolved, no longer relevant, or contradicted by newer information.
+7. **Minimize the diff.** Only touch entries that need to change. Unchanged entries must remain exactly as they are, character for character. This is critical for version control merges across multiple machines.
 
-### Line Budget (Traffic Light)
+### Entry Budget (Traffic Light)
 
-- **Green**: under 25 lines. Healthy. Room to add.
-- **Yellow**: 25-40 lines. Don't add without removing something.
-- **Red**: over 40 lines. Must remove something before adding.
+- **Green**: under 25 entries total. Healthy. Room to add.
+- **Yellow**: 25-40 entries. Don't add without removing something.
+- **Red**: over 40 entries. Must remove something before adding.
 
-If the document is over 40 lines, you are almost certainly including derivable information. Re-apply the litmus test aggressively.
+If over 40 entries, you are almost certainly including derivable information. Re-apply the litmus test aggressively.
 
 ## Output: Write Two Files
 
-**File 1:** Write the updated MEMORY.md to:
+**File 1:** Write the updated memory.yaml to:
 \`${memoryPath}\`
 
-- No frontmatter, no title. Pure markdown starting with a \`##\` header.
-- Target under 25 lines. Never exceed 40 lines.
+- Pure YAML, no frontmatter. Starts directly with a section key.
+- Target under 25 entries total. Never exceed 40.
 
 **File 2:** Write the consolidation state JSON to:
 \`${lastConsolidatedPath}\`
