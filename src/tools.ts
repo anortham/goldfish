@@ -194,7 +194,7 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
           },
           includeMemory: {
             type: 'boolean',
-            description: 'Include full MEMORY.md in response. Default: true when no search param (bootstrap mode), false when search param provided (search mode). MEMORY.md sections are always searchable regardless of this setting.'
+            description: 'Include full memory.yaml in response. Default: true when no search param (bootstrap mode), false when search param provided (search mode). Memory sections are always searchable regardless of this setting.'
           }
         }
       }
@@ -301,7 +301,7 @@ Workflow:
 3. If status is "current": nothing to do, memory is up to date
 4. If remainingCount > 0: more checkpoints need processing. Run consolidate again or tell the user.
 
-The subagent reads checkpoint files directly from disk and writes two files: .memories/MEMORY.md and .memories/.last-consolidated.
+The subagent reads checkpoint files directly from disk and writes two files: .memories/memory.yaml (version-controlled) and a machine-local consolidation state file.
 
 Returns: JSON with status, checkpointCount, remainingCount, memoryPath, lastConsolidatedPath, and subagent prompt.`,
       inputSchema: {

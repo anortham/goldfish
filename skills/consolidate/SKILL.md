@@ -1,6 +1,6 @@
 ---
 name: consolidate
-description: Consolidate Goldfish checkpoints into MEMORY.md -- use when recall flags consolidation needed, before ending long sessions, or on a scheduled cadence to synthesize episodic checkpoints into durable project understanding
+description: Consolidate Goldfish checkpoints into memory.yaml -- use when recall flags consolidation needed, before ending long sessions, or on a scheduled cadence to synthesize episodic checkpoints into durable project understanding
 allowed-tools: mcp__goldfish__consolidate, Agent
 ---
 
@@ -62,17 +62,17 @@ Foreground subagents are required because each batch writes `.last-consolidated`
 
 ## What the Subagent Does
 
-1. Reads MEMORY.md from disk (if it exists)
+1. Reads memory.yaml from disk (if it exists; handles legacy MEMORY.md as baseline)
 2. Reads each checkpoint file from the provided path list
 3. Reads the active plan from disk (if provided)
-4. Synthesizes into well-structured prose sections (## headers)
+4. Synthesizes into structured YAML with four fixed sections (decisions, open_questions, deferred_work, gotchas)
 5. Overwrites contradictions (new facts replace old)
 6. Prunes ephemeral details (keeps decisions, drops debugging steps)
-7. Respects the 500-line hard cap
-8. Writes updated MEMORY.md and .last-consolidated
+7. Respects the 40-entry hard cap
+8. Writes updated memory.yaml and consolidation state
 
 The subagent does NOT modify or delete checkpoints or plans.
 
 ## After Consolidation
 
-Next time `recall()` runs, it will load the fresh MEMORY.md and show fewer (or zero) delta checkpoints. The consolidation flag will show `needed: false`.
+Next time `recall()` runs, it will load the fresh memory.yaml and show fewer (or zero) delta checkpoints. The consolidation flag will show `needed: false`.
