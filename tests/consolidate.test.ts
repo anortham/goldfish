@@ -4,12 +4,14 @@ import { tmpdir } from 'os';
 import { mkdtemp, rm } from 'fs/promises';
 import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { writeMemory, writeConsolidationState } from '../src/memory';
-import { ensureMemoriesDir, getPlansDir } from '../src/workspace';
+import { ensureMemoriesDir, getPlansDir, getConsolidationStatePath } from '../src/workspace';
 import { savePlan, setActivePlan, updatePlan } from '../src/plans';
 import { handleConsolidate } from '../src/handlers/consolidate';
 
 let TEST_DIR: string;
+let tempGoldfishHome: string;
 let restoreDeps: (() => void) | undefined;
+const originalGoldfishHome = process.env.GOLDFISH_HOME;
 
 /** Extract checkpoint file paths from the consolidation prompt text */
 function extractFilesFromPrompt(prompt: string): string[] {
@@ -19,6 +21,8 @@ function extractFilesFromPrompt(prompt: string): string[] {
 
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'goldfish-consolidate-'));
+  tempGoldfishHome = await mkdtemp(join(tmpdir(), 'goldfish-home-'));
+  process.env.GOLDFISH_HOME = tempGoldfishHome;
   await ensureMemoriesDir(TEST_DIR);
   restoreDeps = __setCheckpointDependenciesForTests({
     queueSemanticRecord: async () => {},
@@ -28,7 +32,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   restoreDeps?.();
+  process.env.GOLDFISH_HOME = originalGoldfishHome;
   await rm(TEST_DIR, { recursive: true, force: true });
+  await rm(tempGoldfishHome, { recursive: true, force: true });
 });
 
 describe('handleConsolidate', () => {
@@ -78,8 +84,8 @@ describe('handleConsolidate', () => {
     const result = await handleConsolidate({ workspace: TEST_DIR });
     const parsed = JSON.parse(result.content[0].text);
 
-    expect(parsed.memoryPath).toBe(join(TEST_DIR, '.memories', 'MEMORY.md'));
-    expect(parsed.lastConsolidatedPath).toBe(join(TEST_DIR, '.memories', '.last-consolidated'));
+    expect(parsed.memoryPath).toBe(join(TEST_DIR, '.memories', 'memory.yaml'));
+    expect(parsed.lastConsolidatedPath).toBe(getConsolidationStatePath(TEST_DIR));
   });
 
   it('lists checkpoint files in chronological (oldest-first) order in prompt', async () => {
@@ -142,7 +148,7 @@ describe('handleConsolidate', () => {
 
     expect(parsed.prompt).toContain('Read the following files');
     expect(parsed.prompt).toContain(`${sep}.memories${sep}`);
-    expect(parsed.prompt).toContain('MEMORY.md');
+    expect(parsed.prompt).toContain('memory.yaml');
   });
 
   it('prompt uses last batch checkpoint timestamp, not current time', async () => {
@@ -320,11 +326,15 @@ describe('handleConsolidate', () => {
     expect(parsed.prompt).toContain('25');
     expect(parsed.prompt).toContain('40');
 
-    // Old bloat-inducing patterns gone
-    expect(parsed.prompt).not.toContain('500 lines');
-    expect(parsed.prompt).not.toContain('## Project Overview');
-    expect(parsed.prompt).not.toContain('## Architecture');
-    expect(parsed.prompt).not.toContain('## Current State');
+    // YAML format instructions
+    expect(parsed.prompt).toContain('decisions');
+    expect(parsed.prompt).toContain('open_questions');
+    expect(parsed.prompt).toContain('deferred_work');
+    expect(parsed.prompt).toContain('gotchas');
+    expect(parsed.prompt).toContain('YYYY-MM-DD');
+
+    // Old markdown patterns gone
+    expect(parsed.prompt).not.toContain('No prescribed sections');
   });
 
   it('includes skipped count when old checkpoints are filtered by age limit', async () => {

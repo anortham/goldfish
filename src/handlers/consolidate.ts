@@ -9,7 +9,7 @@ import { readConsolidationState } from '../memory.js';
 import { getAllCheckpoints } from '../checkpoints.js';
 import { getActivePlan } from '../plans.js';
 import { buildConsolidationPrompt } from '../consolidation-prompt.js';
-import { getMemoriesDir, getPlansDir, resolveWorkspace } from '../workspace.js';
+import { getMemoriesDir, getPlansDir, getConsolidationStatePath, resolveWorkspace } from '../workspace.js';
 import { join } from 'path';
 import type { ConsolidationPayload } from '../types.js';
 
@@ -82,8 +82,8 @@ export async function handleConsolidate(args: any) {
 
   // Build paths
   const memoriesDir = getMemoriesDir(workspace);
-  const memoryPath = join(memoriesDir, 'MEMORY.md');
-  const lastConsolidatedPath = join(memoriesDir, '.last-consolidated');
+  const memoryPath = join(memoriesDir, 'memory.yaml');
+  const lastConsolidatedPath = getConsolidationStatePath(workspace);
 
   // Active plan path (if valid active plan exists)
   const activePlanPath = activePlan
