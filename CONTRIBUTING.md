@@ -18,15 +18,17 @@ If you find yourself writing implementation code before tests, STOP. Delete it a
 
 ## Core Philosophy
 
-This is **iteration #5** of a developer memory system, now at **v5.3.0**. We've learned hard lessons:
+This is **iteration #5** of a developer memory system, now at **v6.5.0**. We've learned hard lessons:
 
 ### What We've Tried Before
 1. **Original Goldfish (TS)**: JSON files, good concepts, critical bugs (race conditions, date handling)
 2. **Tusk (Bun + SQLite)**: Fixed bugs, added features, became too complex, hook spam disaster
 3. **.NET rewrite**: Over-engineered, never finished
+4. **Goldfish 4.0**: Radical simplicity, markdown storage
+5. **Goldfish 5.x-6.x**: Claude Code plugin, project-local .memories/, semantic recall, memory consolidation
 
 ### What We're Building Now
-**Radical simplicity**: Markdown storage, fuse.js search, quality-focused behavioral guidance. No database. ~2,094 lines of well-structured production code.
+**Radical simplicity**: Markdown storage, fuse.js search, quality-focused behavioral guidance. No database.
 
 **Goldfish is a Claude Code plugin** with skills, hooks, and an MCP server.
 
@@ -139,9 +141,11 @@ bun test --coverage
   plans/
     {plan-id}.md
   .active-plan
+  memory.yaml              # Consolidated memory (YAML, merge-friendly)
 
 ~/.goldfish/
   registry.json            # Cross-project registry
+  consolidation-state/     # Per-workspace consolidation cursors
 ```
 
 ### Core Modules
@@ -152,13 +156,21 @@ bun test --coverage
 | `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` |
 | `src/plans.ts` | Plan management | `tests/plans.test.ts` |
 | `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` |
+| `src/memory.ts` | Memory file I/O, consolidation state | `tests/memory.test.ts` |
+| `src/semantic.ts` | Embedding runtime, pending semantic work | `tests/semantic.test.ts` |
+| `src/ranking.ts` | Hybrid ranking, scoring helpers | `tests/ranking.test.ts` |
+| `src/semantic-cache.ts` | Derived semantic manifest + JSONL records | `tests/semantic-cache.test.ts` |
+| `src/transformers-embedder.ts` | Local embedding runtime | `tests/transformers-embedder.test.ts` |
+| `src/digests.ts` | Compact retrieval/search digests | `tests/digests.test.ts` |
+| `src/consolidation-prompt.ts` | Consolidation subagent prompt builder | - |
+| `src/logger.ts` | File-based logging | - |
 | `src/registry.ts` | Cross-project registry | `tests/registry.test.ts` |
 | `src/git.ts` | Git context capture | `tests/git.test.ts` |
 | `src/lock.ts` | File locking utilities | `tests/lock.test.ts` |
 | `src/summary.ts` | Auto-summary generation | `tests/summary.test.ts` |
 | `src/emoji.ts` | Fish emoji helper | - |
 | `src/server.ts` | MCP server | `tests/server.test.ts` |
-| `src/handlers/` | Tool handlers (checkpoint, recall, plan) | various |
+| `src/handlers/` | Tool handlers (checkpoint, recall, plan, consolidate) | `tests/handlers.test.ts` |
 | `src/tools.ts` | Tool definitions | - |
 | `src/instructions.ts` | Server behavioral instructions | - |
 | `src/types.ts` | TypeScript interfaces | - |
@@ -427,7 +439,7 @@ You're doing it right when:
 
 ## Remember
 
-**This is iteration #5, now at v5.3.0. We've made mistakes before.**
+**This is iteration #5, now at v6.5.0. We've made mistakes before.**
 
 The difference this time: **radical simplicity** and **evidence-based feature development**.
 

@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, standup
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth (and is git-committable), while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
-**Version 5.8.1** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 6.5.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -17,7 +17,7 @@ AI coding sessions have a memory problem:
 - Switching projects loses context
 - No way to answer "what was I working on yesterday?"
 
-Goldfish solves this with three MCP tools (checkpoint, recall, plan), five skills, and three hooks that make memory automatic and transparent.
+Goldfish solves this with four MCP tools (checkpoint, recall, plan, consolidate), five skills, and three hooks that make memory automatic and transparent.
 
 ---
 
@@ -97,25 +97,13 @@ cd goldfish && bun install
 }
 ```
 
-For Claude Code specifically, add this to your project's `.mcp.json` or `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "goldfish": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/goldfish/src/server.ts"]
-    }
-  }
-}
-```
-
-**What you get with standalone MCP:** The 3 core tools (`checkpoint`, `recall`, `plan`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/plan`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
+**What you get with standalone MCP:** The 4 core tools (`checkpoint`, `recall`, `plan`, `consolidate`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/plan`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
 
 For standalone MCP usage, you'll want to instruct your agent to:
 - Call `recall()` at session start
 - Call `checkpoint()` after completing work
 - Call `plan()` to save and manage long-running plans
+- Call `consolidate()` periodically to distill checkpoints into memory.yaml
 
 ### VS Code with GitHub Copilot
 
@@ -259,6 +247,7 @@ your-project/
       auth-system-redesign.md  # Plan (YAML frontmatter + markdown body)
       api-v2-migration.md
     .active-plan               # Contains the active plan ID
+    memory.yaml                # Consolidated memory (YAML, merge-friendly)
 ```
 
 ### Checkpoint File Format
@@ -288,7 +277,9 @@ the edge case and verified the fix prevents token reuse attacks.
 
 ```
 ~/.goldfish/
-  registry.json    # Auto-populated list of projects using Goldfish
+  registry.json              # Auto-populated list of projects using Goldfish
+  consolidation-state/       # Per-workspace consolidation cursors
+    {workspace}_{hash}.json
 ```
 
 The registry tracks which projects have `.memories/` directories. It is populated automatically on checkpoint save and used by cross-project recall for standup reports.
@@ -354,7 +345,7 @@ Key decisions for v5.0.0:
 | Atomic file operations | Write-to-temp then rename prevents corruption on crash |
 | UTC timestamps everywhere | No timezone bugs (learned the hard way in v1) |
 | Quality-focused behavioral language | Directive about checkpoint quality, restrained about frequency |
-| 3 tools, not more | Checkpoint, recall, plan cover all use cases without bloat |
+| 4 tools, not more | Checkpoint, recall, plan, consolidate cover all use cases without bloat |
 | Skills over slash commands | Plugin-native, no manual `bun setup` step |
 | Evidence-based features only | Complexity is added only when real usage demands it |
 
@@ -366,7 +357,6 @@ Key decisions for v5.0.0:
 goldfish/
   .claude-plugin/
     plugin.json           # Claude Code plugin manifest (auto-discovery)
-  .mcp.json              # MCP server configuration (for standalone/dev use)
   hooks/
     hooks.json            # Hook definitions (PreCompact, SessionStart, ExitPlanMode)
   skills/
@@ -377,7 +367,7 @@ goldfish/
     plan-status/SKILL.md  # /plan-status skill
   src/
     server.ts             # MCP server entry point
-    tools.ts              # Tool definitions (checkpoint, recall, plan)
+    tools.ts              # Tool definitions (checkpoint, recall, plan, consolidate)
     instructions.ts       # Server behavioral instructions
     types.ts              # TypeScript interfaces
     checkpoints.ts        # Checkpoint storage and retrieval
@@ -385,15 +375,19 @@ goldfish/
     recall.ts             # Fuzzy + semantic hybrid recall
     digests.ts            # Compact retrieval/search digests
     semantic-cache.ts     # Derived semantic manifest + JSONL records
-    semantic.ts           # Hybrid ranking + bounded maintenance
+    semantic.ts           # Embedding runtime and pending semantic work processing
+    ranking.ts            # Hybrid ranking and scoring helpers
     transformers-embedder.ts # Local embedding runtime
+    memory.ts             # Memory file I/O (memory.yaml)
+    consolidation-prompt.ts # Consolidation subagent prompt builder
+    logger.ts             # File-based logging
     registry.ts           # Cross-project registry (~/.goldfish/registry.json)
     workspace.ts          # Workspace detection and normalization
     git.ts                # Git context capture
     lock.ts               # File locking for concurrent writes
     summary.ts            # Auto-summary generation
     emoji.ts              # Emoji utilities
-    handlers/             # Tool handler implementations
+    handlers/             # Tool handler implementations (checkpoint, recall, plan, consolidate)
   tests/                  # Test files
 ```
 
@@ -455,9 +449,8 @@ Benchmarked on Apple Silicon (M-series).
 ### Plugin not loading
 
 1. Verify the plugin is installed: `claude plugin list`
-2. Check that `.mcp.json` exists in the goldfish root directory
-3. Ensure Bun is installed and available in your PATH
-4. Restart Claude Code (plugins load at startup)
+2. Ensure Bun is installed and available in your PATH
+3. Restart Claude Code (plugins load at startup)
 
 ### Checkpoints not saving
 

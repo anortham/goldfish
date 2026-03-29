@@ -1,4 +1,4 @@
-# Goldfish v5.8.1 - Implementation Specification
+# Goldfish v6.5.0 - Implementation Specification
 
 ## Design Philosophy
 
@@ -22,10 +22,14 @@
   {date}/{HHMMSS}_{hash}.md   # Individual checkpoints (YAML frontmatter)
   plans/{plan-id}.md           # Plans (YAML frontmatter)
   .active-plan                 # Active plan ID
+  memory.yaml                  # Consolidated memory (YAML, merge-friendly)
 
-~/.goldfish/registry.json      # Cross-project registry
-~/.goldfish/cache/semantic/    # Derived semantic manifest + JSONL records
-~/.goldfish/models/transformers/ # Local embedding model cache
+~/.goldfish/
+  registry.json                # Cross-project registry
+  consolidation-state/         # Per-workspace consolidation cursors
+    {workspace}_{hash}.json
+  cache/semantic/              # Derived semantic manifest + JSONL records
+  models/transformers/         # Local embedding model cache
 ```
 
 ### Core Principles
@@ -136,15 +140,19 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 | `src/recall.ts` | Search (fuse.js), aggregation, cross-project recall via registry |
 | `src/digests.ts` | Compact retrieval digests for lexical search and compact result presentation |
 | `src/semantic-cache.ts` | Derived semantic manifest/records storage under `~/.goldfish/cache/semantic/` |
-| `src/semantic.ts` | Hybrid ranking and bounded semantic maintenance helpers |
+| `src/semantic.ts` | Embedding runtime and pending semantic work processing |
+| `src/ranking.ts` | Hybrid ranking and scoring helpers |
 | `src/transformers-embedder.ts` | Lazy local embedding runtime backed by `@huggingface/transformers` |
+| `src/memory.ts` | Memory file I/O (memory.yaml), consolidation state I/O |
+| `src/consolidation-prompt.ts` | Consolidation subagent prompt builder |
+| `src/logger.ts` | File-based logging |
 | `src/registry.ts` | `~/.goldfish/registry.json` management, auto-registration, stale filtering |
 | `src/git.ts` | Git context capture (branch, commit, files) |
 | `src/lock.ts` | File locking for concurrent writes |
 | `src/summary.ts` | Auto-summary generation for long descriptions |
 | `src/emoji.ts` | Fish emoji helper |
 | `src/server.ts` | MCP server setup |
-| `src/handlers/` | Tool handlers (checkpoint, recall, plan) |
+| `src/handlers/` | Tool handlers (checkpoint, recall, plan, consolidate) |
 | `src/tools.ts` | Tool definitions |
 | `src/instructions.ts` | Server behavioral instructions |
 | `src/types.ts` | TypeScript interfaces |
@@ -156,7 +164,6 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 ```
 goldfish/
 ├── .claude-plugin/plugin.json
-├── .mcp.json
 ├── skills/
 │   ├── recall/SKILL.md
 │   ├── checkpoint/SKILL.md
@@ -194,9 +201,9 @@ This is a deliberate recalibration. The original aggressive language (from Tusk 
 2. Run Fuse lexical search over those digests so default search stays fast and token-efficient.
 3. If the semantic runtime is already warm, load ready embeddings from the derived cache and blend lexical, semantic, metadata, and recency signals into a hybrid ranking.
 4. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
-5. After search, do bounded semantic maintenance only while time budget remains: at most 3 records and ~150ms per recall pass.
+5. After search, process pending semantic work. Search-triggered maintenance processes the full pending backlog on first use, trading one-time latency for complete results.
 
-**Bounded maintenance details:**
+**Semantic maintenance details:**
 - Pending semantic work is queued on checkpoint save.
 - Search-triggered maintenance is best-effort only; recall still succeeds if embedding work fails.
 - Model-version invalidation marks derived records stale without touching checkpoint markdown.
@@ -241,7 +248,7 @@ We achieve this through:
 
 ## Implementation Status
 
-### Complete - v5.8.1
+### Complete - v6.5.0
 
 **ALL MODULES IMPLEMENTED AND TESTED**
 
@@ -251,10 +258,12 @@ We achieve this through:
 4. **Plan storage** - YAML frontmatter, CRUD, active plan tracking, lifecycle management
 5. **Recall with fuse.js** - Fuzzy search, cross-workspace aggregation, date range filtering
 6. **Cross-project registry** - `~/.goldfish/registry.json`, auto-registration, stale filtering
-7. **MCP server** - Tools (checkpoint, recall, plan), behavioral guidance
-8. **Claude Code plugin** - Skills, hooks, `.mcp.json`
+7. **MCP server** - Tools (checkpoint, recall, plan, consolidate), behavioral guidance
+8. **Claude Code plugin** - Skills, hooks, plugin.json
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
+11. **Semantic recall** - Hybrid ranking, embedding runtime, derived cache
+12. **Memory consolidation** - memory.yaml, consolidation state, subagent prompt builder
 
 **Current architecture:** markdown source data in-project, derived semantic cache in `~/.goldfish/cache/semantic/`, and 4 runtime dependencies (`@huggingface/transformers`, `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`).
 
