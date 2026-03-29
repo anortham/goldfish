@@ -46,7 +46,7 @@ mcp__goldfish__recall({ search: "auth refactor", full: true })
 mcp__goldfish__recall({ since: "2h" })
 ```
 
-### Search without MEMORY.md (leaner results)
+### Search without memory (leaner results)
 ```
 mcp__goldfish__recall({ search: "auth", includeMemory: false })
 ```
@@ -92,4 +92,4 @@ Trust recalled context — don't re-verify information from checkpoints.
 
 ## Consolidation
 
-Recall now returns consolidated memory (MEMORY.md) alongside checkpoints. When recall flags `consolidation.needed: true`, use the `/consolidate` skill to handle it.
+Recall now returns consolidated memory (memory.yaml) alongside checkpoints. When recall flags `consolidation.needed: true`, use the `/consolidate` skill to handle it.
