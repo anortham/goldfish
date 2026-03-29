@@ -40,9 +40,12 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
   plans/
     {plan-id}.md           # Individual plans (YAML frontmatter)
   .active-plan             # Contains active plan ID
+  memory.yaml              # Consolidated memory (YAML, merge-friendly)
 
 ~/.goldfish/
   registry.json            # Cross-project registry (auto-populated)
+  consolidation-state/     # Per-workspace consolidation cursors (machine-local)
+    {workspace}.json
   cache/semantic/          # Derived semantic manifest + JSONL records (rebuildable)
   models/transformers/     # Local embedding model cache
 ```
@@ -64,6 +67,7 @@ Goldfish is a **Claude Code plugin** with:
 | `src/workspace.ts` | Workspace normalization plus `.memories/`, semantic cache, and model cache paths | `tests/workspace.test.ts` |
 | `src/checkpoints.ts` | Checkpoint storage, plan affinity, semantic queueing | `tests/checkpoints.test.ts` |
 | `src/plans.ts` | Plan management | `tests/plans.test.ts` |
+| `src/memory.ts` | Memory file I/O (memory.yaml with MEMORY.md fallback), consolidation state I/O | `tests/memory.test.ts` |
 | `src/recall.ts` | Fuzzy + semantic hybrid recall, aggregation, bounded maintenance | `tests/recall.test.ts` |
 | `src/digests.ts` | Compact retrieval digests and compact search descriptions | `tests/digests.test.ts` |
 | `src/semantic-cache.ts` | Derived semantic manifest and JSONL record storage | `tests/semantic-cache.test.ts` |
@@ -341,7 +345,7 @@ Run the group matching your change instead of the full suite. Use the full suite
 | Storage & utils | `bun test workspace lock git summary digests` | Paths, file ops, utilities |
 | Checkpoints | `bun test checkpoints` | Checkpoint CRUD, formatting, parsing |
 | Plans | `bun test plans` | Plan CRUD, activation |
-| Memory | `bun test consolidate memory` | Consolidation, MEMORY.md state |
+| Memory | `bun test consolidate memory` | Consolidation, memory.yaml state |
 | Semantic | `bun test semantic transformers` | Embeddings, ranking, cache |
 | Recall | `bun test recall` | Search, filtering, hybrid ranking |
 | Handlers | `bun test handlers` | MCP tool handler responses |
