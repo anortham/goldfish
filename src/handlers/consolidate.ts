@@ -12,7 +12,7 @@ import { buildConsolidationPrompt } from '../consolidation-prompt.js';
 import { getMemoriesDir, getPlansDir, getConsolidationStatePath, getConsolidationStateDir, resolveWorkspace } from '../workspace.js';
 import { mkdir } from 'fs/promises';
 import { join } from 'path';
-import type { ConsolidationPayload } from '../types.js';
+import type { ConsolidateArgs, ConsolidationPayload } from '../types.js';
 
 const CONSOLIDATION_BATCH_CAP = 50;
 const CONSOLIDATION_ALL_CAP = 100;
@@ -22,7 +22,7 @@ const CONSOLIDATION_ALL_CAP = 100;
  * Returns a metadata-only JSON payload (file paths + prompt) that a subagent
  * uses to read checkpoint files from disk and update memory.yaml.
  */
-export async function handleConsolidate(args: any) {
+export async function handleConsolidate(args: ConsolidateArgs) {
   const workspace = resolveWorkspace(args?.workspace);
 
   const [consolidationState, activePlan, allCheckpoints] = await Promise.all([

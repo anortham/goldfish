@@ -4,7 +4,7 @@
 
 import { saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
-import type { CheckpointInput } from '../types.js';
+import type { CheckpointArgs, CheckpointInput } from '../types.js';
 import { resolveWorkspace } from '../workspace.js';
 
 /**
@@ -26,7 +26,7 @@ function coerceArray(value: unknown): string[] | undefined {
 /**
  * Handle checkpoint tool calls
  */
-export async function handleCheckpoint(args: any) {
+export async function handleCheckpoint(args: CheckpointArgs) {
   const {
     description,
     workspace,

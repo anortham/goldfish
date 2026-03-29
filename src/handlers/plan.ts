@@ -5,7 +5,7 @@
 import { savePlan, getPlan, getActivePlan, listPlans, setActivePlan, updatePlan } from '../plans.js';
 import { getFishEmoji } from '../emoji.js';
 import { resolveWorkspace } from '../workspace.js';
-import type { Plan } from '../types.js';
+import type { Plan, PlanArgs } from '../types.js';
 
 /**
  * Format a full plan as readable markdown
@@ -50,7 +50,7 @@ function textResponse(text: string) {
  * Falls back to the active plan when neither is provided.
  * Returns null if no ID can be resolved.
  */
-async function resolveId(args: any, workspace: string): Promise<string | null> {
+async function resolveId(args: PlanArgs, workspace: string): Promise<string | null> {
   const id = args.id || args.planId;
   if (id) return id;
 
@@ -62,7 +62,7 @@ async function resolveId(args: any, workspace: string): Promise<string | null> {
 /**
  * Handle plan tool calls
  */
-export async function handlePlan(args: any) {
+export async function handlePlan(args: PlanArgs) {
   const { action, workspace: wsArg } = args;
   const workspace = resolveWorkspace(wsArg);
   const fish = getFishEmoji();

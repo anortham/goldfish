@@ -84,7 +84,7 @@ describe('Tool handlers', () => {
       const { handleCheckpoint } = await import('../src/server');
 
       await expect(
-        handleCheckpoint({ workspace: TEST_DIR })
+        handleCheckpoint({ workspace: TEST_DIR } as any)
       ).rejects.toThrow();
     });
   });

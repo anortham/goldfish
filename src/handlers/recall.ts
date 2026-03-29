@@ -6,7 +6,7 @@ import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
-import type { Checkpoint, Plan } from '../types.js';
+import type { Checkpoint, Plan, RecallArgs } from '../types.js';
 
 /**
  * Safely convert a value to an array for display.
@@ -136,7 +136,7 @@ function formatActivePlan(plan: Plan): string {
 /**
  * Handle recall tool calls
  */
-export async function handleRecall(args: any) {
+export async function handleRecall(args: RecallArgs) {
   const result = await recallFunc(args);
 
   // Capture diagnostic info

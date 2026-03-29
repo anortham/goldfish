@@ -219,7 +219,7 @@ describe('Readable markdown responses', () => {
 
     it('throws error for missing description', async () => {
       await expect(
-        handleCheckpoint({ workspace: TEST_DIR })
+        handleCheckpoint({ workspace: TEST_DIR } as any)
       ).rejects.toThrow('Description is required');
     });
 

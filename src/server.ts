@@ -18,6 +18,7 @@ import {
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handlePlan, handleConsolidate } from './handlers/index.js';
+import type { CheckpointArgs, RecallArgs, PlanArgs, ConsolidateArgs } from './types.js';
 import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 import { getLogger } from './logger.js';
 
@@ -62,16 +63,16 @@ export async function startServer() {
       let result;
       switch (name) {
         case 'checkpoint':
-          result = await handleCheckpoint(args);
+          result = await handleCheckpoint(args as unknown as CheckpointArgs);
           break;
         case 'recall':
-          result = await handleRecall(args);
+          result = await handleRecall(args as RecallArgs);
           break;
         case 'plan':
-          result = await handlePlan(args);
+          result = await handlePlan(args as unknown as PlanArgs);
           break;
         case 'consolidate':
-          result = await handleConsolidate(args);
+          result = await handleConsolidate((args ?? {}) as ConsolidateArgs);
           break;
         default:
           throw new Error(`Unknown tool: ${name}`);

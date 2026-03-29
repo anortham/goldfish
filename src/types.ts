@@ -165,3 +165,57 @@ export interface ConsolidationPayload {
   skippedOldCount?: number;            // Checkpoints older than age limit that were excluded
   prompt?: string;                     // Subagent instructions (checkpoint file paths embedded)
 }
+
+/** MCP tool argument types for compile-time safety */
+
+export interface CheckpointArgs {
+  description: string;
+  tags?: string[] | string;
+  type?: 'checkpoint' | 'decision' | 'incident' | 'learning';
+  context?: string;
+  decision?: string;
+  alternatives?: string[] | string;
+  impact?: string;
+  evidence?: string[] | string;
+  symbols?: string[] | string;
+  next?: string;
+  confidence?: number | string;
+  unknowns?: string[] | string;
+  workspace?: string;
+}
+
+export interface RecallArgs {
+  workspace?: string;
+  limit?: number;
+  days?: number;
+  from?: string;
+  to?: string;
+  since?: string;
+  search?: string;
+  full?: boolean;
+  planId?: string;
+  plan_id?: string;
+  includeMemory?: boolean;
+  include_memory?: boolean;
+  _registryDir?: string;
+  _semanticRuntime?: SemanticRuntime;
+}
+
+export interface PlanArgs {
+  action: string;
+  id?: string;
+  planId?: string;
+  plan_id?: string;
+  title?: string;
+  content?: string;
+  workspace?: string;
+  tags?: string[];
+  activate?: boolean;
+  status?: string;
+  updates?: PlanUpdate;
+}
+
+export interface ConsolidateArgs {
+  all?: boolean;
+  workspace?: string;
+}
