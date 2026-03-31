@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { mkdir, rm, writeFile } from 'fs/promises'
-import { acquireLock } from '../src/lock'
+import { acquireLock, tryAcquireLock } from '../src/lock'
 import { getSemanticCacheDir } from '../src/workspace'
 import {
   invalidateSemanticRecordsForModelVersion,
@@ -385,7 +385,8 @@ describe('semantic cache', () => {
       digestHash: 'hash-locked',
       status: 'pending',
       updatedAt: '2026-03-12T10:00:00.000Z'
-    })}\n`)
+    })}
+`)
     await release()
 
     const state = await statePromise
@@ -404,6 +405,510 @@ describe('semantic cache', () => {
         updatedAt: '2026-03-12T10:00:00.000Z'
       }
     ])
+  })
+})
+
+describe('semantic cache normalization', () => {
+  const originalGoldfishHome = process.env.GOLDFISH_HOME
+  const originalWarn = console.warn
+  let warnings: string[] = []
+
+  let tempHome: string
+  let workspacePath: string
+
+  beforeEach(async () => {
+    tempHome = join(tmpdir(), `test-normalization-home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    workspacePath = join(tmpdir(), `test-normalization-workspace-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+
+    process.env.GOLDFISH_HOME = join(tempHome, '.goldfish')
+    warnings = []
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(arg => String(arg)).join(' '))
+    }
+
+    await mkdir(tempHome, { recursive: true })
+    await mkdir(workspacePath, { recursive: true })
+  })
+
+  afterEach(async () => {
+    console.warn = originalWarn
+    if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME
+    else process.env.GOLDFISH_HOME = originalGoldfishHome
+
+    await rm(tempHome, { recursive: true, force: true })
+    await rm(workspacePath, { recursive: true, force: true })
+  })
+
+  it('drops manifest-only entries (no corresponding record) during load', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    // Create manifest with an entry that has no corresponding record
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_manifest_only: {
+          checkpointTimestamp: '2026-03-12T10:00:00.000Z',
+          digestHash: 'hash-only',
+          digestVersion: 1
+        },
+        checkpoint_valid: {
+          checkpointTimestamp: '2026-03-12T11:00:00.000Z',
+          digestHash: 'hash-valid',
+          digestVersion: 1,
+          modelId: 'test-model',
+          modelVersion: '1',
+          dimensions: 2,
+          indexedAt: '2026-03-12T11:00:00.000Z'
+        }
+      }
+    }, null, 2))
+
+    // Create records with only the valid checkpoint
+    await writeFile(join(cacheDir, 'records.jsonl'), `${JSON.stringify({
+      checkpointId: 'checkpoint_valid',
+      digest: 'Valid digest',
+      digestHash: 'hash-valid',
+      status: 'ready',
+      embedding: [0.1, 0.2],
+      updatedAt: '2026-03-12T11:00:00.000Z'
+    })}
+`)
+
+    const state = await loadSemanticState(workspacePath)
+
+    // Manifest-only entry should be dropped
+    expect(state.manifest.checkpoints.checkpoint_manifest_only).toBeUndefined()
+    expect(state.manifest.checkpoints.checkpoint_valid).toBeDefined()
+    expect(state.records).toHaveLength(1)
+    expect(state.records[0]!.checkpointId).toBe('checkpoint_valid')
+  })
+
+  it('drops orphan records (no matching manifest entry) during load', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    // Create manifest with only one entry
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_valid: {
+          checkpointTimestamp: '2026-03-12T11:00:00.000Z',
+          digestHash: 'hash-valid',
+          digestVersion: 1,
+          modelId: 'test-model',
+          modelVersion: '1',
+          dimensions: 2,
+          indexedAt: '2026-03-12T11:00:00.000Z'
+        }
+      }
+    }, null, 2))
+
+    // Create records including an orphan
+    await writeFile(join(cacheDir, 'records.jsonl'), [
+      JSON.stringify({
+        checkpointId: 'checkpoint_orphan',
+        digest: 'Orphan digest',
+        digestHash: 'hash-orphan',
+        status: 'ready',
+        embedding: [0.3, 0.4],
+        updatedAt: '2026-03-12T10:00:00.000Z'
+      }),
+      JSON.stringify({
+        checkpointId: 'checkpoint_valid',
+        digest: 'Valid digest',
+        digestHash: 'hash-valid',
+        status: 'ready',
+        embedding: [0.1, 0.2],
+        updatedAt: '2026-03-12T11:00:00.000Z'
+      })
+    ].join('\n') + '\n')
+
+    const state = await loadSemanticState(workspacePath)
+
+    // Orphan record should be dropped
+    expect(state.records).toHaveLength(1)
+    expect(state.records[0]!.checkpointId).toBe('checkpoint_valid')
+    expect(state.manifest.checkpoints.checkpoint_orphan).toBeUndefined()
+  })
+
+  it('normalizes state removes both manifest-only and orphan entries', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    // Create inconsistent state: manifest has extra entries, records have extra entries
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_manifest_only: {
+          checkpointTimestamp: '2026-03-12T10:00:00.000Z',
+          digestHash: 'hash-only',
+          digestVersion: 1
+        },
+        checkpoint_valid: {
+          checkpointTimestamp: '2026-03-12T11:00:00.000Z',
+          digestHash: 'hash-valid',
+          digestVersion: 1,
+          modelId: 'test-model',
+          modelVersion: '1',
+          dimensions: 2,
+          indexedAt: '2026-03-12T11:00:00.000Z'
+        }
+      }
+    }, null, 2))
+
+    await writeFile(join(cacheDir, 'records.jsonl'), [
+      JSON.stringify({
+        checkpointId: 'checkpoint_orphan',
+        digest: 'Orphan digest',
+        digestHash: 'hash-orphan',
+        status: 'ready',
+        embedding: [0.3, 0.4],
+        updatedAt: '2026-03-12T09:00:00.000Z'
+      }),
+      JSON.stringify({
+        checkpointId: 'checkpoint_valid',
+        digest: 'Valid digest',
+        digestHash: 'hash-valid',
+        status: 'ready',
+        embedding: [0.1, 0.2],
+        updatedAt: '2026-03-12T11:00:00.000Z'
+      })
+    ].join('\n') + '\n')
+
+    const state = await loadSemanticState(workspacePath)
+
+    // Only the valid checkpoint should remain
+    expect(Object.keys(state.manifest.checkpoints)).toHaveLength(1)
+    expect(state.manifest.checkpoints.checkpoint_valid).toBeDefined()
+    expect(state.manifest.checkpoints.checkpoint_manifest_only).toBeUndefined()
+    expect(state.records).toHaveLength(1)
+    expect(state.records[0]!.checkpointId).toBe('checkpoint_valid')
+  })
+
+  it('drops same-id records whose digestHash no longer matches the manifest entry', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_stale: {
+          checkpointTimestamp: '2026-03-12T11:00:00.000Z',
+          digestHash: 'hash-new',
+          digestVersion: 1
+        }
+      }
+    }, null, 2))
+
+    await writeFile(join(cacheDir, 'records.jsonl'), `${JSON.stringify({
+      checkpointId: 'checkpoint_stale',
+      digest: 'Old digest',
+      digestHash: 'hash-old',
+      status: 'ready',
+      embedding: [0.1, 0.2],
+      updatedAt: '2026-03-12T11:00:00.000Z'
+    })}\n`)
+
+    const state = await loadSemanticState(workspacePath)
+    const manifestContent = await Bun.file(join(cacheDir, 'manifest.json')).text()
+    const recordsContent = await Bun.file(join(cacheDir, 'records.jsonl')).text()
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    expect(JSON.parse(manifestContent)).toEqual({
+      workspacePath,
+      checkpoints: {}
+    })
+    expect(recordsContent).toBe('')
+  })
+
+  it('drops ready records when the manifest entry lost model metadata', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_stale: {
+          checkpointTimestamp: '2026-03-12T11:00:00.000Z',
+          digestHash: 'hash-same',
+          digestVersion: 2
+        }
+      }
+    }, null, 2))
+
+    await writeFile(join(cacheDir, 'records.jsonl'), `${JSON.stringify({
+      checkpointId: 'checkpoint_stale',
+      digest: 'Old digest',
+      digestHash: 'hash-same',
+      status: 'ready',
+      embedding: [0.1, 0.2],
+      updatedAt: '2026-03-12T11:00:00.000Z'
+    })}\n`)
+
+    const state = await loadSemanticState(workspacePath)
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+  })
+})
+
+describe('semantic cache corruption handling', () => {
+  const originalGoldfishHome = process.env.GOLDFISH_HOME
+  const originalWarn = console.warn
+  let warnings: string[] = []
+
+  let tempHome: string
+  let workspacePath: string
+
+  beforeEach(async () => {
+    tempHome = join(tmpdir(), `test-corruption-home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    workspacePath = join(tmpdir(), `test-corruption-workspace-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+
+    process.env.GOLDFISH_HOME = join(tempHome, '.goldfish')
+    warnings = []
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(arg => String(arg)).join(' '))
+    }
+
+    await mkdir(tempHome, { recursive: true })
+    await mkdir(workspacePath, { recursive: true })
+  })
+
+  afterEach(async () => {
+    console.warn = originalWarn
+    if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME
+    else process.env.GOLDFISH_HOME = originalGoldfishHome
+
+    await rm(tempHome, { recursive: true, force: true })
+    await rm(workspacePath, { recursive: true, force: true })
+  })
+
+  it('resets to empty state when manifest.json is malformed', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    // Write malformed JSON
+    await writeFile(join(cacheDir, 'manifest.json'), '{ invalid json }')
+    await writeFile(join(cacheDir, 'records.jsonl'), `${JSON.stringify({
+      checkpointId: 'checkpoint_test',
+      digest: 'Test digest',
+      digestHash: 'hash-test',
+      status: 'ready',
+      embedding: [0.1, 0.2],
+      updatedAt: '2026-03-12T10:00:00.000Z'
+    })}
+`)
+
+    const state = await loadSemanticState(workspacePath)
+
+    // Should return empty state
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    // Should emit warning
+    expect(warnings.length).toBeGreaterThan(0)
+    expect(warnings[0]).toContain('corrupted')
+  })
+
+  it('resets to empty state when records.jsonl is malformed', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {}
+    }, null, 2))
+
+    // Write malformed JSONL (invalid JSON line)
+    await writeFile(join(cacheDir, 'records.jsonl'), '{ invalid json line }\n')
+
+    const state = await loadSemanticState(workspacePath)
+
+    // Should return empty state
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    // Should emit warning
+    expect(warnings.length).toBeGreaterThan(0)
+    expect(warnings[0]).toContain('corrupted')
+  })
+
+  it('resets to empty state when records.jsonl has partial corruption', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {}
+    }, null, 2))
+
+    // First line valid, second line invalid
+    await writeFile(join(cacheDir, 'records.jsonl'), [
+      JSON.stringify({
+        checkpointId: 'checkpoint_valid',
+        digest: 'Valid digest',
+        digestHash: 'hash-valid',
+        status: 'ready',
+        embedding: [0.1, 0.2],
+        updatedAt: '2026-03-12T10:00:00.000Z'
+      }),
+      '{ invalid json }'
+    ].join('\n') + '\n')
+
+    const state = await loadSemanticState(workspacePath)
+
+    // Should reset entirely due to partial corruption
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  it('resets to empty state when a records.jsonl line parses but is structurally invalid', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {}
+    }, null, 2))
+
+    await writeFile(join(cacheDir, 'records.jsonl'), 'null\n')
+
+    const state = await loadSemanticState(workspacePath)
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  it('resets to empty state when a manifest entry is structurally invalid', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_bad: null
+      }
+    }, null, 2))
+    await writeFile(join(cacheDir, 'records.jsonl'), '')
+
+    const state = await loadSemanticState(workspacePath)
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  it('resets to empty state when a parsed record object is missing required fields', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {}
+    }, null, 2))
+
+    await writeFile(join(cacheDir, 'records.jsonl'), `${JSON.stringify({ checkpointId: 'checkpoint_bad' })}\n`)
+
+    const state = await loadSemanticState(workspacePath)
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  it('resets to empty state when a ready record is missing its embedding', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_ready: {
+          checkpointTimestamp: '2026-03-12T11:00:00.000Z',
+          digestHash: 'hash-ready',
+          digestVersion: 1
+        }
+      }
+    }, null, 2))
+
+    await writeFile(join(cacheDir, 'records.jsonl'), `${JSON.stringify({
+      checkpointId: 'checkpoint_ready',
+      digest: 'Ready digest',
+      digestHash: 'hash-ready',
+      status: 'ready',
+      updatedAt: '2026-03-12T11:00:00.000Z'
+    })}\n`)
+
+    const state = await loadSemanticState(workspacePath)
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  it('resets to empty state when a stale record is missing staleReason', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), JSON.stringify({
+      workspacePath: workspacePath,
+      checkpoints: {
+        checkpoint_stale: {
+          checkpointTimestamp: '2026-03-12T11:00:00.000Z',
+          digestHash: 'hash-stale',
+          digestVersion: 1
+        }
+      }
+    }, null, 2))
+
+    await writeFile(join(cacheDir, 'records.jsonl'), `${JSON.stringify({
+      checkpointId: 'checkpoint_stale',
+      digest: 'Stale digest',
+      digestHash: 'hash-stale',
+      status: 'stale',
+      updatedAt: '2026-03-12T11:00:00.000Z'
+    })}\n`)
+
+    const state = await loadSemanticState(workspacePath)
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    expect(warnings.length).toBeGreaterThan(0)
+  })
+
+  it('rewrites corrupted files to valid empty state on disk', async () => {
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    await mkdir(cacheDir, { recursive: true })
+
+    await writeFile(join(cacheDir, 'manifest.json'), '{ invalid json }')
+    await writeFile(join(cacheDir, 'records.jsonl'), '{ invalid jsonl }\n')
+
+    await loadSemanticState(workspacePath)
+
+    const manifestContent = await Bun.file(join(cacheDir, 'manifest.json')).text()
+    const recordsContent = await Bun.file(join(cacheDir, 'records.jsonl')).text()
+
+    expect(JSON.parse(manifestContent)).toEqual({
+      workspacePath,
+      checkpoints: {}
+    })
+    expect(recordsContent).toBe('')
+
+    const warningsAfterFirstLoad = warnings.length
+    await loadSemanticState(workspacePath)
+    expect(warnings).toHaveLength(warningsAfterFirstLoad)
+  })
+
+  it('returns empty state for missing files (ENOENT is not corruption)', async () => {
+    // No files created - this is normal first-use scenario
+    const state = await loadSemanticState(workspacePath)
+
+    expect(state.manifest.checkpoints).toEqual({})
+    expect(state.records).toEqual([])
+    // Should NOT emit warning for ENOENT
+    expect(warnings).toHaveLength(0)
   })
 })
 
@@ -475,6 +980,35 @@ describe('pruneOrphanedSemanticCaches', () => {
     const state = await loadSemanticState(workspacePath)
     expect(state.records).toHaveLength(1)
   })
+
+  it('skips cache directories when their lock is already held', async () => {
+    // Create a pending semantic record so the cache directory exists with content
+    await upsertPendingSemanticRecord(workspacePath, {
+      checkpointId: 'checkpoint_locked_prune',
+      checkpointTimestamp: '2026-03-13T10:00:00.000Z',
+      digest: 'Locked prune test',
+      digestHash: 'hash-locked-prune',
+      digestVersion: 1
+    })
+
+    // Manually remove the workspace so prune would normally delete this cache
+    await rm(workspacePath, { recursive: true, force: true })
+
+    // Acquire the semantic cache lock for this workspace before pruning
+    const cacheDir = getSemanticCacheDir(workspacePath)
+    const lockPath = join(cacheDir, 'semantic-cache')
+    const release = await acquireLock(lockPath)
+
+    try {
+      await pruneOrphanedSemanticCaches()
+
+      // The cache directory should still exist because the lock was held
+      const { existsSync } = await import('fs')
+      expect(existsSync(cacheDir)).toBe(true)
+    } finally {
+      await release()
+    }
+  });
 
   it('deletes cache directories where workspacePath no longer exists', async () => {
     const cacheDir = getSemanticCacheDir(workspacePath)

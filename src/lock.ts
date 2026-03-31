@@ -88,6 +88,56 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
 }
 
 /**
+ * Try to acquire a lock within a short timeout budget.
+ * Returns a release function on success, or null if the lock is already held.
+ * Only real filesystem errors throw.
+ */
+export async function tryAcquireLock(
+  filePath: string,
+  timeoutMs: number
+): Promise<(() => Promise<void>) | null> {
+  const lockPath = `${filePath}.lock`;
+  const nonce = randomBytes(8).toString('hex');
+  const lockData = JSON.stringify({
+    pid: process.pid,
+    timestamp: Date.now(),
+    nonce
+  });
+
+  const maxAttempts = Math.max(1, Math.floor(timeoutMs / LOCK_RETRY_DELAY_MS));
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    try {
+      await writeFile(lockPath, lockData, { flag: 'wx' });
+
+      return async () => {
+        try {
+          const current = JSON.parse(await readFile(lockPath, 'utf-8'));
+          if (current.nonce === nonce) {
+            await unlink(lockPath);
+          }
+        } catch {
+          // Lock file may have been cleaned up already
+        }
+      };
+    } catch (error: any) {
+      if (error.code === 'EEXIST' || error.code === 'EPERM') {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          return null;  // Timed out, return null instead of throwing
+        }
+        await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
+      } else {
+        throw error;  // Real filesystem error
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Execute a function with a lock held
  * Automatically releases lock when done (even if function throws)
  */

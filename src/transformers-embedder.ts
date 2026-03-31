@@ -165,7 +165,7 @@ export function createTransformersEmbedder(
     return await loadingEmbedder
   }
 
-  async function enqueueEmbedding<T>(task: (releaseQueue: () => void) => Promise<T>): Promise<T> {
+  async function enqueueEmbedding<T>(task: () => Promise<T>): Promise<T> {
     const previousTask = embeddingQueue.catch(() => undefined)
     let releaseQueue: (() => void) | undefined
     embeddingQueue = new Promise<void>(resolve => {
@@ -174,17 +174,10 @@ export function createTransformersEmbedder(
 
     const runTask = previousTask.then(async () => {
       try {
-        return await task(() => {
-          if (releaseQueue) {
-            releaseQueue()
-            releaseQueue = undefined
-          }
-        })
+        return await task()
       } finally {
-        if (releaseQueue) {
-          releaseQueue()
-          releaseQueue = undefined
-        }
+        releaseQueue?.()
+        releaseQueue = undefined
       }
     })
 
@@ -206,34 +199,13 @@ export function createTransformersEmbedder(
       }
 
       throwIfAborted(signal)
-      const embedder = await ensureEmbedder()
-      let released = false
+      const embedder = await withAbortSignal(ensureEmbedder(), signal)
 
-      const queuedEmbedding = enqueueEmbedding(async (releaseQueue) => {
+      const queuedEmbedding = enqueueEmbedding(async () => {
         if (signal?.aborted) {
           return []
         }
-
-        const onAbort = () => {
-          if (released) {
-            return
-          }
-
-          released = true
-          releaseQueue()
-        }
-
-        if (signal) {
-          signal.addEventListener('abort', onAbort, { once: true })
-        }
-
-        try {
-          return await embedder(texts, signal)
-        } finally {
-          if (signal) {
-            signal.removeEventListener('abort', onAbort)
-          }
-        }
+        return await embedder(texts, signal)
       })
 
       return await withAbortSignal(queuedEmbedding, signal)

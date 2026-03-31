@@ -255,7 +255,7 @@ export async function rankSearchCheckpoints(
   digests: Record<string, string>,
   readyRecords: ReadySemanticRecord[],
   runtime?: SemanticRuntime,
-  queryEmbeddingPromise?: Promise<QueryEmbeddingResult>
+  queryEmbeddingPromiseFn?: () => Promise<QueryEmbeddingResult>
 ): Promise<Checkpoint[]> {
   const checkpointsById = new Map(checkpoints.map(checkpoint => [checkpoint.id, checkpoint]));
   const lexicalRanked = searchCheckpoints(
@@ -281,12 +281,30 @@ export async function rankSearchCheckpoints(
   }
 
   try {
-    const queryEmbeddingResult = queryEmbeddingPromise ? await queryEmbeddingPromise : undefined;
+    // Memoize the query embedding promise to prevent duplicate requests
+    // if rankSearchCheckpoints is called multiple times
+    let memoizedPromise: Promise<QueryEmbeddingResult> | undefined;
+    const memoizedQueryEmbeddingFn = queryEmbeddingPromiseFn
+      ? () => {
+          if (!memoizedPromise) {
+            memoizedPromise = queryEmbeddingPromiseFn();
+          }
+          return memoizedPromise;
+        }
+      : undefined;
+
+    // Call the memoized lazy function to create/get the promise when we actually need it
+    const queryEmbeddingResult = memoizedQueryEmbeddingFn ? await memoizedQueryEmbeddingFn() : undefined;
     if (queryEmbeddingResult && !queryEmbeddingResult.ok) {
       throw queryEmbeddingResult.error;
     }
 
     const queryEmbedding = queryEmbeddingResult?.embedding;
+    if (queryEmbeddingResult && !queryEmbedding) {
+      return lexicalRanked
+        .map(checkpoint => checkpointsById.get(checkpoint.id))
+        .filter((checkpoint): checkpoint is Checkpoint => Boolean(checkpoint));
+    }
 
     const scored = await buildHybridRanking({
       query,

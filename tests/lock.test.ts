@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { acquireLock, withLock } from '../src/lock';
+import { acquireLock, withLock, tryAcquireLock } from '../src/lock';
 import { join } from 'path';
 import { rm, mkdir, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -178,6 +178,16 @@ describe('File locking', () => {
     // B releases normally
     await releaseB();
     expect(await Bun.file(lockPath).exists()).toBe(false);
+  });
+
+  it('returns null when lock cannot be acquired within timeout', async () => {
+    const release = await acquireLock(TEST_FILE);
+    try {
+      const second = await tryAcquireLock(TEST_FILE, 25);
+      expect(second).toBeNull();
+    } finally {
+      await release();
+    }
   });
 
   it('does not loop forever when a stale lock cannot be deleted', async () => {

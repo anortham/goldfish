@@ -103,7 +103,7 @@ describe('createTransformersEmbedder', () => {
     resolveEmbedding?.([[1, 0]])
   })
 
-  it('lets one successor bypass aborted work without letting the queue fan out', async () => {
+  it('keeps queue serialized when first caller aborts', async () => {
     const resolvers: Array<(value: number[][]) => void> = []
     const started: string[] = []
 
@@ -135,11 +135,13 @@ describe('createTransformersEmbedder', () => {
     const thirdCall = runtime.embedTexts(['third'])
     await Bun.sleep(0)
 
-    expect(started).toEqual(['first', 'second'])
+    // Queue stays serialized: second waits for first's embedder to complete
+    expect(started).toEqual(['first'])
 
     resolvers[0]!([[1, 0]])
     await Bun.sleep(0)
 
+    // Now first's task is done, second starts
     expect(started).toEqual(['first', 'second'])
 
     resolvers[1]!([[2, 0]])
@@ -150,6 +152,66 @@ describe('createTransformersEmbedder', () => {
 
     resolvers[2]!([[3, 0]])
     await expect(thirdCall).resolves.toEqual([[3, 0]])
+  })
+
+  it('rejects promptly when aborted during cold start', async () => {
+    let resolveLoader: ((embedder: (texts: string[]) => Promise<number[][]>) => void) | undefined
+    const runtime = createTransformersEmbedder({
+      loadPipeline: async () => await new Promise(resolve => {
+        resolveLoader = resolve
+      })
+    })
+
+    const controller = new AbortController()
+    const embeddingPromise = runtime.embedTexts(['alpha'], controller.signal)
+    controller.abort()
+
+    await expect(embeddingPromise).rejects.toMatchObject({ name: 'AbortError' })
+
+    resolveLoader?.(async (texts: string[]) => texts.map(() => [1, 0]))
+  })
+
+  it('does not fan out concurrent inference after multiple queued aborts', async () => {
+    const started: string[] = []
+    const resolvers: Array<(value: number[][]) => void> = []
+
+    const runtime = createTransformersEmbedder({
+      loadPipeline: async () => async (texts: string[]) => {
+        started.push(texts[0]!)
+        return await new Promise<number[][]>(resolve => resolvers.push(resolve))
+      }
+    })
+
+    const firstController = new AbortController()
+    const secondController = new AbortController()
+    const thirdController = new AbortController()
+
+    const first = runtime.embedTexts(['first'], firstController.signal)
+    const second = runtime.embedTexts(['second'], secondController.signal)
+    const third = runtime.embedTexts(['third'], thirdController.signal)
+
+    // Attach catch handlers before aborting so Bun doesn't flag unhandled rejections
+    const settled = Promise.allSettled([first, second, third])
+
+    // Let first start executing
+    await Bun.sleep(0)
+
+    firstController.abort()
+    secondController.abort()
+    thirdController.abort()
+
+    const results = await settled
+
+    expect(results[0]!.status).toBe('rejected')
+    expect((results[0] as PromiseRejectedResult).reason).toMatchObject({ name: 'AbortError' })
+    expect(results[1]!.status).toBe('rejected')
+    expect((results[1] as PromiseRejectedResult).reason).toMatchObject({ name: 'AbortError' })
+    expect(results[2]!.status).toBe('rejected')
+    expect((results[2] as PromiseRejectedResult).reason).toMatchObject({ name: 'AbortError' })
+
+    // Only first should have started (second and third were aborted before they got the queue)
+    expect(started).toEqual(['first'])
+    resolvers[0]!([[1, 0]])
   })
 })
 

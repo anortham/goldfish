@@ -30,6 +30,12 @@ const SEARCH_SEMANTIC_MODEL = {
   version: '1'
 };
 
+const QUERY_EMBEDDING_TIMEOUT_MS = 250;
+
+// Bounded maintenance: process at most N items and M ms per search-triggered maintenance pass
+const SEARCH_MAINTENANCE_MAX_ITEMS = 5;
+const SEARCH_MAINTENANCE_MAX_MS = 100;
+
 export const MEMORY_SECTION_PREFIX = 'memory_section_';
 
 function describeError(error: unknown): string {
@@ -42,6 +48,44 @@ function describeError(error: unknown): string {
 
 function warnSemanticFailure(context: string, error: unknown): void {
   console.warn(`[goldfish] ${context}: ${describeError(error)}`);
+}
+
+function createQueryEmbeddingPromise(
+  query: string,
+  runtime: NonNullable<RecallOptions['_semanticRuntime']>
+): () => Promise<QueryEmbeddingResult> {
+  return () => new Promise<QueryEmbeddingResult>((resolve) => {
+    const controller = new AbortController();
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      settled = true;
+      controller.abort();
+      resolve({ ok: false, error: new Error('query embedding timed out') });
+    }, QUERY_EMBEDDING_TIMEOUT_MS);
+
+    void runtime
+      .embedTexts([query], controller.signal)
+      .then(embeddings => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timeout);
+        const embedding = embeddings[0];
+        resolve(embedding ? { ok: true, embedding } : { ok: true });
+      })
+      .catch(error => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timeout);
+        resolve({ ok: false, error });
+      });
+  });
 }
 
 /**
@@ -199,34 +243,57 @@ async function runSearchSemanticMaintenance(
     return;
   }
 
-  const seenWorkspaces = new Set<string>();
+  const uniqueWorkspaces = workspaces.filter((workspace, index) => workspaces.indexOf(workspace) === index);
+  let remainingItems = SEARCH_MAINTENANCE_MAX_ITEMS;
+  const startedAt = Date.now();
 
   try {
-    for (const workspace of workspaces) {
-      if (seenWorkspaces.has(workspace)) {
-        continue;
-      }
+    while (remainingItems > 0) {
+      let progressed = false;
 
-      seenWorkspaces.add(workspace);
-
-      const pending = await listPendingSemanticRecords(workspace);
-      if (pending.length === 0) {
-        continue;
-      }
-
-      await processPendingSemanticWork({
-        pending,
-        maxItems: pending.length,
-        embed: async (texts: string[], signal?: AbortSignal) => await runtime.embedTexts(texts, signal),
-        save: async (checkpointId: string, embedding: number[]) => {
-          await markSemanticRecordReady(
-            workspace,
-            checkpointId,
-            embedding,
-            runtime.getModelInfo?.() ?? SEARCH_SEMANTIC_MODEL
-          );
+      for (const workspace of uniqueWorkspaces) {
+        if (remainingItems <= 0) {
+          return;
         }
-      });
+
+        if ((Date.now() - startedAt) >= SEARCH_MAINTENANCE_MAX_MS) {
+          return;
+        }
+
+        const pending = await listPendingSemanticRecords(workspace);
+        if (pending.length === 0) {
+          continue;
+        }
+
+        const remainingMs = SEARCH_MAINTENANCE_MAX_MS - (Date.now() - startedAt);
+        if (remainingMs <= 0) {
+          return;
+        }
+
+        const result = await processPendingSemanticWork({
+          pending,
+          maxItems: Math.min(pending.length, remainingItems),
+          maxMs: remainingMs,
+          embed: async (texts: string[], signal?: AbortSignal) => await runtime.embedTexts(texts, signal),
+          save: async (checkpointId: string, embedding: number[]) => {
+            await markSemanticRecordReady(
+              workspace,
+              checkpointId,
+              embedding,
+              runtime.getModelInfo?.() ?? SEARCH_SEMANTIC_MODEL
+            );
+          }
+        });
+
+        if (result.processed > 0) {
+          progressed = true;
+          remainingItems -= result.processed;
+        }
+      }
+
+      if (!progressed) {
+        return;
+      }
     }
   } catch (error) {
     warnSemanticFailure('semantic maintenance failed', error);
@@ -359,10 +426,7 @@ async function recallFromWorkspace(
   if (options.search) {
     const semanticRuntime = options._semanticRuntime ?? getDefaultSemanticRuntime();
     const wasWarm = semanticRuntime.isReady();
-    const queryEmbeddingPromise = semanticRuntime
-      .embedTexts([options.search])
-      .then(embeddings => ({ ok: true, embedding: embeddings[0] } as QueryEmbeddingResult))
-      .catch(error => ({ ok: false, error } as QueryEmbeddingResult));
+    const queryEmbeddingPromise = createQueryEmbeddingPromise(options.search, semanticRuntime);
 
     // Load and parse memory sections into synthetic checkpoints for search
     const searchMemoryContent = await readMemory(workspace);
@@ -529,10 +593,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   if (options.search) {
     const semanticRuntime = options._semanticRuntime ?? getDefaultSemanticRuntime();
     const wasWarm = semanticRuntime.isReady();
-    const queryEmbeddingPromise = semanticRuntime
-      .embedTexts([options.search])
-      .then(embeddings => ({ ok: true, embedding: embeddings[0] } as QueryEmbeddingResult))
-      .catch(error => ({ ok: false, error } as QueryEmbeddingResult));
+    const queryEmbeddingPromise = createQueryEmbeddingPromise(options.search, semanticRuntime);
 
     if (wasWarm) {
       await runSearchSemanticMaintenance(

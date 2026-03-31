@@ -196,18 +196,21 @@ This is a deliberate recalibration. The original aggressive language (from Tusk 
 - **Last-N mode** (default): When no date parameters are provided, returns the last `limit` checkpoints (default: 5) regardless of age. No date window.
 - **Date-window mode**: When `days`, `since`, `from`, or `to` is provided, filters checkpoints to that date range.
 
-**Phase 1 hybrid recall flow:**
+**Hybrid recall flow:**
 1. Load markdown checkpoints from `.memories/` and build compact retrieval digests.
-2. Run Fuse lexical search over those digests so default search stays fast and token-efficient.
-3. If the semantic runtime is already warm, load ready embeddings from the derived cache and blend lexical, semantic, metadata, and recency signals into a hybrid ranking.
-4. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
-5. After search, process pending semantic work. Search-triggered maintenance processes the full pending backlog on first use, trading one-time latency for complete results.
+2. Run Fuse lexical search over those digests so search always has a fast fallback path.
+3. Start query embedding opportunistically with a short timeout. If it resolves in budget, blend lexical, semantic, metadata, and recency signals into a hybrid ranking.
+4. If semantic work times out, fails, or the derived cache is broken, return lexical results and recover semantic state lazily.
+5. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
+6. After search, process a bounded amount of pending semantic work so indexing debt amortizes across searches instead of blocking one request.
 
 **Semantic maintenance details:**
 - Pending semantic work is queued on checkpoint save.
-- Search-triggered maintenance is best-effort only; recall still succeeds if embedding work fails.
+- Search-triggered maintenance is best-effort and bounded by per-search item/time budgets; recall always succeeds even if embedding work fails.
 - Model-version invalidation marks derived records stale without touching checkpoint markdown.
+- Corrupted or inconsistent derived cache state is detected, warned, and reset to empty; backfill recreates it from source markdown.
 - Semantic cache and model downloads live under `~/.goldfish/`, outside `.memories/`, and can be rebuilt from source markdown.
+- Pruning orphaned semantic caches acquires the cache lock before deletion, skipping caches with active operations.
 
 Recall runs **automatically at session start** via the SessionStart hook. Users can also invoke `/recall` manually for targeted queries (search, cross-project, time ranges).
 

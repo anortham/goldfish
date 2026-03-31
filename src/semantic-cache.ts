@@ -1,8 +1,8 @@
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { withLock } from './lock'
+import { tryAcquireLock, withLock } from './lock'
 import type { SemanticModelInfo } from './types'
-import { getGoldfishHomeDir, getSemanticCacheDir } from './workspace'
+import { getGoldfishHomeDir, getSemanticCacheDir, resolveWorkspace } from './workspace'
 
 export interface SemanticRecord {
   checkpointId: string
@@ -73,6 +73,36 @@ async function readManifest(manifestPath: string): Promise<SemanticManifest> {
     const content = await readFile(manifestPath, 'utf-8')
     const parsed = JSON.parse(content) as SemanticManifest
 
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new SemanticCacheCorruptionError('Manifest must be an object')
+    }
+
+    if (parsed.checkpoints !== undefined && (
+      typeof parsed.checkpoints !== 'object' ||
+      parsed.checkpoints === null ||
+      Array.isArray(parsed.checkpoints)
+    )) {
+      throw new SemanticCacheCorruptionError('Manifest checkpoints must be an object')
+    }
+
+    for (const [checkpointId, checkpoint] of Object.entries(parsed.checkpoints ?? {})) {
+      if (!checkpoint || typeof checkpoint !== 'object' || Array.isArray(checkpoint)) {
+        throw new SemanticCacheCorruptionError(`Manifest checkpoint '${checkpointId}' must be an object`)
+      }
+
+      if (typeof checkpoint.checkpointTimestamp !== 'string') {
+        throw new SemanticCacheCorruptionError(`Manifest checkpoint '${checkpointId}' missing checkpointTimestamp`)
+      }
+
+      if (typeof checkpoint.digestHash !== 'string') {
+        throw new SemanticCacheCorruptionError(`Manifest checkpoint '${checkpointId}' missing digestHash`)
+      }
+
+      if (typeof checkpoint.digestVersion !== 'number') {
+        throw new SemanticCacheCorruptionError(`Manifest checkpoint '${checkpointId}' missing digestVersion`)
+      }
+    }
+
     return {
       ...(parsed.workspacePath ? { workspacePath: parsed.workspacePath } : {}),
       checkpoints: parsed.checkpoints ?? {}
@@ -80,6 +110,10 @@ async function readManifest(manifestPath: string): Promise<SemanticManifest> {
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return { checkpoints: {} }
+    }
+
+    if (error instanceof SyntaxError) {
+      throw new SemanticCacheCorruptionError(error.message)
     }
 
     throw error
@@ -94,13 +128,85 @@ async function readRecords(recordsPath: string): Promise<SemanticRecord[]> {
       .split('\n')
       .map(line => line.trim())
       .filter(Boolean)
-      .map(line => JSON.parse(line) as SemanticRecord)
+      .map(line => {
+        const parsed = JSON.parse(line) as SemanticRecord
+
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new SemanticCacheCorruptionError('Record must be an object')
+        }
+
+        if (typeof parsed.checkpointId !== 'string') {
+          throw new SemanticCacheCorruptionError('Record missing checkpointId')
+        }
+
+        if (typeof parsed.digest !== 'string') {
+          throw new SemanticCacheCorruptionError(`Record '${parsed.checkpointId}' missing digest`)
+        }
+
+        if (typeof parsed.digestHash !== 'string') {
+          throw new SemanticCacheCorruptionError(`Record '${parsed.checkpointId}' missing digestHash`)
+        }
+
+        if (!['pending', 'ready', 'stale'].includes(parsed.status)) {
+          throw new SemanticCacheCorruptionError(`Record '${parsed.checkpointId}' has invalid status`)
+        }
+
+        if (typeof parsed.updatedAt !== 'string') {
+          throw new SemanticCacheCorruptionError(`Record '${parsed.checkpointId}' missing updatedAt`)
+        }
+
+        if (parsed.status === 'ready' && (
+          !Array.isArray(parsed.embedding) ||
+          !parsed.embedding.every(value => typeof value === 'number')
+        )) {
+          throw new SemanticCacheCorruptionError(`Record '${parsed.checkpointId}' missing valid embedding`)
+        }
+
+        if (parsed.status === 'stale' && !['digest-hash', 'digest-version', 'model-version'].includes(parsed.staleReason ?? '')) {
+          throw new SemanticCacheCorruptionError(`Record '${parsed.checkpointId}' missing valid staleReason`)
+        }
+
+        return parsed
+      })
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return []
     }
 
+    if (error instanceof SyntaxError) {
+      throw new SemanticCacheCorruptionError(error.message)
+    }
+
     throw error
+  }
+}
+
+class SemanticCacheCorruptionError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SemanticCacheCorruptionError'
+  }
+}
+
+function isSemanticCacheCorruptionError(error: unknown): error is SemanticCacheCorruptionError {
+  return error instanceof SemanticCacheCorruptionError
+}
+
+function warnSemanticCacheCorruption(paths: ReturnType<typeof getPaths>, error: SemanticCacheCorruptionError): void {
+  console.warn(
+    `[goldfish] Semantic cache corrupted at ${paths.cacheDir}: ${error.message}. Resetting to empty state.`
+  )
+}
+
+function createEmptySemanticState(workspace?: string): SemanticState {
+  const resolvedWorkspace = workspace ?? resolveWorkspace()
+
+  return {
+    manifest: {
+      workspacePath: resolvedWorkspace,
+      checkpoints: {}
+    },
+    records: []
   }
 }
 
@@ -141,13 +247,73 @@ async function withSemanticStateLock<T>(
   await mkdir(cacheDir, { recursive: true })
 
   return await withLock(lockPath, async () => {
-    const state: SemanticState = {
-      manifest: await readManifest(manifestPath),
-      records: await readRecords(recordsPath)
+    let state: SemanticState
+
+    try {
+      const rawState: SemanticState = {
+        manifest: await readManifest(manifestPath),
+        records: await readRecords(recordsPath)
+      }
+
+      state = normalizeSemanticState(rawState)
+
+      if (JSON.stringify(state) !== JSON.stringify(rawState)) {
+        await writeSemanticState(paths, state)
+      }
+    } catch (error) {
+      if (!isSemanticCacheCorruptionError(error)) {
+        throw error
+      }
+
+      warnSemanticCacheCorruption(paths, error)
+      state = createEmptySemanticState(workspace)
+      await writeSemanticState(paths, state)
     }
 
     return await fn(state, paths)
   })
+}
+
+function normalizeSemanticState(state: SemanticState): SemanticState {
+  const normalizedRecordsById = new Map<string, SemanticRecord>()
+
+  // Keep only records that have a matching manifest entry
+  for (const record of state.records) {
+    const manifestEntry = state.manifest.checkpoints[record.checkpointId]
+    if (!manifestEntry) {
+      continue
+    }
+
+    if (record.digestHash !== manifestEntry.digestHash) {
+      continue
+    }
+
+    if (
+      record.status === 'ready' &&
+      (!manifestEntry.modelId || !manifestEntry.modelVersion || typeof manifestEntry.dimensions !== 'number' || !manifestEntry.indexedAt)
+    ) {
+      continue
+    }
+
+    normalizedRecordsById.set(record.checkpointId, record)
+  }
+
+  // Build normalized checkpoints keeping only entries that have records
+  const normalizedCheckpoints: Record<string, SemanticManifestCheckpoint> = {}
+  for (const checkpointId of normalizedRecordsById.keys()) {
+    const entry = state.manifest.checkpoints[checkpointId]
+    if (entry) {
+      normalizedCheckpoints[checkpointId] = entry
+    }
+  }
+
+  return {
+    manifest: {
+      ...(state.manifest.workspacePath ? { workspacePath: state.manifest.workspacePath } : {}),
+      checkpoints: normalizedCheckpoints
+    },
+    records: Array.from(normalizedRecordsById.values())
+  }
 }
 
 function findRecordIndex(records: SemanticRecord[], checkpointId: string): number {
@@ -361,37 +527,40 @@ export async function pruneOrphanedSemanticCaches(): Promise<void> {
 
   for (const { dirPath } of dirs) {
     try {
-      const manifestPath = join(dirPath, MANIFEST_FILE)
-      let manifest: SemanticManifest | undefined
+      const release = await tryAcquireLock(join(dirPath, LOCK_FILE), 25)
+      if (!release) {
+        continue  // Lock held by active operation, skip this cache
+      }
 
       try {
-        const content = await readFile(manifestPath, 'utf-8')
-        manifest = JSON.parse(content)
-      } catch {
-        // No manifest or invalid JSON — delete
-        await rm(dirPath, { recursive: true, force: true })
-        continue
+        // Re-read manifest inside the lock to avoid TOCTOU
+        let manifest: SemanticManifest | undefined
+        try {
+          const content = await readFile(join(dirPath, MANIFEST_FILE), 'utf-8')
+          manifest = JSON.parse(content)
+        } catch {
+          await rm(dirPath, { recursive: true, force: true })
+          continue
+        }
+
+        if (!manifest?.workspacePath) {
+          await rm(dirPath, { recursive: true, force: true })
+          continue
+        }
+
+        let workspaceExists = false
+        try {
+          await stat(manifest.workspacePath)
+          workspaceExists = true
+        } catch { /* doesn't exist */ }
+
+        if (!workspaceExists) {
+          await rm(dirPath, { recursive: true, force: true })
+          continue
+        }
+      } finally {
+        await release()
       }
-
-      if (!manifest?.workspacePath) {
-        // Pre-migration manifest without workspacePath — delete
-        await rm(dirPath, { recursive: true, force: true })
-        continue
-      }
-
-      let workspaceExists = false
-      try {
-        await stat(manifest.workspacePath)
-        workspaceExists = true
-      } catch { /* doesn't exist */ }
-
-      if (!workspaceExists) {
-        // Workspace path no longer exists — delete
-        await rm(dirPath, { recursive: true, force: true })
-        continue
-      }
-
-      // workspacePath exists on disk — keep
     } catch {
       // Skip dirs that fail — best-effort
     }
