@@ -69,8 +69,9 @@ export async function handlePlan(args: PlanArgs) {
 
   switch (action) {
     case 'save': {
-      const { title, content, activate, id, tags } = args;
+      const { title, content, activate, id, tags, status } = args;
       const planId = id || args.planId;
+      const shouldActivate = activate !== false;
       if (!title || !content) {
         throw new Error('Title and content are required for save action');
       }
@@ -79,12 +80,13 @@ export async function handlePlan(args: PlanArgs) {
         title,
         content,
         workspace,
-        activate: activate ?? false,
+        activate,
+        ...(status && { status }),
         ...(planId && { id: planId }),
         ...(tags && { tags })
       });
 
-      const statusText = plan.status === 'active' && activate ? ' (active)' : '';
+      const statusText = shouldActivate && plan.status === 'active' ? ' (active)' : '';
       return textResponse(`${fish} Plan saved: ${plan.id}${statusText}`);
     }
 

@@ -553,8 +553,7 @@ Checkpoint without plan`;
     expect(parsed.planId).toBe('my-plan-id');
   });
 
-  it('handles null/undefined timestamp in legacy data gracefully', () => {
-    // When timestamp field is missing or null in YAML, it comes through as null
+  it('throws when timestamp is null in current-format frontmatter', () => {
     const content = `---
 id: checkpoint_nullts001
 timestamp: null
@@ -562,10 +561,7 @@ timestamp: null
 
 Missing timestamp.`;
 
-    const checkpoint = parseCheckpointFile(content);
-    expect(checkpoint.id).toBe('checkpoint_nullts001');
-    // Should produce a valid ISO string, not "null"
-    expect(checkpoint.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(() => parseCheckpointFile(content)).toThrow(/missing timestamp/i);
   });
 
   it('parses structured memory fields from frontmatter', () => {
@@ -651,6 +647,48 @@ tags: [unclosed bracket
 Malformed YAML.`;
 
     expect(() => parseCheckpointFile(content)).toThrow();
+  });
+
+  it('throws when id is missing from current-format frontmatter', () => {
+    const content = `---
+timestamp: "2026-02-14T10:00:00.000Z"
+---
+
+Missing id.`;
+
+    expect(() => parseCheckpointFile(content)).toThrow(/missing id/i);
+  });
+
+  it('throws when timestamp is missing from current-format frontmatter', () => {
+    const content = `---
+id: checkpoint_missingts
+---
+
+Missing timestamp.`;
+
+    expect(() => parseCheckpointFile(content)).toThrow(/missing timestamp/i);
+  });
+
+  it('throws when timestamp is invalid in current-format frontmatter', () => {
+    const content = `---
+id: checkpoint_badts01
+timestamp: definitely-not-a-date
+---
+
+Invalid timestamp.`;
+
+    expect(() => parseCheckpointFile(content)).toThrow(/invalid timestamp/i);
+  });
+
+  it('throws when timestamp uses an impossible calendar date in current-format frontmatter', () => {
+    const content = `---
+id: checkpoint_badts02
+timestamp: 2026-02-30T10:00:00.000Z
+---
+
+Impossible timestamp.`;
+
+    expect(() => parseCheckpointFile(content)).toThrow(/invalid timestamp/i);
   });
 
   it('treats non-array tags as undefined', () => {

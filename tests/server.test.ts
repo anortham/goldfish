@@ -397,7 +397,8 @@ describe('Tool descriptions', () => {
     const tools = getTools();
     const planTool = tools.find(t => t.name === 'plan');
 
-    expect(planTool!.description).toContain('ACTIVATE');
+    expect(planTool!.description).toContain('Saving an active plan makes it active by default');
+    expect(planTool!.description).toContain('activate: false preserves the opt-out');
   });
 });
 
@@ -508,6 +509,30 @@ describe('Server exports', () => {
 
     expect(SERVER_VERSION).toBe(packageJson.version);
     expect(SERVER_VERSION).toBe(pluginJson.version);
+  });
+
+  it('keeps marketplace metadata and README inventory aligned with the current release', async () => {
+    const { SERVER_VERSION } = await import('../src/server');
+    const { readdir } = await import('fs/promises');
+
+    const marketplaceJson = JSON.parse(
+      await Bun.file(new URL('../.claude-plugin/marketplace.json', import.meta.url)).text()
+    ) as { plugins: Array<{ version: string }> };
+
+    const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
+    const skillDirs = (await readdir(new URL('../skills/', import.meta.url), { withFileTypes: true }))
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort();
+    const readmeSkillTable = Array.from(
+      readme.matchAll(/^\| `\/([^`]+)` \|/gm),
+      match => match[1]!
+    );
+
+    expect(marketplaceJson.plugins[0]!.version).toBe(SERVER_VERSION);
+    expect(readme).toContain(`**Version ${SERVER_VERSION}**`);
+    expect(readme).toContain(`${skillDirs.length} skills`);
+    expect(readmeSkillTable).toEqual(skillDirs);
   });
 });
 

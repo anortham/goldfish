@@ -1235,6 +1235,34 @@ describe('Date range filtering', () => {
     // No checkpoints should be found — our checkpoint is today, not 30 days ago
     expect(pastResult.checkpoints).toEqual([]);
   });
+
+  it('throws when from is invalid', async () => {
+    await expect(recall({
+      workspace: TEST_DIR_A,
+      from: 'not-a-date'
+    })).rejects.toThrow(/invalid from/i);
+  });
+
+  it('throws when from uses an impossible calendar date', async () => {
+    await expect(recall({
+      workspace: TEST_DIR_A,
+      from: '2026-02-30'
+    })).rejects.toThrow(/invalid from/i);
+  });
+
+  it('throws when to is invalid', async () => {
+    await expect(recall({
+      workspace: TEST_DIR_A,
+      to: 'not-a-date'
+    })).rejects.toThrow(/invalid to/i);
+  });
+
+  it('throws when to uses an impossible calendar date', async () => {
+    await expect(recall({
+      workspace: TEST_DIR_A,
+      to: '2026-02-30'
+    })).rejects.toThrow(/invalid to/i);
+  });
 });
 
 describe('parseSince - human-friendly time span parser', () => {

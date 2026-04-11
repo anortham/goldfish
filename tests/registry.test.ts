@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join, isAbsolute } from 'path';
-import { rm, mkdir, writeFile, readFile } from 'fs/promises';
+import { rm, mkdir, writeFile, readFile, readdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import {
   getRegistryPath,
@@ -191,6 +191,17 @@ describe('Register project', () => {
     const registry = await getRegistry(GOLDFISH_DIR);
     // Should still be a single entry, not duplicated
     expect(registry.projects).toHaveLength(1);
+  });
+
+  it('leaves no temp or lock files behind after register and unregister', async () => {
+    const projectPath = join(TEST_DIR, 'temp-cleanup-project');
+    await mkdir(projectPath, { recursive: true });
+
+    await registerProject(projectPath, GOLDFISH_DIR);
+    await unregisterProject(projectPath, GOLDFISH_DIR);
+
+    const files = await readdir(GOLDFISH_DIR);
+    expect(files.filter(name => name.includes('.tmp.') || name.endsWith('.lock'))).toEqual([]);
   });
 });
 

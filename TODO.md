@@ -1,5 +1,14 @@
 # Goldfish -- Backlog
 
+## Immediate Fixes
+- [x] Fix version and skill inventory drift across docs and manifests
+- [x] Align plan save behavior with activation guidance
+- [x] Make registry writes atomic
+- [x] Add locking around memory and consolidation state writes
+- [x] Tighten malformed checkpoint parsing
+- [x] Validate `from` and `to` inputs strictly
+- [x] Add regression coverage for the above, including unborn-`HEAD` git state
+
 ## Consolidation Tuning (Needs Real Usage Data)
 - [ ] Tune consolidation subagent prompt based on real output quality
 - [ ] Monitor semantic search quality with memory sections in the index

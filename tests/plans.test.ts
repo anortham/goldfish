@@ -371,6 +371,17 @@ describe('Plan storage', () => {
     expect(plan.status).toBe('completed');
   });
 
+  it('rejects invalid status at save time', async () => {
+    await expect(
+      savePlan({
+        title: 'Bad Status Plan',
+        content: 'Content',
+        status: 'banana' as any,
+        workspace: TEST_DIR
+      })
+    ).rejects.toThrow(/invalid.*status/i);
+  });
+
   it('uses atomic write (no leftover .tmp files)', async () => {
     await savePlan({
       id: 'atomic-test',
@@ -473,14 +484,16 @@ describe('Active plan management', () => {
       id: 'plan-1',
       title: 'First Plan',
       content: 'Content',
-      workspace: TEST_DIR
+      workspace: TEST_DIR,
+      activate: false
     });
 
     await savePlan({
       id: 'plan-2',
       title: 'Second Plan',
       content: 'Content',
-      workspace: TEST_DIR
+      workspace: TEST_DIR,
+      activate: false
     });
   });
 
@@ -526,6 +539,14 @@ describe('Active plan management', () => {
     ).rejects.toThrow();
   });
 
+  it('rejects activating a completed plan', async () => {
+    await updatePlan(TEST_DIR, 'plan-1', { status: 'completed' });
+
+    await expect(
+      setActivePlan(TEST_DIR, 'plan-1')
+    ).rejects.toThrow(/cannot activate.*completed/i);
+  });
+
   it('auto-activates plan when activate flag is true', async () => {
     await savePlan({
       id: 'auto-active',
@@ -539,6 +560,18 @@ describe('Active plan management', () => {
     expect(activePlan?.id).toBe('auto-active');
   });
 
+  it('auto-activates plan when activate is omitted', async () => {
+    await savePlan({
+      id: 'default-active',
+      title: 'Default Active Plan',
+      content: 'Content',
+      workspace: TEST_DIR
+    });
+
+    const activePlan = await getActivePlan(TEST_DIR);
+    expect(activePlan?.id).toBe('default-active');
+  });
+
   it('does not auto-activate when activate flag is false', async () => {
     await savePlan({
       id: 'not-active',
@@ -550,6 +583,46 @@ describe('Active plan management', () => {
 
     const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan).toBeNull();
+  });
+
+  it('does not replace the active plan when saving a completed plan without activate', async () => {
+    await savePlan({
+      id: 'current-active',
+      title: 'Current Active Plan',
+      content: 'Content',
+      workspace: TEST_DIR
+    });
+
+    await savePlan({
+      id: 'completed-plan',
+      title: 'Completed Plan',
+      content: 'Content',
+      status: 'completed',
+      workspace: TEST_DIR
+    });
+
+    const activePlan = await getActivePlan(TEST_DIR);
+    expect(activePlan?.id).toBe('current-active');
+  });
+
+  it('does not replace the active plan when saving an archived plan without activate', async () => {
+    await savePlan({
+      id: 'current-active',
+      title: 'Current Active Plan',
+      content: 'Content',
+      workspace: TEST_DIR
+    });
+
+    await savePlan({
+      id: 'archived-plan',
+      title: 'Archived Plan',
+      content: 'Content',
+      status: 'archived',
+      workspace: TEST_DIR
+    });
+
+    const activePlan = await getActivePlan(TEST_DIR);
+    expect(activePlan?.id).toBe('current-active');
   });
 });
 
@@ -591,6 +664,14 @@ describe('Plan updates', () => {
 
     const plan = await getPlan(TEST_DIR, 'test-plan');
     expect(plan!.status).toBe('completed');
+  });
+
+  it('rejects invalid status during update', async () => {
+    await expect(
+      updatePlan(TEST_DIR, 'test-plan', {
+        status: 'banana' as any
+      })
+    ).rejects.toThrow(/invalid.*status/i);
   });
 
   it('checks all unchecked boxes when status transitions to completed', async () => {

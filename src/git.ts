@@ -35,12 +35,18 @@ export function getGitContext(cwd?: string): GitContext {
       ? commitResult.stdout.toString().trim()
       : undefined;
 
-    // Get changed files (staged + unstaged, excluding untracked)
-    const filesResult = spawnSync(['git', 'diff', '--name-only', 'HEAD'], spawnOpts);
     const filesSet = new Set<string>();
 
-    if (filesResult.success) {
-      for (const file of filesResult.stdout.toString().trim().split('\n')) {
+    // Query unstaged and staged changes separately so repos with unborn HEAD still report files.
+    for (const result of [
+      spawnSync(['git', 'diff', '--name-only'], spawnOpts),
+      spawnSync(['git', 'diff', '--cached', '--name-only'], spawnOpts)
+    ]) {
+      if (!result.success) {
+        continue;
+      }
+
+      for (const file of result.stdout.toString().trim().split('\n')) {
         if (file) {
           filesSet.add(file);
         }

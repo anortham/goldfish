@@ -587,6 +587,24 @@ describe('Readable markdown responses', () => {
         expect(text).toContain('(active)');
       });
 
+      it('saves plan as active when activate is omitted', async () => {
+        const result = await handlePlan({
+          action: 'save',
+          title: 'Implicitly Active Plan',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).toContain('(active)');
+
+        const recallResult = await handleRecall({ workspace: TEST_DIR });
+        const recallText = recallResult.content[0]!.text;
+
+        expect(recallText).toContain('## Active Plan: Implicitly Active Plan (active)');
+      });
+
       it('saves plan without activating when activate: false', async () => {
         const result = await handlePlan({
           action: 'save',
@@ -607,6 +625,45 @@ describe('Readable markdown responses', () => {
         expect(recallText).not.toContain('## Active Plan:');
       });
 
+      it('does not wipe out the active plan when saving a completed plan without activate', async () => {
+        await handlePlan({
+          action: 'save',
+          title: 'Current Active Plan',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        const result = await handlePlan({
+          action: 'save',
+          title: 'Completed Plan',
+          content: 'Content',
+          status: 'completed',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).not.toContain('(active)');
+
+        const recallResult = await handleRecall({ workspace: TEST_DIR });
+        const recallText = recallResult.content[0]!.text;
+
+        expect(recallText).toContain('## Active Plan: Current Active Plan (active)');
+        expect(recallText).not.toContain('## Active Plan: Completed Plan (completed)');
+      });
+
+      it('rejects invalid status when saving through the handler', async () => {
+        await expect(
+          handlePlan({
+            action: 'save',
+            title: 'Bad Status Plan',
+            content: 'Content',
+            status: 'banana',
+            workspace: TEST_DIR
+          })
+        ).rejects.toThrow(/invalid.*status/i);
+      });
+    
       it('forwards tags to savePlan', async () => {
         const result = await handlePlan({
           action: 'save',
@@ -857,6 +914,24 @@ describe('Readable markdown responses', () => {
         const text = result.content[0]!.text;
         expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan activated: test-plan/);
       });
+
+      it('rejects activating a completed plan', async () => {
+        await savePlan({
+          id: 'completed-plan',
+          title: 'Completed',
+          content: 'Content',
+          status: 'completed',
+          workspace: TEST_DIR
+        });
+
+        await expect(
+          handlePlan({
+            action: 'activate',
+            id: 'completed-plan',
+            workspace: TEST_DIR
+          })
+        ).rejects.toThrow(/cannot activate.*completed/i);
+      });
     });
 
     describe('update action', () => {
@@ -923,6 +998,24 @@ describe('Readable markdown responses', () => {
 
         const text = result.content[0]!.text;
         expect(text).toContain('Plan updated: active-update-test');
+      });
+
+      it('rejects invalid status in updates', async () => {
+        await savePlan({
+          id: 'test-plan',
+          title: 'Original',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        await expect(
+          handlePlan({
+            action: 'update',
+            id: 'test-plan',
+            updates: { status: 'banana' as any },
+            workspace: TEST_DIR
+          })
+        ).rejects.toThrow(/invalid.*status/i);
       });
     });
 

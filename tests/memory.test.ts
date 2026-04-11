@@ -295,6 +295,19 @@ describe('writeConsolidationState', () => {
     const files = await readdir(memoriesDir);
     expect(files).not.toContain('.last-consolidated');
   });
+
+  it('leaves no lock or temp files behind after writing memory and consolidation state', async () => {
+    await writeMemory(tempDir, 'decisions:\n  - Locked write\n');
+    await writeConsolidationState(tempDir, {
+      timestamp: '2026-04-10T12:00:00.000Z',
+      checkpointsConsolidated: 4
+    });
+
+    const memoryFiles = await readdir(join(tempDir, '.memories'));
+    const stateFiles = await readdir(join(tempGoldfishHome, 'consolidation-state'));
+    expect(memoryFiles.filter(name => name.includes('.tmp.') || name.endsWith('.lock'))).toEqual([]);
+    expect(stateFiles.filter(name => name.includes('.tmp.') || name.endsWith('.lock'))).toEqual([]);
+  });
 });
 
 describe('parseMemoryYaml', () => {

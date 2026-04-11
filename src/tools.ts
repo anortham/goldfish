@@ -220,14 +220,14 @@ Plans are NOT checkpoints. They are strategic documents that:
 NEVER ask permission to save or update a plan. Just do it.
 
 Actions (use without asking permission):
-- save: Create new plan (MANDATORY after ExitPlanMode). Always activate unless you have a reason not to.
+- save: Create new plan (MANDATORY after ExitPlanMode). Active-status saves become active unless you pass activate: false.
 - get: Retrieve specific plan. Falls back to active plan if no id provided.
 - list: See all plans (filterable by status)
 - activate: Set as active plan (shows in recall). Only ONE plan can be active per workspace.
 - update: Update plan content or status. Pass fields in an updates object, or directly as top-level parameters (title, content, status, tags). Falls back to active plan if no id provided.
 - complete: Mark plan as done (sets status to 'completed'). Falls back to active plan if no id provided.
 
-IMPORTANT: Only ONE plan can be active per workspace. After saving a plan, ACTIVATE it so it appears in recall(). Plans are saved to {project}/.memories/plans/ as markdown files with YAML frontmatter.
+IMPORTANT: Only ONE plan can be active per workspace. Saving an active plan makes it active by default, and activate: false preserves the opt-out. Completed or archived saves do not replace the current active plan. Plans are saved to {project}/.memories/plans/ as markdown files with YAML frontmatter.
 
 Returns: Plan details, status updates, or list of plans.`,
       inputSchema: {
@@ -265,7 +265,7 @@ Returns: Plan details, status updates, or list of plans.`,
           },
           activate: {
             type: 'boolean',
-            description: 'Activate plan after saving (default: false)'
+            description: 'Activate plan after saving. Defaults to true for active-status saves; pass false to keep the current active plan unchanged.'
           },
           status: {
             type: 'string',

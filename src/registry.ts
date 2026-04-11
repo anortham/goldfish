@@ -6,7 +6,8 @@
  */
 
 import { join, resolve } from 'path';
-import { mkdir, writeFile, stat } from 'fs/promises';
+import { mkdir, stat } from 'fs/promises';
+import { atomicWriteFile } from './file-io';
 import { withLock } from './lock';
 import { normalizeWorkspace, getGoldfishHomeDir } from './workspace';
 import type { Registry, RegisteredProject } from './types';
@@ -85,8 +86,7 @@ export async function registerProject(projectPath: string, registryDir?: string)
     };
     registry.projects.push(entry);
 
-    // Direct write (lock provides exclusivity; avoids Windows rename ENOENT issues)
-    await writeFile(filePath, JSON.stringify(registry, null, 2), 'utf-8');
+    await atomicWriteFile(filePath, JSON.stringify(registry, null, 2));
   });
 }
 
@@ -114,7 +114,7 @@ export async function unregisterProject(projectPath: string, registryDir?: strin
     if (filtered.length !== registry.projects.length) {
       registry.projects = filtered;
 
-      await writeFile(filePath, JSON.stringify(registry, null, 2), 'utf-8');
+      await atomicWriteFile(filePath, JSON.stringify(registry, null, 2));
     }
   });
 }

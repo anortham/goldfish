@@ -4,11 +4,12 @@
  * (with legacy .memories/.last-consolidated fallback).
  */
 
-import { readFile, writeFile, mkdir, rename, unlink } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { join } from 'path';
 import YAML from 'yaml';
 import type { ConsolidationState, MemoryData, MemorySection } from './types';
-import { getConsolidationStatePath, getConsolidationStateDir, normalizeWorkspace } from './workspace';
+import { atomicWriteLocked } from './file-io';
+import { getConsolidationStatePath } from './workspace';
 
 const MEMORIES_DIR = '.memories';
 const MEMORY_YAML = 'memory.yaml';
@@ -87,10 +88,8 @@ export async function readMemory(workspace: string): Promise<string | null> {
  * Creates the directory if needed. Uses atomic write-then-rename.
  */
 export async function writeMemory(workspace: string, content: string): Promise<void> {
-  const dir = memoriesDir(workspace);
-  await mkdir(dir, { recursive: true });
-  const filePath = join(dir, MEMORY_YAML);
-  await atomicWrite(filePath, content);
+  const filePath = join(memoriesDir(workspace), MEMORY_YAML);
+  await atomicWriteLocked(filePath, content);
 }
 
 /**
@@ -134,10 +133,9 @@ export async function readConsolidationState(workspace: string): Promise<Consoli
  * Creates the directory if needed. Uses atomic write-then-rename.
  */
 export async function writeConsolidationState(workspace: string, state: ConsolidationState): Promise<void> {
-  await mkdir(getConsolidationStateDir(), { recursive: true });
   const filePath = getConsolidationStatePath(workspace);
   const content = JSON.stringify(state, null, 2);
-  await atomicWrite(filePath, content);
+  await atomicWriteLocked(filePath, content);
 }
 
 /**
@@ -283,25 +281,6 @@ export function getMemorySummary(content: string | null): string | null {
   }
 
   return summary.trim();
-}
-
-/**
- * Atomic write: write to a temp file then rename into place.
- * Prevents corruption on crashes.
- */
-async function atomicWrite(filePath: string, content: string): Promise<void> {
-  const tempPath = `${filePath}.tmp.${Date.now()}`;
-  await writeFile(tempPath, content, 'utf-8');
-  try {
-    await rename(tempPath, filePath);
-  } catch (error: any) {
-    if (error.code === 'ENOENT' && process.platform === 'win32') {
-      await writeFile(filePath, content, 'utf-8');
-      try { await unlink(tempPath); } catch {}
-    } else {
-      throw error;
-    }
-  }
 }
 
 function isEnoent(err: unknown): boolean {

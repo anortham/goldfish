@@ -161,4 +161,19 @@ describe('Git context', () => {
     expect(context.files).toBeDefined();
     expect(context.files!.length).toBe(MAX_GIT_FILES);
   });
+
+  it('includes staged files before the first commit when HEAD is unborn', async () => {
+    originalCwd = process.cwd();
+    repoDir = await mkdtemp(join(tmpdir(), 'git-unborn-head-'));
+    process.chdir(repoDir);
+
+    await Bun.spawn(['git', 'init'], { stdout: 'ignore', stderr: 'ignore' }).exited;
+
+    await writeFile('staged-before-first-commit.txt', 'hello');
+    await Bun.spawn(['git', 'add', 'staged-before-first-commit.txt']).exited;
+
+    const context = getGitContext();
+    expect(context.commit).toBeUndefined();
+    expect(context.files).toContain('staged-before-first-commit.txt');
+  });
 });

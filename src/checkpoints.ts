@@ -200,6 +200,34 @@ function normalizeTimestamp(raw: unknown): string {
   return new Date().toISOString();
 }
 
+function hasValidCalendarDate(value: string, parsed: Date): boolean {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$)/);
+  if (!match) {
+    return true;
+  }
+
+  const [, year, month, day] = match;
+  return (
+    parsed.getUTCFullYear() === parseInt(year!, 10) &&
+    parsed.getUTCMonth() + 1 === parseInt(month!, 10) &&
+    parsed.getUTCDate() === parseInt(day!, 10)
+  );
+}
+
+function parseRequiredCheckpointTimestamp(raw: unknown): string {
+  if (raw === undefined || raw === null || raw === '') {
+    throw new Error('Invalid checkpoint file: missing timestamp');
+  }
+
+  const timestamp = normalizeTimestamp(raw);
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime()) || !hasValidCalendarDate(timestamp, parsed)) {
+    throw new Error('Invalid checkpoint file: invalid timestamp');
+  }
+
+  return timestamp;
+}
+
 /**
  * Normalize a legacy git context object to the current GitContext shape.
  * Handles: files_changed (snake_case), filesChanged (camelCase), dirty field.
@@ -267,7 +295,11 @@ export function parseCheckpointFile(content: string): Checkpoint {
 
   const frontmatter = parseYaml(yamlContent) as Record<string, unknown>;
 
-  const timestamp = normalizeTimestamp(frontmatter.timestamp);
+  if (frontmatter.id === undefined || frontmatter.id === null || String(frontmatter.id).trim() === '') {
+    throw new Error('Invalid checkpoint file: missing id');
+  }
+
+  const timestamp = parseRequiredCheckpointTimestamp(frontmatter.timestamp);
   const rawGit = frontmatter.git as Record<string, unknown> | undefined;
   const git = rawGit ? normalizeGit(rawGit) : undefined;
 

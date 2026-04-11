@@ -126,6 +126,29 @@ export function parseSince(since: string): Date {
   return new Date(now.getTime() - parseInt(amount!) * milliseconds[unitValue]);
 }
 
+function hasValidCalendarDate(value: string, parsed: Date): boolean {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$)/);
+  if (!match) {
+    return true;
+  }
+
+  const [, year, month, day] = match;
+  return (
+    parsed.getUTCFullYear() === parseInt(year!, 10) &&
+    parsed.getUTCMonth() + 1 === parseInt(month!, 10) &&
+    parsed.getUTCDate() === parseInt(day!, 10)
+  );
+}
+
+function assertValidDateInput(value: string, label: 'from' | 'to'): void {
+  const candidate = value.includes('T') ? value : `${value}T00:00:00.000Z`;
+  const parsed = new Date(candidate);
+
+  if (Number.isNaN(parsed.getTime()) || !hasValidCalendarDate(value, parsed)) {
+    throw new Error(`Invalid ${label} format: ${value}`);
+  }
+}
+
 
 /**
  * Calculate date range from recall options
@@ -142,6 +165,8 @@ function getDateRange(options: RecallOptions): { from: string; to: string } {
 
   // 1. Explicit from/to range
   if (options.from && options.to) {
+    assertValidDateInput(options.from, 'from');
+    assertValidDateInput(options.to, 'to');
     return { from: options.from, to: options.to };
   }
 
@@ -156,11 +181,13 @@ function getDateRange(options: RecallOptions): { from: string; to: string } {
 
   // 3. Only 'from' provided (from that point to now)
   if (options.from) {
+    assertValidDateInput(options.from, 'from');
     return { from: options.from, to: now.toISOString() };
   }
 
   // 4. Only 'to' provided (7 days before to that point)
   if (options.to) {
+    assertValidDateInput(options.to, 'to');
     const toDate = new Date(options.to);
     const weekBefore = new Date(toDate.getTime() - 7 * 86400000);
     return { from: weekBefore.toISOString(), to: options.to };

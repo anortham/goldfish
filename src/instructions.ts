@@ -27,9 +27,9 @@ Space out checkpoints so each one captures a distinct piece of progress — one 
 ## Planning
 
 When ExitPlanMode is called, save the plan within 1 exchange:
-plan({ action: "save", title: "...", content: "...", activate: true })
+plan({ action: "save", title: "...", content: "..." })
 
-Save immediately — don't ask permission. Activate so it appears in future recall() responses.
+Save immediately, don't ask permission. Saved plans with status: active become active by default. Use activate: false to keep the current active plan unchanged, or activate: true when you want to be explicit. Completed or archived saves do not replace the current active plan.
 
 ## Recall
 

@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, standup
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth (and is git-committable), while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
-**Version 6.5.0** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 6.5.1** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -17,7 +17,7 @@ AI coding sessions have a memory problem:
 - Switching projects loses context
 - No way to answer "what was I working on yesterday?"
 
-Goldfish solves this with four MCP tools (checkpoint, recall, plan, consolidate), five skills, and three hooks that make memory automatic and transparent.
+Goldfish solves this with four MCP tools (checkpoint, recall, plan, consolidate), 6 skills, and three hooks that make memory automatic and transparent.
 
 ---
 
@@ -27,7 +27,7 @@ Goldfish solves this with four MCP tools (checkpoint, recall, plan, consolidate)
 
 ### Option 1: Install from GitHub (Recommended)
 
-This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/plan`, `/standup`, `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction, auto-save plans).
+This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/consolidate`, `/plan`, `/standup`, `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction, auto-save plans).
 
 ```bash
 # Add the Goldfish repository as a plugin marketplace
@@ -97,7 +97,7 @@ cd goldfish && bun install
 }
 ```
 
-**What you get with standalone MCP:** The 4 core tools (`checkpoint`, `recall`, `plan`, `consolidate`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/plan`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
+**What you get with standalone MCP:** The 4 core tools (`checkpoint`, `recall`, `plan`, `consolidate`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/consolidate`, `/plan`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
 
 For standalone MCP usage, you'll want to instruct your agent to:
 - Call `recall()` at session start
@@ -206,10 +206,11 @@ Skills are invocable via `/skill-name` in Claude Code. They provide guided workf
 | Skill | What It Does |
 |-------|-------------|
 | `/checkpoint` | Save a checkpoint with rich description and tags |
-| `/recall` | Restore context from recent checkpoints and active plan |
-| `/standup` | Generate a cross-project standup report |
+| `/consolidate` | Prepare memory consolidation work for the background subagent |
 | `/plan` | Create and manage persistent plans for multi-session work |
 | `/plan-status` | Assess progress against the active plan |
+| `/recall` | Restore context from recent checkpoints and active plan |
+| `/standup` | Generate a cross-project standup report |
 
 Skills live in the `skills/` directory, each with a `SKILL.md` file containing behavioral instructions.
 
@@ -361,6 +362,7 @@ goldfish/
     hooks.json            # Hook definitions (PreCompact, SessionStart, ExitPlanMode)
   skills/
     checkpoint/SKILL.md   # /checkpoint skill
+    consolidate/SKILL.md  # /consolidate skill
     recall/SKILL.md       # /recall skill
     standup/SKILL.md      # /standup skill
     plan/SKILL.md         # /plan skill

@@ -14,6 +14,14 @@ import type { Plan, PlanInput, PlanUpdate } from './types';
 import { getMemoriesDir, getPlansDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
 import { withLock } from './lock';
 
+const VALID_PLAN_STATUSES = new Set(['active', 'completed', 'archived']);
+
+function assertValidPlanStatus(status: unknown): asserts status is Plan['status'] {
+  if (typeof status !== 'string' || !VALID_PLAN_STATUSES.has(status)) {
+    throw new Error(`Invalid plan status '${status}'. Expected active, completed, or archived.`);
+  }
+}
+
 /**
  * Format a plan as markdown with YAML frontmatter
  */
@@ -112,13 +120,15 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
 
   const now = new Date().toISOString();
   const id = input.id || generatePlanId(input.title);
+  const status = input.status ?? 'active';
   validatePlanId(id);
+  assertValidPlanStatus(status);
 
   const plan: Plan = {
     id,
     title: input.title,
     content: input.content,
-    status: input.status || 'active',
+    status,
     created: now,
     updated: now,
     tags: input.tags || []
@@ -152,8 +162,8 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
     }
   });
 
-  // Auto-activate if requested (default: false)
-  if (input.activate) {
+  // Only active-status plans may become the workspace's active plan.
+  if (plan.status === 'active' && input.activate !== false) {
     await setActivePlan(projectPath, id);
   }
 
@@ -246,6 +256,9 @@ export async function setActivePlan(projectPath: string, planId: string): Promis
   if (!plan) {
     throw new Error(`Plan '${planId}' does not exist`);
   }
+  if (plan.status !== 'active') {
+    throw new Error(`Cannot activate plan '${planId}' with status '${plan.status}'`);
+  }
 
   const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
@@ -282,6 +295,9 @@ export async function updatePlan(
     const plan = await getPlan(projectPath, id);
     if (!plan) {
       throw new Error(`Plan '${id}' does not exist`);
+    }
+    if (updates.status !== undefined) {
+      assertValidPlanStatus(updates.status);
     }
 
     // Apply updates
