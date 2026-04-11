@@ -8,7 +8,8 @@
  */
 
 import { join } from 'path';
-import { readFile, writeFile, readdir, unlink, rename } from 'fs/promises';
+import { readFile, readdir, unlink } from 'fs/promises';
+import { atomicWriteFile } from './file-io';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Plan, PlanInput, PlanUpdate } from './types';
 import { getMemoriesDir, getPlansDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
@@ -147,19 +148,7 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
       if (error.code !== 'ENOENT') throw error;
     }
 
-    // Atomic write: temp file then rename
-    const tempPath = `${planPath}.tmp.${Date.now()}`;
-    await writeFile(tempPath, content, 'utf-8');
-    try {
-      await rename(tempPath, planPath);
-    } catch (error: any) {
-      if (error.code === 'ENOENT' && process.platform === 'win32') {
-        await writeFile(planPath, content, 'utf-8');
-        try { await unlink(tempPath); } catch {}
-      } else {
-        throw error;
-      }
-    }
+    await atomicWriteFile(planPath, content);
   });
 
   // Only active-status plans may become the workspace's active plan.
@@ -263,19 +252,7 @@ export async function setActivePlan(projectPath: string, planId: string): Promis
   const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
   await withLock(activePlanPath, async () => {
-    // Write atomically
-    const tempPath = `${activePlanPath}.tmp.${Date.now()}`;
-    await writeFile(tempPath, planId, 'utf-8');
-    try {
-      await rename(tempPath, activePlanPath);
-    } catch (error: any) {
-      if (error.code === 'ENOENT' && process.platform === 'win32') {
-        await writeFile(activePlanPath, planId, 'utf-8');
-        try { await unlink(tempPath); } catch {}
-      } else {
-        throw error;
-      }
-    }
+    await atomicWriteFile(activePlanPath, planId);
   });
 }
 
@@ -314,18 +291,7 @@ export async function updatePlan(
 
     // Write updated plan (atomic)
     const content = formatPlanFile(updatedPlan);
-    const tempPath = `${planPath}.tmp.${Date.now()}`;
-    await writeFile(tempPath, content, 'utf-8');
-    try {
-      await rename(tempPath, planPath);
-    } catch (error: any) {
-      if (error.code === 'ENOENT' && process.platform === 'win32') {
-        await writeFile(planPath, content, 'utf-8');
-        try { await unlink(tempPath); } catch {}
-      } else {
-        throw error;
-      }
-    }
+    await atomicWriteFile(planPath, content);
   });
 }
 

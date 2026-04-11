@@ -9,7 +9,7 @@ import { createHash } from 'crypto';
 import { stat } from 'fs/promises';
 import { join } from 'path';
 import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
-import { getCheckpointsForDateRange, getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS } from './checkpoints';
+import { getCheckpointsForDateRange, getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS, hasValidCalendarDate } from './checkpoints';
 import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } from './digests';
 import { readMemory, readConsolidationState, getMemorySummary, parseMemorySections } from './memory';
 import { getActivePlan } from './plans';
@@ -124,20 +124,6 @@ export function parseSince(since: string): Date {
 
   const unitValue = unit as 'm' | 'h' | 'd';
   return new Date(now.getTime() - parseInt(amount!) * milliseconds[unitValue]);
-}
-
-function hasValidCalendarDate(value: string, parsed: Date): boolean {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$)/);
-  if (!match) {
-    return true;
-  }
-
-  const [, year, month, day] = match;
-  return (
-    parsed.getUTCFullYear() === parseInt(year!, 10) &&
-    parsed.getUTCMonth() + 1 === parseInt(month!, 10) &&
-    parsed.getUTCDate() === parseInt(day!, 10)
-  );
 }
 
 function assertValidDateInput(value: string, label: 'from' | 'to'): void {

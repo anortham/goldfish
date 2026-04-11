@@ -80,7 +80,7 @@ export async function handlePlan(args: PlanArgs) {
         title,
         content,
         workspace,
-        activate,
+        activate: shouldActivate,
         ...(status && { status }),
         ...(planId && { id: planId }),
         ...(tags && { tags })

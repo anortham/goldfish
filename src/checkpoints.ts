@@ -200,7 +200,7 @@ function normalizeTimestamp(raw: unknown): string {
   return new Date().toISOString();
 }
 
-function hasValidCalendarDate(value: string, parsed: Date): boolean {
+export function hasValidCalendarDate(value: string, parsed: Date): boolean {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$)/);
   if (!match) {
     return true;
