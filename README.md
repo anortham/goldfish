@@ -4,7 +4,7 @@ Persistent developer memory for Claude Code. Checkpoints, recall, plans, standup
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth (and is git-committable), while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
-**Version 6.5.1** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 6.5.2** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
