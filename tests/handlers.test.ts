@@ -11,6 +11,9 @@ import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+let tempGoldfishHome: string;
+const originalGoldfishHome = process.env.GOLDFISH_HOME;
+
 /**
  * Test readable markdown responses for AI agent consumption
  *
@@ -27,12 +30,17 @@ const TEST_DEFAULT_RUNTIME = {
   embedTexts: async () => [[1, 0]]
 };
 
-beforeAll(() => {
+beforeAll(async () => {
+  tempGoldfishHome = await mkdtemp(join(tmpdir(), 'goldfish-home-handlers-'));
+  process.env.GOLDFISH_HOME = tempGoldfishHome;
   setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
 });
 
-afterAll(() => {
+afterAll(async () => {
   setDefaultSemanticRuntime(undefined);
+  if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
+  else process.env.GOLDFISH_HOME = originalGoldfishHome;
+  await rm(tempGoldfishHome, { recursive: true, force: true });
 });
 
 beforeEach(async () => {

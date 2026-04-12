@@ -15,6 +15,8 @@ import type { Checkpoint } from '../src/types';
 let TEST_DIR_A: string;
 let TEST_DIR_B: string;
 let restoreCheckpointDeps: (() => void) | undefined;
+let tempGoldfishHome: string;
+const originalGoldfishHome = process.env.GOLDFISH_HOME;
 
 const TEST_DEFAULT_RUNTIME = {
   isReady: () => false,
@@ -22,12 +24,17 @@ const TEST_DEFAULT_RUNTIME = {
   embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
 };
 
-beforeAll(() => {
+beforeAll(async () => {
+  tempGoldfishHome = await mkdtemp(join(tmpdir(), 'goldfish-home-recall-'));
+  process.env.GOLDFISH_HOME = tempGoldfishHome;
   setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
 });
 
-afterAll(() => {
+afterAll(async () => {
   setDefaultSemanticRuntime(undefined);
+  if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
+  else process.env.GOLDFISH_HOME = originalGoldfishHome;
+  await rm(tempGoldfishHome, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
