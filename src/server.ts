@@ -22,7 +22,7 @@ import type { CheckpointArgs, RecallArgs, PlanArgs, ConsolidateArgs } from './ty
 import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 import { getLogger } from './logger.js';
 
-export const SERVER_VERSION = '6.5.2';
+export const SERVER_VERSION = '6.5.3';
 
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan, handleConsolidate };

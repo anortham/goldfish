@@ -50,6 +50,28 @@ function warnSemanticFailure(context: string, error: unknown): void {
   console.warn(`[goldfish] ${context}: ${describeError(error)}`);
 }
 
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeRecallOptions(options: RecallOptions): RecallOptions {
+  const days = typeof options.days === 'number' && Number.isFinite(options.days) && options.days > 0
+    ? options.days
+    : undefined;
+
+  return {
+    ...options,
+    workspace: normalizeOptionalString(options.workspace),
+    since: normalizeOptionalString(options.since),
+    days,
+    from: normalizeOptionalString(options.from),
+    to: normalizeOptionalString(options.to),
+    search: normalizeOptionalString(options.search),
+    planId: normalizeOptionalString(options.planId)
+  };
+}
+
 function createQueryEmbeddingPromise(
   query: string,
   runtime: NonNullable<RecallOptions['_semanticRuntime']>
@@ -575,13 +597,14 @@ async function recallFromWorkspace(
  * Retrieves checkpoints from specified workspace(s) with optional search
  */
 export async function recall(options: RecallOptions = {}): Promise<RecallResult> {
-  const workspace = options.workspace || 'current';
+  const normalizedOptions = normalizeRecallOptions(options);
+  const workspace = normalizedOptions.workspace || 'current';
 
   // Single workspace recall
   if (workspace !== 'all') {
     const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
-    const { checkpoints, activePlan, memory, matchedMemorySections, consolidation } = await recallFromWorkspace(projectPath, options);
+    const { checkpoints, activePlan, memory, matchedMemorySections, consolidation } = await recallFromWorkspace(projectPath, normalizedOptions);
 
     return {
       checkpoints,
@@ -593,20 +616,20 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   }
 
   // Cross-workspace recall via registry
-  const projects = await listRegisteredProjects(options._registryDir);
+  const projects = await listRegisteredProjects(normalizedOptions._registryDir);
 
   // Apply global limit (default: 5, clamp negative to 0)
-  const globalLimit = Math.max(0, options.limit !== undefined ? options.limit : 5);
+  const globalLimit = Math.max(0, normalizedOptions.limit !== undefined ? normalizedOptions.limit : 5);
 
   // Short-circuit: limit=0 means plan-only, skip all project I/O
   if (globalLimit === 0) {
     return { checkpoints: [], workspaces: [] };
   }
 
-  if (options.search) {
-    const semanticRuntime = options._semanticRuntime ?? getDefaultSemanticRuntime();
+  if (normalizedOptions.search) {
+    const semanticRuntime = normalizedOptions._semanticRuntime ?? getDefaultSemanticRuntime();
     const wasWarm = semanticRuntime.isReady();
-    const queryEmbeddingPromise = createQueryEmbeddingPromise(options.search, semanticRuntime);
+    const queryEmbeddingPromise = createQueryEmbeddingPromise(normalizedOptions.search, semanticRuntime);
 
     if (wasWarm) {
       await runSearchSemanticMaintenance(
@@ -617,7 +640,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
 
     const projectResults = await Promise.all(
       projects.map(async (project) => {
-        const checkpoints = await loadWorkspaceCheckpoints(project.path, options);
+        const checkpoints = await loadWorkspaceCheckpoints(project.path, normalizedOptions);
         await backfillMissingSemanticRecords(project.path, checkpoints);
         const readyRecords = await loadReadySemanticRecords(project.path, checkpoints, semanticRuntime);
         const projectMemory = await readMemory(project.path);
@@ -678,7 +701,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     }
 
     const ranked = await rankSearchCheckpoints(
-      options.search,
+      normalizedOptions.search,
       rankedCandidates,
       digests,
       readyRecords,
@@ -705,7 +728,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
           return presentCheckpoint({
             ...original.checkpoint,
             workspace: original.workspace
-          }, options);
+          }, normalizedOptions);
         }),
       workspaces: workspaceSummaries
     };
@@ -716,11 +739,11 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   // Load without limit so checkpointCount in summaries reflects total matches.
   const projectResults = await Promise.all(
     projects.map(async (project) => {
-      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, { ...options, limit: undefined });
+      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, { ...normalizedOptions, limit: undefined });
       allCheckpoints.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       const presented = allCheckpoints
         .slice(0, globalLimit)
-        .map(checkpoint => presentCheckpoint(checkpoint, options));
+        .map(checkpoint => presentCheckpoint(checkpoint, normalizedOptions));
       const projectMemory = await readMemory(project.path);
       return { project, checkpoints: presented, totalCount: allCheckpoints.length, projectMemory };
     })

@@ -1,12 +1,12 @@
 import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { recall, parseSince, MEMORY_SECTION_PREFIX } from '../src/recall';
-import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
+import { formatCheckpoint, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
 import { writeMemory, writeConsolidationState } from '../src/memory';
 import { savePlan } from '../src/plans';
 import { loadSemanticState, listPendingSemanticRecords, markSemanticRecordReady } from '../src/semantic-cache';
 import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
-import { ensureMemoriesDir, getSemanticCacheDir } from '../src/workspace';
+import { ensureMemoriesDir, getMemoriesDir, getSemanticCacheDir } from '../src/workspace';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -92,19 +92,80 @@ describe('Basic recall functionality', () => {
     expect(result.checkpoints.length).toBeGreaterThan(0);
   });
 
-  it('treats days: 0 as an explicit date filter', async () => {
-    await saveCheckpoint({
-      description: 'Checkpoint outside zero-day window',
-      workspace: TEST_DIR_A
-    });
-
+  it('treats days: 0 as omitted and falls back to last-N mode', async () => {
     const result = await recall({
       workspace: TEST_DIR_A,
       days: 0,
       limit: 10
     });
 
-    expect(result.checkpoints).toEqual([]);
+    expect(result.checkpoints).toHaveLength(3);
+    expect(result.checkpoints[0]!.description).toBe('Refactored database queries');
+  });
+
+  it('treats negative days as omitted', async () => {
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      days: -1,
+      limit: 10
+    });
+
+    expect(result.checkpoints).toHaveLength(3);
+    expect(result.checkpoints[0]!.description).toBe('Refactored database queries');
+  });
+
+  it('treats blank date strings as omitted', async () => {
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      since: '   ',
+      from: '   ',
+      to: '   ',
+      limit: 10
+    });
+
+    expect(result.checkpoints).toHaveLength(3);
+    expect(result.checkpoints[0]!.description).toBe('Refactored database queries');
+  });
+
+  it('treats blank search as omitted', async () => {
+    await writeMemory(TEST_DIR_A, 'decisions:\n  - "search placeholder should not suppress memory"\n');
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      search: '   ',
+      limit: 10
+    });
+
+    expect(result.checkpoints).toHaveLength(3);
+    expect(result.memory).toContain('search placeholder should not suppress memory');
+  });
+
+  it('keeps since precedence when days is also provided', async () => {
+    const oldTimestamp = new Date(Date.now() - 10 * 86400000).toISOString();
+    const oldDate = oldTimestamp.split('T')[0]!;
+    const oldCheckpoint: Checkpoint = {
+      id: 'checkpoint_old_since_precedence',
+      timestamp: oldTimestamp,
+      description: 'Old checkpoint outside since window'
+    };
+    const oldDateDir = join(getMemoriesDir(TEST_DIR_A), oldDate);
+
+    await mkdir(oldDateDir, { recursive: true });
+    await writeFile(
+      join(oldDateDir, '120000_old_since_precedence.md'),
+      formatCheckpoint(oldCheckpoint),
+      'utf-8'
+    );
+
+    const result = await recall({
+      workspace: TEST_DIR_A,
+      since: '2d',
+      days: 30,
+      limit: 10
+    });
+
+    expect(result.checkpoints).toHaveLength(3);
+    expect(result.checkpoints.some(c => c.description === 'Old checkpoint outside since window')).toBe(false);
   });
 
   it('uses cwd when workspace not specified', async () => {
