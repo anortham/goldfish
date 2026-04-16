@@ -1,8 +1,7 @@
 import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
-import { recall, parseSince, MEMORY_SECTION_PREFIX } from '../src/recall';
+import { recall, parseSince } from '../src/recall';
 import { formatCheckpoint, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
-import { writeMemory, writeConsolidationState } from '../src/memory';
 import { savePlan } from '../src/plans';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
@@ -122,8 +121,8 @@ describe('Basic recall functionality', () => {
   });
 
   it('treats blank search as omitted', async () => {
-    await writeMemory(TEST_DIR_A, 'decisions:\n  - "search placeholder should not suppress memory"\n');
-
+    // A whitespace-only search should behave like no search at all: every
+    // checkpoint comes back, ordered by timestamp.
     const result = await recall({
       workspace: TEST_DIR_A,
       search: '   ',
@@ -131,7 +130,6 @@ describe('Basic recall functionality', () => {
     });
 
     expect(result.checkpoints).toHaveLength(3);
-    expect(result.memory).toContain('search placeholder should not suppress memory');
   });
 
   it('keeps since precedence when days is also provided', async () => {
@@ -877,7 +875,7 @@ describe('recall with limit parameter', () => {
     expect(result.activeBrief).toBeDefined();
   });
 
-  it('limit: 0 single-workspace returns brief and consolidation but skips checkpoints', async () => {
+  it('limit: 0 single-workspace returns brief but skips checkpoints', async () => {
     await savePlan({
       id: 'plan-shortcircuit',
       title: 'Short Circuit Plan',
@@ -885,12 +883,6 @@ describe('recall with limit parameter', () => {
       workspace: TEST_DIR_A,
       activate: true
     });
-
-    await writeConsolidationState(TEST_DIR_A, {
-      timestamp: new Date('2020-01-01T00:00:00Z').toISOString(),
-      checkpointsConsolidated: 3
-    });
-    await writeMemory(TEST_DIR_A, '## Memory\nSome content');
 
     const result = await recall({
       workspace: TEST_DIR_A,
@@ -900,8 +892,8 @@ describe('recall with limit parameter', () => {
     expect(result.checkpoints).toHaveLength(0);
     expect(result.activeBrief).toBeDefined();
     expect(result.activeBrief!.id).toBe('plan-shortcircuit');
-    // Consolidation state should still be returned
-    expect(result.consolidation).toBeDefined();
+    // Phase 2: consolidation state is no longer surfaced from recall.
+    expect((result as unknown as Record<string, unknown>).consolidation).toBeUndefined();
   });
 });
 
@@ -1277,453 +1269,73 @@ Work without a plan`;
   });
 });
 
-describe('Memory and consolidation in recall', () => {
-  const MEMORY_CONTENT = `## Key Decisions
-- Chose LanceDB for vector store
-- MPS acceleration for Apple Silicon
+describe('Phase 2 consolidation removal', () => {
+  // The consolidation pipeline (memory.yaml synthesis, ~/.goldfish/consolidation-state/
+  // cursors, the consolidate MCP tool) is being deleted. Recall results must
+  // no longer carry any consolidation-derived fields.
 
-## Architecture
-Sparks is the MCP server entry point.
-`;
-
-  it('default recall (no search) includes MEMORY.md content', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-    await writeConsolidationState(TEST_DIR_A, {
-      timestamp: new Date().toISOString(),
-      checkpointsConsolidated: 5
-    });
-
-    await saveCheckpoint({
-      description: 'Some work happened',
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({ workspace: TEST_DIR_A });
-
-    expect(result.memory).toBe(MEMORY_CONTENT);
-  });
-
-  it('search recall excludes MEMORY.md by default', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-
-    await saveCheckpoint({
-      description: 'Fixed a LanceDB indexing bug',
-      tags: ['bug-fix'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'LanceDB'
-    });
-
-    expect(result.memory).toBeUndefined();
-  });
-
-  it('search recall includes MEMORY.md when includeMemory: true', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-
-    await saveCheckpoint({
-      description: 'Fixed a LanceDB indexing bug',
-      tags: ['bug-fix'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'LanceDB',
-      includeMemory: true
-    });
-
-    expect(result.memory).toBe(MEMORY_CONTENT);
-  });
-
-  it('default recall excludes MEMORY.md when includeMemory: false', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-
+  it('does not surface a consolidated memory blob', async () => {
     await saveCheckpoint({
       description: 'Some work',
       workspace: TEST_DIR_A
     });
 
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      includeMemory: false
-    });
+    const result = await recall({ workspace: TEST_DIR_A });
 
-    expect(result.memory).toBeUndefined();
+    // Even when callers pass deprecated options, recall must not read
+    // memory.yaml/MEMORY.md and must not populate result.memory.
+    const resultRecord = result as unknown as Record<string, unknown>;
+    expect(resultRecord.memory).toBeUndefined();
   });
 
-  it('returns undefined memory when no MEMORY.md exists', async () => {
+  it('does not return a consolidation flag', async () => {
     await saveCheckpoint({
-      description: 'Work without memory file',
+      description: 'Some work',
       workspace: TEST_DIR_A
     });
 
     const result = await recall({ workspace: TEST_DIR_A });
 
-    expect(result.memory).toBeUndefined();
+    const resultRecord = result as unknown as Record<string, unknown>;
+    expect(resultRecord.consolidation).toBeUndefined();
   });
 
-  it('detects stale consolidation (old timestamp + new checkpoints)', async () => {
-    // Set consolidation timestamp in the past
-    const pastDate = new Date('2020-01-01T00:00:00Z');
-    await writeConsolidationState(TEST_DIR_A, {
-      timestamp: pastDate.toISOString(),
-      checkpointsConsolidated: 3
-    });
-
-    // Create checkpoints after that timestamp
-    await saveCheckpoint({
-      description: 'New work after consolidation',
-      workspace: TEST_DIR_A
-    });
-
-    await saveCheckpoint({
-      description: 'More new work',
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({ workspace: TEST_DIR_A });
-
-    expect(result.consolidation).toBeDefined();
-    expect(result.consolidation!.needed).toBe(true);
-    expect(result.consolidation!.staleCheckpoints).toBe(2);
-    expect(result.consolidation!.lastConsolidated).toBe(pastDate.toISOString());
-  });
-
-  it('reports consolidation not needed when up to date', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-
-    // Set consolidation timestamp in the future
-    const futureDate = new Date('2099-01-01T00:00:00Z');
-    await writeConsolidationState(TEST_DIR_A, {
-      timestamp: futureDate.toISOString(),
-      checkpointsConsolidated: 10
-    });
-
-    await saveCheckpoint({
-      description: 'A checkpoint before the future consolidation',
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({ workspace: TEST_DIR_A });
-
-    expect(result.consolidation).toBeDefined();
-    expect(result.consolidation!.needed).toBe(false);
-    expect(result.consolidation!.staleCheckpoints).toBe(0);
-  });
-
-  it('returns consolidation field when MEMORY.md exists but no consolidation state', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-
-    await saveCheckpoint({
-      description: 'Work with memory but no consolidation state',
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({ workspace: TEST_DIR_A });
-
-    expect(result.consolidation).toBeDefined();
-    expect(result.consolidation!.needed).toBe(true);
-    expect(result.consolidation!.staleCheckpoints).toBe(1);
-    expect(result.consolidation!.lastConsolidated).toBeNull();
-  });
-
-  it('excludes checkpoints older than 30 days from stale count', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-
-    // Consolidation happened 60 days ago
-    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
-    await writeConsolidationState(TEST_DIR_A, {
-      timestamp: sixtyDaysAgo.toISOString(),
-      checkpointsConsolidated: 5
-    });
-
-    // Write a checkpoint from 45 days ago (older than 30-day limit, should NOT count)
-    const fortyFiveDaysAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
-    const oldDate = fortyFiveDaysAgo.toISOString().split('T')[0]!;
-    const oldDateDir = join(TEST_DIR_A, '.memories', oldDate);
-    await mkdir(oldDateDir, { recursive: true });
-    await writeFile(join(oldDateDir, '120000_oldcheck.md'), [
-      '---',
-      'id: checkpoint_old',
-      `timestamp: "${fortyFiveDaysAgo.toISOString()}"`,
-      '---',
-      '',
-      'Old checkpoint beyond 30-day window'
-    ].join('\n'), 'utf-8');
-
-    // Write a checkpoint from 5 days ago (within 30-day limit, SHOULD count)
-    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-    const recentDate = fiveDaysAgo.toISOString().split('T')[0]!;
-    const recentDateDir = join(TEST_DIR_A, '.memories', recentDate);
-    await mkdir(recentDateDir, { recursive: true });
-    await writeFile(join(recentDateDir, '120000_newcheck.md'), [
-      '---',
-      'id: checkpoint_new',
-      `timestamp: "${fiveDaysAgo.toISOString()}"`,
-      '---',
-      '',
-      'Recent checkpoint within 30-day window'
-    ].join('\n'), 'utf-8');
-
-    const result = await recall({ workspace: TEST_DIR_A });
-
-    expect(result.consolidation).toBeDefined();
-    expect(result.consolidation!.needed).toBe(true);
-    // Only the recent checkpoint should count as stale, not the old one
-    expect(result.consolidation!.staleCheckpoints).toBe(1);
-  });
-
-  it('reports consolidation not needed when all unconsolidated checkpoints are older than 30 days', async () => {
-    await writeMemory(TEST_DIR_A, MEMORY_CONTENT);
-
-    // Consolidation happened 60 days ago
-    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
-    await writeConsolidationState(TEST_DIR_A, {
-      timestamp: sixtyDaysAgo.toISOString(),
-      checkpointsConsolidated: 5
-    });
-
-    // Only old checkpoints exist (beyond 30-day window)
-    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
-    const oldDate = fortyDaysAgo.toISOString().split('T')[0]!;
-    const oldDateDir = join(TEST_DIR_A, '.memories', oldDate);
-    await mkdir(oldDateDir, { recursive: true });
-    await writeFile(join(oldDateDir, '120000_ancient.md'), [
-      '---',
-      'id: checkpoint_ancient',
-      `timestamp: "${fortyDaysAgo.toISOString()}"`,
-      '---',
-      '',
-      'Ancient checkpoint beyond 30-day window'
-    ].join('\n'), 'utf-8');
-
-    const result = await recall({ workspace: TEST_DIR_A });
-
-    expect(result.consolidation).toBeDefined();
-    expect(result.consolidation!.needed).toBe(false);
-    expect(result.consolidation!.staleCheckpoints).toBe(0);
-  });
-
-  it('returns no consolidation field when neither MEMORY.md nor consolidation state exist', async () => {
-    await saveCheckpoint({
-      description: 'Bare workspace with no memory or consolidation',
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({ workspace: TEST_DIR_A });
-
-    expect(result.memory).toBeUndefined();
-    expect(result.consolidation).toBeUndefined();
-  });
-});
-
-describe('Memory section search integration', () => {
-  it('search finds content in MEMORY.md sections', async () => {
-    await writeMemory(TEST_DIR_A, [
-      '## Deployment Architecture',
-      '',
-      'We use Kubernetes with Helm charts for all production deployments.',
-      '',
-      '## Testing Strategy',
-      '',
-      'Integration tests run in CI against ephemeral postgres databases.',
-    ].join('\n'));
-
-    await saveCheckpoint({
-      description: 'Added retry logic to payment processor',
-      tags: ['payments'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'Kubernetes',
-      limit: 5
-    });
-
-    expect(result.matchedMemorySections).toBeDefined();
-    expect(result.matchedMemorySections!.length).toBeGreaterThanOrEqual(1);
-    const matched = result.matchedMemorySections!.find(s => s.header === 'Deployment Architecture');
-    expect(matched).toBeDefined();
-    expect(matched!.content).toContain('Kubernetes');
-  });
-
-  it('memory sections rank alongside checkpoints', async () => {
-    await writeMemory(TEST_DIR_A, [
-      '## Authentication Flow',
-      '',
-      'OAuth2 with PKCE for all client applications. Tokens expire after 1 hour.',
-    ].join('\n'));
-
+  it('does not return matchedMemorySections from search', async () => {
     await saveCheckpoint({
       description: 'Implemented OAuth2 PKCE flow for mobile clients',
-      tags: ['auth', 'oauth'],
+      tags: ['auth'],
       workspace: TEST_DIR_A
     });
 
     const result = await recall({
       workspace: TEST_DIR_A,
-      search: 'OAuth2 PKCE',
+      search: 'OAuth2',
       limit: 5
     });
 
-    // Both the memory section and the checkpoint should appear
-    expect(result.matchedMemorySections).toBeDefined();
-    expect(result.matchedMemorySections!.length).toBeGreaterThanOrEqual(1);
-    expect(result.checkpoints.length).toBeGreaterThanOrEqual(1);
-
-    const memoryMatch = result.matchedMemorySections!.find(s => s.header === 'Authentication Flow');
-    expect(memoryMatch).toBeDefined();
-
-    const checkpointMatch = result.checkpoints.find(c => c.description.includes('OAuth2'));
-    expect(checkpointMatch).toBeDefined();
+    const resultRecord = result as unknown as Record<string, unknown>;
+    expect(resultRecord.matchedMemorySections).toBeUndefined();
   });
 
-  it('no memory sections returned when no MEMORY.md exists', async () => {
-    await saveCheckpoint({
-      description: 'Some work without any memory file',
-      tags: ['misc'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'anything',
-      limit: 5
-    });
-
-    expect(result.matchedMemorySections).toBeUndefined();
+  it('no longer exports MEMORY_SECTION_PREFIX from src/recall', async () => {
+    // Phase 2.6 strips the memory-section synthesis from recall.ts. The
+    // module-level constant disappears with it.
+    const recallModule = await import('../src/recall');
+    expect((recallModule as Record<string, unknown>).MEMORY_SECTION_PREFIX).toBeUndefined();
   });
 
-  it('memory sections use oldest checkpoint timestamp when no consolidation state exists', async () => {
-    await writeMemory(TEST_DIR_A, [
-      '## System Architecture',
-      '',
-      'Microservices communicating via gRPC.',
-    ].join('\n'));
-
-    // Create checkpoints with known timestamps
-    const oldCheckpoint = await saveCheckpoint({
-      description: 'Old architecture decision about gRPC',
-      tags: ['architecture'],
-      workspace: TEST_DIR_A
-    });
-
-    const newCheckpoint = await saveCheckpoint({
-      description: 'New gRPC performance optimization',
-      tags: ['performance'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'gRPC',
-      limit: 10
-    });
-
-    // Memory section should appear in results but not dominate newer checkpoints
-    // via a synthetic "now" timestamp
-    expect(result.matchedMemorySections).toBeDefined();
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    // The newest actual checkpoint should rank above the memory section
-    // (memory section shouldn't get artificial recency boost from Date.now())
-    expect(result.checkpoints[0]!.id).toBe(newCheckpoint.id);
-  });
-
-  it('memory section IDs use the expected prefix', async () => {
-    // Verify the prefix constant is exported and usable
-    expect(MEMORY_SECTION_PREFIX).toBe('memory_section_');
-  });
-
-  it('memory sections do not appear in the checkpoints array', async () => {
-    await writeMemory(TEST_DIR_A, [
-      '## Unique Xylophone Config',
-      '',
-      'The xylophone service uses a custom configuration format.',
-    ].join('\n'));
-
-    await saveCheckpoint({
-      description: 'Unrelated checkpoint about database migrations',
-      tags: ['db'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'xylophone configuration',
-      limit: 5
-    });
-
-    // No checkpoint should have a memory_section_ prefix in its ID
-    for (const cp of result.checkpoints) {
-      expect(cp.id.startsWith(MEMORY_SECTION_PREFIX)).toBe(false);
+  it('no longer exports writeMemory or writeConsolidationState from src/memory', async () => {
+    // Phase 2.5 deletes the consolidation-state I/O helpers. The module
+    // itself may also disappear — either outcome satisfies the contract.
+    let memoryModule: Record<string, unknown> | null = null;
+    try {
+      memoryModule = (await import('../src/memory')) as Record<string, unknown>;
+    } catch {
+      memoryModule = null;
+    }
+    if (memoryModule !== null) {
+      expect(memoryModule.writeMemory).toBeUndefined();
+      expect(memoryModule.writeConsolidationState).toBeUndefined();
     }
   });
-
-  it('search finds content in YAML memory sections', async () => {
-    await writeMemory(TEST_DIR_A, [
-      'decisions:',
-      '  - "2026-03-20 | Chose Kubernetes for container orchestration"',
-      '  - "2026-03-21 | Selected Helm charts for deployment management"',
-      '',
-      'gotchas:',
-      '  - "2026-03-22 | Integration tests need ephemeral postgres databases"',
-    ].join('\n'));
-
-    await saveCheckpoint({
-      description: 'Added retry logic to payment processor',
-      tags: ['payments'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'Kubernetes',
-      limit: 5
-    });
-
-    expect(result.matchedMemorySections).toBeDefined();
-    expect(result.matchedMemorySections!.length).toBeGreaterThanOrEqual(1);
-    const matched = result.matchedMemorySections!.find(s => s.slug === 'decisions');
-    expect(matched).toBeDefined();
-    expect(matched!.content).toContain('Kubernetes');
-  });
-
-  it('YAML memory sections search uses slug for identification', async () => {
-    await writeMemory(TEST_DIR_A, [
-      'decisions:',
-      '  - "2026-03-20 | Chose PostgreSQL over MySQL for ACID compliance"',
-      '',
-      'gotchas:',
-      '  - "2026-03-21 | Postgres connection pool must be sized for concurrency"',
-      '',
-      'open_questions:',
-      '  - "2026-03-22 | Should we shard the database before launch?"',
-    ].join('\n'));
-
-    await saveCheckpoint({
-      description: 'Set up database connection pooling',
-      tags: ['database'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'Postgres',
-      limit: 5
-    });
-
-    expect(result.matchedMemorySections).toBeDefined();
-    for (const section of result.matchedMemorySections!) {
-      expect(['decisions', 'open_questions', 'deferred_work', 'gotchas']).toContain(section.slug);
-    }
-
-    const decisionMatch = result.matchedMemorySections!.find(s => s.slug === 'decisions');
-    const gotchaMatch = result.matchedMemorySections!.find(s => s.slug === 'gotchas');
-    expect(decisionMatch ?? gotchaMatch).toBeDefined();
-  });
-
 });

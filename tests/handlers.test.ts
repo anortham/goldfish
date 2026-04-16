@@ -1154,3 +1154,25 @@ describe('Token efficiency', () => {
     expect(text).not.toContain('":');
   });
 });
+
+describe('Phase 2 consolidation removal', () => {
+  it('does not export handleConsolidate from handlers/index', async () => {
+    const handlersIndex = await import('../src/handlers/index');
+
+    // Phase 2.4 deletes the consolidate handler. The barrel re-export must
+    // also drop the symbol so callers can't accidentally re-add it.
+    expect((handlersIndex as Record<string, unknown>).handleConsolidate).toBeUndefined();
+  });
+
+  it('does not ship a handlers/consolidate module', async () => {
+    // Phase 2.4 deletes src/handlers/consolidate.ts entirely. Importing the
+    // path should fail; if it succeeds we still consider this a regression.
+    let imported: unknown = null;
+    try {
+      imported = await import('../src/handlers/consolidate');
+    } catch {
+      imported = null;
+    }
+    expect(imported).toBeNull();
+  });
+});

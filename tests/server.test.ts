@@ -316,8 +316,11 @@ describe('Tool descriptions', () => {
 
     const tools = getTools();
 
-    expect(tools).toHaveLength(5);
-    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'recall', 'brief', 'plan', 'consolidate']);
+    // Phase 2 deletes the `consolidate` tool. Phase 3 deletes the `plan`
+    // compatibility alias. Pin the v7.0 final shape here so both phases see
+    // the failure they need.
+    expect(tools).toHaveLength(3);
+    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'recall', 'brief']);
 
     // Each tool should have description and inputSchema
     for (const tool of tools) {
@@ -344,10 +347,11 @@ describe('Tool descriptions', () => {
     expect(recallTool!.description).toContain('user invokes /recall');
 
     const briefTool = tools.find(t => t.name === 'brief');
-    const planTool = tools.find(t => t.name === 'plan');
     expect(briefTool!.description).toContain('strategic context');
-    expect(planTool!.description).toContain('Compatibility alias');
-    expect(planTool!.description).toContain('Use `brief` for new work');
+
+    // Phase 2/3: `plan` and `consolidate` are removed from the tool list.
+    expect(tools.find(t => t.name === 'plan')).toBeUndefined();
+    expect(tools.find(t => t.name === 'consolidate')).toBeUndefined();
   });
 
   it('uses consistent workspace parameter description across tools', async () => {
@@ -362,17 +366,6 @@ describe('Tool descriptions', () => {
         expect(props.workspace.description).not.toContain('Workspace name');
       }
     }
-  });
-
-  it('plan tool includes tags parameter in schema', async () => {
-    const { getTools } = await import('../src/server');
-
-    const tools = getTools();
-    const planTool = tools.find(t => t.name === 'plan');
-    const props = planTool!.inputSchema.properties as Record<string, any>;
-
-    expect(props.tags).toBeDefined();
-    expect(props.tags.type).toBe('array');
   });
 
   it('checkpoint tool exposes structured memory schema fields', async () => {
@@ -396,20 +389,6 @@ describe('Tool descriptions', () => {
     expect(props.confidence.maximum).toBe(5);
   });
 
-  it('plan tool documents updates schema with properties', async () => {
-    const { getTools } = await import('../src/server');
-
-    const tools = getTools();
-    const planTool = tools.find(t => t.name === 'plan');
-    const props = planTool!.inputSchema.properties as Record<string, any>;
-
-    expect(props.updates.properties).toBeDefined();
-    expect(props.updates.properties.title).toBeDefined();
-    expect(props.updates.properties.content).toBeDefined();
-    expect(props.updates.properties.status).toBeDefined();
-    expect(props.updates.properties.tags).toBeDefined();
-  });
-
   it('publishes brief as the canonical forward-looking tool', async () => {
     const { getTools } = await import('../src/server');
 
@@ -420,15 +399,6 @@ describe('Tool descriptions', () => {
     expect(briefTool!.description).toContain('brief');
   });
 
-  it('plan tool includes activate guidance in description', async () => {
-    const { getTools } = await import('../src/server');
-
-    const tools = getTools();
-    const planTool = tools.find(t => t.name === 'plan');
-
-    expect(planTool!.description).toContain('Saving an active plan makes it active by default');
-    expect(planTool!.description).toContain('activate: false preserves the opt-out');
-  });
 });
 
 describe('Server instructions', () => {
@@ -522,13 +492,15 @@ describe('Server exports', () => {
   });
 
   it('exports all handler functions', async () => {
-    const { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } = await import('../src/server');
+    const serverModule = await import('../src/server');
 
-    expect(typeof handleCheckpoint).toBe('function');
-    expect(typeof handleRecall).toBe('function');
-    expect(typeof handleBrief).toBe('function');
-    expect(typeof handlePlan).toBe('function');
-    expect(typeof handleConsolidate).toBe('function');
+    expect(typeof serverModule.handleCheckpoint).toBe('function');
+    expect(typeof serverModule.handleRecall).toBe('function');
+    expect(typeof serverModule.handleBrief).toBe('function');
+
+    // Phase 2/3: plan and consolidate handlers are removed from the server.
+    expect((serverModule as Record<string, unknown>).handlePlan).toBeUndefined();
+    expect((serverModule as Record<string, unknown>).handleConsolidate).toBeUndefined();
   });
 
   it('exports getTools and getInstructions', async () => {
