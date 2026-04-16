@@ -87,18 +87,6 @@ export interface RecallOptions {
   planId?: string;        // Legacy alias for briefId during migration
   includeMemory?: boolean;  // Include memory.yaml in response. Defaults: true (no search), false (with search). Override explicitly.
   _registryDir?: string;  // Internal: override registry dir for test isolation
-  _semanticRuntime?: SemanticRuntime; // Internal: semantic runtime override for test isolation
-}
-
-export interface SemanticRuntime {
-  isReady(): boolean
-  getModelInfo?(): SemanticModelInfo | undefined
-  embedTexts(texts: string[], signal?: AbortSignal): Promise<number[][]>
-}
-
-export interface SemanticModelInfo {
-  id: string
-  version: string
 }
 
 export interface RecallResult {
@@ -210,7 +198,6 @@ export interface RecallArgs {
   includeMemory?: boolean;
   include_memory?: boolean;
   _registryDir?: string;
-  _semanticRuntime?: SemanticRuntime;
 }
 
 export interface PlanArgs {

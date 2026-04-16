@@ -4,9 +4,8 @@ import { formatCheckpoint, saveCheckpoint, __setCheckpointDependenciesForTests }
 import { buildCompactSearchDescription } from '../src/digests';
 import { writeMemory, writeConsolidationState } from '../src/memory';
 import { savePlan } from '../src/plans';
-import { loadSemanticState, listPendingSemanticRecords, markSemanticRecordReady } from '../src/semantic-cache';
 import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
-import { ensureMemoriesDir, getMemoriesDir, getSemanticCacheDir } from '../src/workspace';
+import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -18,6 +17,9 @@ let restoreCheckpointDeps: (() => void) | undefined;
 let tempGoldfishHome: string;
 const originalGoldfishHome = process.env.GOLDFISH_HOME;
 
+// The default semantic runtime is suppressed during tests so that the
+// semantic-cache queueing in checkpoints.ts remains a no-op. The hybrid
+// ranking layer was removed in v7; recall now uses Orama BM25 directly.
 const TEST_DEFAULT_RUNTIME = {
   isReady: () => false,
   getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
@@ -236,16 +238,6 @@ describe('Search functionality', () => {
     expect(result.checkpoints[0]!.tags).toContain('database');
   });
 
-  it('performs fuzzy matching', async () => {
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'authenticaton'  // Typo
-    });
-
-    // Should still find authentication-related checkpoints
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-  });
-
   it('returns empty array when no matches found', async () => {
     const result = await recall({
       workspace: TEST_DIR_A,
@@ -270,230 +262,39 @@ describe('Search functionality', () => {
     ).toBe(true);
   });
 
-  it('uses semantic ranking to rescue wording mismatches when runtime is ready', async () => {
-    const exactLexical = await saveCheckpoint({
-      description: 'Fixed login timeout bug in authentication flow',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    const semanticRescue = await saveCheckpoint({
-      description: 'Resolved idle session expiry for returning users',
+  it('applies briefId filtering before search ranking', async () => {
+    // A checkpoint that matches the query lexically but is NOT associated with
+    // the active brief. It must be filtered out before ranking runs.
+    await saveCheckpoint({
+      description: 'Resolved idle session expiry unrelated to the active brief',
       tags: ['session'],
       workspace: TEST_DIR_A
     });
 
-    await saveCheckpoint({
-      description: 'Refactored database migration scripts',
-      tags: ['database'],
-      workspace: TEST_DIR_A
-    });
-
-    await markSemanticRecordReady(TEST_DIR_A, exactLexical.id, [0.7, 0.3], { id: 'test-model', version: '1' });
-    await markSemanticRecordReady(TEST_DIR_A, semanticRescue.id, [1, 0], { id: 'test-model', version: '1' });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'login timeout issue',
-      limit: 3,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async (texts: string[]) => {
-          return texts.map(text =>
-            text.includes('login timeout') ? [1, 0] : [0, 1]
-          );
-        }
-      }
-    });
-
-    const rankedIds = result.checkpoints.map(c => c.id);
-    expect(rankedIds.slice(0, 2)).toEqual([
-      exactLexical.id,
-      semanticRescue.id
-    ]);
-  });
-
-  it('keeps exact lexical matches ahead of vaguer semantic matches', async () => {
-    const exactLexical = await saveCheckpoint({
-      description: 'Implemented semantic recall ranking for authentication timeout search',
-      tags: ['semantic-recall'],
-      workspace: TEST_DIR_B
-    });
-
-    const vagueSemantic = await saveCheckpoint({
-      description: 'Improved memory retrieval for related support incidents',
-      tags: ['incidents'],
-      workspace: TEST_DIR_B
-    });
-
-    await markSemanticRecordReady(TEST_DIR_B, exactLexical.id, [0.95, 0.05], { id: 'test-model', version: '1' });
-    await markSemanticRecordReady(TEST_DIR_B, vagueSemantic.id, [1, 0], { id: 'test-model', version: '1' });
-
-    const result = await recall({
-      workspace: TEST_DIR_B,
-      search: 'authentication timeout semantic recall ranking',
-      limit: 2,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    });
-
-    expect(result.checkpoints.map(c => c.id)).toEqual([
-      exactLexical.id,
-      vagueSemantic.id
-    ]);
-  });
-
-  it('applies briefId filtering before search ranking', async () => {
-    const exactOtherPlan = await saveCheckpoint({
-      description: 'Semantic recall ranking overhaul for authentication timeout search',
-      tags: ['search'],
-      workspace: TEST_DIR_A
-    });
-
     await savePlan({
-      id: 'semantic-plan',
-      title: 'Semantic Recall',
+      id: 'session-plan',
+      title: 'Session Hardening',
       content: 'Plan content',
       workspace: TEST_DIR_A,
       activate: true
     });
 
+    // A checkpoint associated with the active brief that also matches the query.
     const matchingPlan = await saveCheckpoint({
-      description: 'Resolved idle session expiry for returning users',
+      description: 'Resolved idle session expiry while on the session plan',
       tags: ['session'],
       workspace: TEST_DIR_A
     });
 
-    await markSemanticRecordReady(TEST_DIR_A, exactOtherPlan.id, [0.1, 0.9], { id: 'test-model', version: '1' });
-    await markSemanticRecordReady(TEST_DIR_A, matchingPlan.id, [1, 0], { id: 'test-model', version: '1' });
-
     const result = await recall({
       workspace: TEST_DIR_A,
-      search: 'login timeout issue',
-      briefId: 'semantic-plan',
-      limit: 5,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
+      search: 'session expiry',
+      briefId: 'session-plan',
+      limit: 5
     });
 
     expect(result.checkpoints).toHaveLength(1);
     expect(result.checkpoints[0]!.id).toBe(matchingPlan.id);
-  });
-
-  it('processes a bounded number of pending semantic records per warm search call', async () => {
-    for (let i = 1; i <= 8; i++) {
-      await saveCheckpoint({
-        description: `Authentication search record ${i}`,
-        tags: ['auth'],
-        workspace: TEST_DIR_A
-      });
-    }
-
-    const beforeState = await loadSemanticState(TEST_DIR_A);
-    const beforePending = await listPendingSemanticRecords(TEST_DIR_A);
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    });
-
-    const pending = await listPendingSemanticRecords(TEST_DIR_A);
-    const state = await loadSemanticState(TEST_DIR_A);
-    const readyDelta = state.records.filter(record => record.status === 'ready').length
-      - beforeState.records.filter(record => record.status === 'ready').length;
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(readyDelta).toBe(5);
-    expect(pending.length).toBe(beforePending.length - 5);
-  });
-
-  it('processes the same bounded number of pending records in the cold-runtime post-ranking path', async () => {
-    let warm = false;
-    const embedCalls: string[][] = [];
-    const runtime = {
-      isReady: () => warm,
-      getModelInfo: () => ({ id: 'test-model', version: '1' }),
-      embedTexts: async (texts: string[]) => {
-        embedCalls.push([...texts]);
-        warm = true;
-        return texts.map(() => [1, 0]);
-      }
-    }
-
-    // Create 12 checkpoints to produce 12 pending records
-    for (let i = 0; i < 12; i++) {
-      await saveCheckpoint({
-        description: `Checkpoint ${i} for bounded maintenance`,
-        tags: ['bounded-test'],
-        workspace: TEST_DIR_A
-      })
-    }
-
-    const beforeState = await loadSemanticState(TEST_DIR_A)
-    const beforePending = await listPendingSemanticRecords(TEST_DIR_A)
-
-    // First recall with search triggers backfill + bounded maintenance
-    await recall({
-      search: 'bounded maintenance',
-      workspace: TEST_DIR_A,
-      _semanticRuntime: runtime
-    })
-
-    const state = await loadSemanticState(TEST_DIR_A)
-    const pending = await listPendingSemanticRecords(TEST_DIR_A)
-    const readyDelta = state.records.filter(record => record.status === 'ready').length
-      - beforeState.records.filter(record => record.status === 'ready').length
-    expect(readyDelta).toBe(5)
-    expect(pending.length).toBe(beforePending.length - 5)
-    expect(embedCalls[0]).toEqual(['bounded maintenance'])
-    expect(embedCalls[1]!.length).toBeGreaterThan(1)
-  });
-
-  it('respects the maintenance time budget and still returns search results', async () => {
-    const beforePending = await listPendingSemanticRecords(TEST_DIR_A)
-    let maintenanceAttempted = false
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => true,
-        getModelInfo: () => ({ id: 'test-model', version: '1' }),
-        embedTexts: async (texts: string[], signal?: AbortSignal) => {
-          if (texts.length === 1 && texts[0] === 'authentication') {
-            return [[1, 0]]
-          }
-
-          maintenanceAttempted = true
-          await new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(resolve, 200)
-            signal?.addEventListener('abort', () => {
-              clearTimeout(timer)
-              reject(new Error('maintenance embedding aborted'))
-            }, { once: true })
-          })
-
-          return texts.map(() => [1, 0])
-        }
-      }
-    })
-
-    const afterPending = await listPendingSemanticRecords(TEST_DIR_A)
-
-    expect(beforePending.length).toBeGreaterThan(0)
-    expect(maintenanceAttempted).toBe(true)
-    expect(result.checkpoints.length).toBeGreaterThan(0)
-    expect(afterPending).toHaveLength(beforePending.length)
   });
 
   it('searches using decision fields the same way as the lexical helper', async () => {
@@ -520,444 +321,17 @@ describe('Search functionality', () => {
     expect(result.checkpoints[0]!.description).toContain('order processing');
   });
 
-  it('does not run semantic maintenance for plain recall without search', async () => {
-    await saveCheckpoint({
-      description: 'Checkpoint that should stay pending',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    const before = await listPendingSemanticRecords(TEST_DIR_A);
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    });
-
-    const after = await listPendingSemanticRecords(TEST_DIR_A);
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(after).toHaveLength(before.length);
-  });
-
-  it('warms a cold runtime on first search and lets the next warm search rank newly indexed semantic matches immediately', async () => {
-    const lexicalMatch = await saveCheckpoint({
-      description: 'Fixed login timeout bug in authentication flow',
-      tags: ['auth'],
-      workspace: TEST_DIR_B
-    });
-
-    const semanticRescue = await saveCheckpoint({
-      description: 'Resolved idle session expiry for returning users',
-      tags: ['session'],
-      workspace: TEST_DIR_B
-    });
-
-    const initialSemanticState = await loadSemanticState(TEST_DIR_B);
-    const lexicalDigest = initialSemanticState.records.find(record => record.checkpointId === lexicalMatch.id)!.digest;
-    const semanticDigest = initialSemanticState.records.find(record => record.checkpointId === semanticRescue.id)!.digest;
-
-    let warm = false;
-    const embedCalls: string[][] = [];
-
-    const runtime = {
-      isReady: () => warm,
-      getModelInfo: () => ({ id: 'test-model', version: '1' }),
-      embedTexts: async (texts: string[]) => {
-        embedCalls.push([...texts]);
-        warm = true;
-
-        return texts.map(text => {
-          if (text === 'login timeout issue') return [1, 0];
-          if (text.includes('Resolved idle session expiry')) return [1, 0];
-          return [0, 1];
-        });
-      }
-    };
-
-    const firstResult = await recall({
-      workspace: TEST_DIR_B,
-      search: 'login timeout issue',
-      limit: 10,
-      _semanticRuntime: runtime
-    });
-
-    const afterFirstSearch = await loadSemanticState(TEST_DIR_B);
-
-    const secondResult = await recall({
-      workspace: TEST_DIR_B,
-      search: 'login timeout issue',
-      limit: 10,
-      _semanticRuntime: runtime
-    });
-
-    const afterSecondSearch = await loadSemanticState(TEST_DIR_B);
-
-    expect(firstResult.checkpoints.map(c => c.id)).toEqual([lexicalMatch.id]);
-    expect(secondResult.checkpoints.map(c => c.id).slice(0, 2)).toEqual([
-      semanticRescue.id,
-      lexicalMatch.id
-    ]);
-    expect(afterFirstSearch.records.filter(record => record.status === 'ready')).toHaveLength(2);
-    expect(afterSecondSearch.records.filter(record => record.status === 'ready')).toHaveLength(2);
-    // First call: query embedding for search. Second call: batched maintenance for both digests. Third call: query embedding for second search.
-    expect(embedCalls).toHaveLength(3);
-    expect(embedCalls[0]).toEqual(['login timeout issue']);
-    expect(embedCalls[1]).toContain(lexicalDigest);
-    expect(embedCalls[1]).toContain(semanticDigest);
-    expect(embedCalls[2]).toEqual(['login timeout issue']);
-  });
-
-  it('invalidates incompatible ready records before search ranking', async () => {
-    const incompatible = await saveCheckpoint({
-      description: 'Resolved idle session expiry for returning users',
-      tags: ['session'],
-      workspace: TEST_DIR_A
-    });
-
-    await markSemanticRecordReady(TEST_DIR_A, incompatible.id, [1, 0], {
-      id: 'old-model',
-      version: '1'
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'login timeout issue',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => false,
-        getModelInfo: () => ({ id: 'new-model', version: '2' }),
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    });
-
-    const pending = await listPendingSemanticRecords(TEST_DIR_A);
-    const state = await loadSemanticState(TEST_DIR_A);
-
-    expect(result.checkpoints.map(c => c.id)).not.toContain(incompatible.id);
-    expect(pending.map(record => record.checkpointId)).toContain(incompatible.id);
-    expect(state.records.find(record => record.checkpointId === incompatible.id)?.staleReason).toBe('model-version');
-  });
-
-  it('returns search results when pending maintenance cannot produce embeddings', async () => {
-    await saveCheckpoint({
-      description: 'Authentication maintenance fallback',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    let embedCalls = 0;
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async () => {
-          embedCalls += 1;
-          return embedCalls === 1 ? [[1, 0]] : [];
-        }
-      }
-    });
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(result.checkpoints[0]!.description.toLowerCase()).toContain('auth');
-  });
-
-  it('falls back to lexical results when semantic embedding fails during ranking', async () => {
-    await saveCheckpoint({
-      description: 'Authentication fallback ranking result',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async () => {
-          throw new Error('semantic ranking failed');
-        }
-      }
-    });
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(result.checkpoints[0]!.description.toLowerCase()).toContain('auth');
-  });
-
-  it('query embedding timeout defers until ranking phase - regression test for early timeout bug', async () => {
-    const semanticRescue = await saveCheckpoint({
-      description: 'Resolved idle session expiry for returning users',
-      tags: ['session'],
-      workspace: TEST_DIR_A
-    });
-
-    await markSemanticRecordReady(TEST_DIR_A, semanticRescue.id, [1, 0], { id: 'test-model', version: '1' });
-
-    let maintenanceStarted = false;
-    let queryStarted = false;
-    let releaseMaintenance: (() => void) | undefined;
-    let releaseQuery: (() => void) | undefined;
-
-    const runtime = {
-      isReady: () => true,
-      getModelInfo: () => ({ id: 'test-model', version: '1' }),
-      embedTexts: async (texts: string[], signal?: AbortSignal) => {
-        if (texts.length === 1 && texts[0] === 'login timeout issue') {
-          queryStarted = true;
-
-          await new Promise<void>((resolve, reject) => {
-            releaseQuery = resolve;
-            signal?.addEventListener('abort', () => {
-              reject(new Error('query embedding aborted'));
-            }, { once: true });
-          });
-
-          return [[1, 0]];
-        }
-
-        maintenanceStarted = true;
-        await new Promise<void>(resolve => {
-          releaseMaintenance = resolve;
-        });
-        return texts.map(() => [1, 0]);
-      }
-    };
-
-    const recallPromise = recall({
-      workspace: TEST_DIR_A,
-      search: 'login timeout issue',
-      limit: 5,
-      _semanticRuntime: runtime
-    });
-
-    for (let attempt = 0; attempt < 50 && !maintenanceStarted; attempt++) {
-      await Bun.sleep(10);
-    }
-
-    expect(maintenanceStarted).toBe(true);
-    expect(queryStarted).toBe(false);
-
-    releaseMaintenance?.();
-
-    for (let attempt = 0; attempt < 50 && !queryStarted; attempt++) {
-      await Bun.sleep(10);
-    }
-
-    expect(queryStarted).toBe(true);
-    releaseQuery?.();
-
-    const result = await Promise.race([
-      recallPromise,
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('recall timed out')), 5000);
-      })
-    ]);
-
-    expect(result.checkpoints.map(c => c.id).slice(0, 2)).toContain(semanticRescue.id);
-  });
-
-  it('falls back to lexical results when single-workspace query embedding hangs', async () => {
-    const checkpoint = await saveCheckpoint({
-      description: 'Authentication timeout lexical fallback result',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    await markSemanticRecordReady(TEST_DIR_A, checkpoint.id, [1, 0], { id: 'test-model', version: '1' });
-
-    let aborted = false;
-
-    const result = await Promise.race([
-      recall({
-        workspace: TEST_DIR_A,
-        search: 'authentication timeout',
-        limit: 10,
-        _semanticRuntime: {
-          isReady: () => true,
-          getModelInfo: () => ({ id: 'test-model', version: '1' }),
-          embedTexts: async (texts: string[], signal?: AbortSignal) => {
-            if (texts.length === 1 && texts[0] === 'authentication timeout') {
-              await new Promise<never>((_, reject) => {
-                signal?.addEventListener('abort', () => {
-                  aborted = true;
-                  reject(new Error('query embedding aborted'));
-                }, { once: true });
-              });
-
-              return [];
-            }
-
-            return texts.map(() => [1, 0]);
-          }
-        }
-      }),
-      new Promise<never>((_, reject) => {
-        // Relaxed watchdog: only prevents indefinite hangs, not testing timing precision
-        setTimeout(() => reject(new Error('recall timed out')), 5000);
-      })
-    ]);
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(result.checkpoints[0]!.description.toLowerCase()).toContain('auth');
-    expect(aborted).toBe(true);
-  });
-
-  it('returns search results when semantic maintenance throws', async () => {
-    await saveCheckpoint({
-      description: 'Authentication maintenance error handling',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    let embedCalls = 0;
-
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async () => {
-          embedCalls += 1;
-          if (embedCalls > 1) {
-            throw new Error('semantic maintenance failed');
-          }
-
-          return [[1, 0]];
-        }
-      }
-    });
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(result.checkpoints[0]!.description.toLowerCase()).toContain('auth');
-  });
-
-  it('warns when semantic maintenance throws', async () => {
-    await saveCheckpoint({
-      description: 'Authentication maintenance warning path',
-      tags: ['auth'],
-      workspace: TEST_DIR_A
-    });
-
-    const originalWarn = console.warn;
-    const warnings: string[] = [];
-    console.warn = (...args: unknown[]) => {
-      warnings.push(args.map(arg => String(arg)).join(' '));
-    };
-
-    try {
-      await recall({
-        workspace: TEST_DIR_A,
-        search: 'authentication',
-        limit: 10,
-        _semanticRuntime: {
-          isReady: () => true,
-          getModelInfo: () => ({ id: 'test-model', version: '1' }),
-          embedTexts: async () => {
-            throw new Error('semantic maintenance warning');
-          }
-        }
-      });
-    } finally {
-      console.warn = originalWarn;
-    }
-
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]!).toContain('semantic maintenance failed');
-    expect(warnings[0]!).toContain('semantic maintenance warning');
-  });
-
-  it('backfills checkpoints missing from semantic cache during search', async () => {
-    // beforeEach already saved 3 checkpoints to TEST_DIR_A
-    // Record how many semantic records exist from those
-    const stateBefore = await loadSemanticState(TEST_DIR_A);
-    const countBefore = Object.keys(stateBefore.manifest.checkpoints).length;
-    expect(countBefore).toBeGreaterThan(0);
-
-    // Wipe semantic cache to simulate pre-semantic checkpoints
-    const cacheDir = getSemanticCacheDir(TEST_DIR_A);
-    await rm(cacheDir, { recursive: true, force: true });
-
-    const stateAfterWipe = await loadSemanticState(TEST_DIR_A);
-    expect(Object.keys(stateAfterWipe.manifest.checkpoints)).toHaveLength(0);
-
-    // Run recall with search — should backfill missing checkpoints
-    await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => false,
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    });
-
-    // Verify backfill restored pending records for all checkpoints
-    const stateAfterRecall = await loadSemanticState(TEST_DIR_A);
-    expect(Object.keys(stateAfterRecall.manifest.checkpoints).length).toBe(countBefore);
-
-    const pending = await listPendingSemanticRecords(TEST_DIR_A);
-    expect(pending).toHaveLength(countBefore);
-  });
-
-  it('backfill skips checkpoints already in semantic cache', async () => {
-    // beforeEach saved 3 checkpoints — all have semantic records already
-    const stateBefore = await loadSemanticState(TEST_DIR_A);
-    const recordsBefore = stateBefore.records.length;
-
-    // Run recall with search — should not duplicate the existing records
-    await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => false,
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    });
-
-    const stateAfter = await loadSemanticState(TEST_DIR_A);
-    expect(stateAfter.records).toHaveLength(recordsBefore);
-  });
-
   it('returns empty results when no checkpoints match the search query', async () => {
-    // Mark all pending records from beforeEach with orthogonal embeddings [1, 0, 0]
-    // so they are semantically unrelated to any query embedding [0, 0, 1]
-    const stateBefore = await loadSemanticState(TEST_DIR_A)
-    for (const record of stateBefore.records) {
-      if (record.status === 'pending') {
-        await markSemanticRecordReady(TEST_DIR_A, record.checkpointId, [1, 0, 0], {
-          id: 'test-model',
-          version: '1'
-        })
-      }
-    }
-
-    // Runtime that returns [0, 0, 1] — orthogonal to all stored embeddings
-    // isReady returns false so maintenance doesn't re-embed using this runtime
-    const runtime = {
-      isReady: () => false,
-      getModelInfo: () => ({ id: 'test-model', version: '1' }),
-      embedTexts: async (texts: string[]) => texts.map(() => [0, 0, 1])
-    }
-
+    // beforeEach saved checkpoints about authentication, OAuth2, and database
+    // schema. None of them mention kubernetes deployment, so Orama (with both
+    // its AND and OR fallback passes) returns nothing.
     const result = await recall({
       search: 'kubernetes deployment configuration',
       workspace: TEST_DIR_A,
-      _semanticRuntime: runtime,
       limit: 5
-    })
+    });
 
-    // Should return 0 results — nothing relevant (all embeddings orthogonal, no lexical match)
-    expect(result.checkpoints).toHaveLength(0)
+    expect(result.checkpoints).toHaveLength(0);
   });
 });
 
@@ -1038,126 +412,30 @@ describe('Cross-workspace functionality', () => {
   });
 
   it('preserves global relevance ordering for cross-workspace search', async () => {
-    const exactLexical = await saveCheckpoint({
-      description: 'Authentication timeout semantic recall ranking rollout',
-      tags: ['search'],
-      workspace: projectA
-    });
-
-    const vagueSemantic = await saveCheckpoint({
-      description: 'Resolved idle session expiry for returning users',
-      tags: ['session'],
-      workspace: projectB
-    });
-
-    await markSemanticRecordReady(projectA, exactLexical.id, [0.95, 0.05], { id: 'test-model', version: '1' });
-    await markSemanticRecordReady(projectB, vagueSemantic.id, [1, 0], { id: 'test-model', version: '1' });
-
-    const result = await recall({
-      workspace: 'all',
-      days: 1,
-      search: 'authentication timeout semantic recall ranking',
-      limit: 2,
-      _registryDir: registryDir,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    });
-
-    expect(result.checkpoints.map(c => c.id)).toEqual([
-      exactLexical.id,
-      vagueSemantic.id
-    ]);
-  });
-
-  it('falls back to lexical results when cross-workspace query embedding hangs', async () => {
-    const lexicalMatch = await saveCheckpoint({
-      description: 'Authentication timeout cross workspace lexical fallback result',
+    // A strong lexical match in project A and a near-irrelevant checkpoint in
+    // project B. Cross-workspace search should rank the strong match first
+    // regardless of which workspace it lives in.
+    const strongMatch = await saveCheckpoint({
+      description: 'Authentication timeout regression in the login flow',
       tags: ['auth'],
       workspace: projectA
     });
 
-    await markSemanticRecordReady(projectA, lexicalMatch.id, [1, 0], { id: 'test-model', version: '1' });
+    await saveCheckpoint({
+      description: 'Tweaked README badge layout',
+      tags: ['docs'],
+      workspace: projectB
+    });
 
-    let aborted = false;
-
-    const result = await Promise.race([
-      recall({
-        workspace: 'all',
-        days: 1,
-        search: 'authentication timeout',
-        limit: 10,
-        _registryDir: registryDir,
-        _semanticRuntime: {
-          isReady: () => true,
-          getModelInfo: () => ({ id: 'test-model', version: '1' }),
-          embedTexts: async (texts: string[], signal?: AbortSignal) => {
-            if (texts.length === 1 && texts[0] === 'authentication timeout') {
-              await new Promise<never>((_, reject) => {
-                signal?.addEventListener('abort', () => {
-                  aborted = true;
-                  reject(new Error('query embedding aborted'));
-                }, { once: true });
-              });
-
-              return [];
-            }
-
-            return texts.map(() => [1, 0]);
-          }
-        }
-      }),
-      new Promise<never>((_, reject) => {
-        // Relaxed watchdog: only prevents indefinite hangs, not testing timing precision
-        setTimeout(() => reject(new Error('recall timed out')), 5000);
-      })
-    ]);
-
-    expect(result.checkpoints.map(c => c.id)).toContain(lexicalMatch.id);
-    expect(aborted).toBe(true);
-  });
-
-  it('applies the maintenance item budget across all workspaces, not per workspace', async () => {
-    for (let i = 0; i < 4; i++) {
-      await saveCheckpoint({
-        description: `Project A bounded maintenance ${i}`,
-        tags: ['bounded-maintenance'],
-        workspace: projectA
-      })
-
-      await saveCheckpoint({
-        description: `Project B bounded maintenance ${i}`,
-        tags: ['bounded-maintenance'],
-        workspace: projectB
-      })
-    }
-
-    const beforeA = await loadSemanticState(projectA)
-    const beforeB = await loadSemanticState(projectB)
-
-    await recall({
+    const result = await recall({
       workspace: 'all',
       days: 1,
-      search: 'bounded maintenance',
-      limit: 10,
-      _registryDir: registryDir,
-      _semanticRuntime: {
-        isReady: () => true,
-        getModelInfo: () => ({ id: 'test-model', version: '1' }),
-        embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-      }
-    })
+      search: 'authentication timeout',
+      limit: 2,
+      _registryDir: registryDir
+    });
 
-    const afterA = await loadSemanticState(projectA)
-    const afterB = await loadSemanticState(projectB)
-
-    const readyDeltaA = afterA.records.filter(record => record.status === 'ready').length
-      - beforeA.records.filter(record => record.status === 'ready').length
-    const readyDeltaB = afterB.records.filter(record => record.status === 'ready').length
-      - beforeB.records.filter(record => record.status === 'ready').length
-
-    expect(readyDeltaA + readyDeltaB).toBe(5)
+    expect(result.checkpoints[0]!.id).toBe(strongMatch.id);
   });
 
   it('checkpointCount reflects total matching checkpoints, not the limited return set', async () => {
@@ -2422,35 +1700,6 @@ describe('Memory section search integration', () => {
     expect(matched!.content).toContain('Kubernetes');
   });
 
-  it('returns lexical results when semantic cache is corrupted', async () => {
-    // Create a checkpoint
-    await saveCheckpoint({
-      description: 'Authentication timeout handling fix',
-      tags: ['auth', 'bug-fix'],
-      workspace: TEST_DIR_A
-    });
-
-    // Corrupt the semantic cache
-    const cacheDir = getSemanticCacheDir(TEST_DIR_A);
-    await mkdir(cacheDir, { recursive: true });
-    await writeFile(join(cacheDir, 'manifest.json'), '{ invalid json content }');
-    await writeFile(join(cacheDir, 'records.jsonl'), '{ also invalid }\n');
-
-    // Recall should still work using lexical search
-    const result = await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication timeout',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => true,
-        embedTexts: async () => [[1, 0]]
-      }
-    });
-
-    expect(result.checkpoints.length).toBeGreaterThan(0);
-    expect(result.checkpoints[0]!.description.toLowerCase()).toContain('auth');
-  });
-
   it('YAML memory sections search uses slug for identification', async () => {
     await writeMemory(TEST_DIR_A, [
       'decisions:',
@@ -2485,40 +1734,4 @@ describe('Memory section search integration', () => {
     expect(decisionMatch ?? gotchaMatch).toBeDefined();
   });
 
-  it('backfills correctly after semantic cache corruption', async () => {
-    // Create checkpoints
-    for (let i = 0; i < 3; i++) {
-      await saveCheckpoint({
-        description: `Authentication work ${i}`,
-        tags: ['auth'],
-        workspace: TEST_DIR_A
-      });
-    }
-
-    const expectedCheckpointCount = 3
-
-    // Corrupt the semantic cache
-    const cacheDir = getSemanticCacheDir(TEST_DIR_A);
-    await mkdir(cacheDir, { recursive: true });
-    await writeFile(join(cacheDir, 'manifest.json'), '{ invalid json }');
-    await writeFile(join(cacheDir, 'records.jsonl'), '{ invalid jsonl }\n');
-
-    // Run recall with search - should recover and backfill
-    await recall({
-      workspace: TEST_DIR_A,
-      search: 'authentication',
-      limit: 10,
-      _semanticRuntime: {
-        isReady: () => false,
-        embedTexts: async () => [[1, 0]]
-      }
-    });
-
-    // Semantic cache should now be valid and have pending records
-    const state = await loadSemanticState(TEST_DIR_A);
-    expect(Object.keys(state.manifest.checkpoints)).toHaveLength(expectedCheckpointCount);
-
-    const pending = await listPendingSemanticRecords(TEST_DIR_A);
-    expect(pending).toHaveLength(expectedCheckpointCount);
-  });
 });

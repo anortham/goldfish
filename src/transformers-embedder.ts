@@ -1,6 +1,16 @@
-import type { SemanticModelInfo, SemanticRuntime } from './types'
+import type { SemanticModelInfo } from './semantic-cache'
 import { getModelCacheDir } from './workspace'
 import { createRequire } from 'module'
+
+// Local type — the legacy public type was removed from src/types.ts in v7.
+// This file is scheduled for deletion in Task 1.4; this internal copy keeps
+// it compiling in the meantime so test setup that imports
+// `setDefaultSemanticRuntime` continues to work.
+export interface SemanticRuntime {
+  isReady(): boolean
+  getModelInfo?(): SemanticModelInfo | undefined
+  embedTexts(texts: string[], signal?: AbortSignal): Promise<number[][]>
+}
 
 const DEFAULT_MODEL_ID = 'Xenova/all-MiniLM-L6-v2'
 

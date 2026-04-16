@@ -1,8 +1,15 @@
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tryAcquireLock, withLock } from './lock'
-import type { SemanticModelInfo } from './types'
 import { getGoldfishHomeDir, getSemanticCacheDir, resolveWorkspace } from './workspace'
+
+// Local type — the legacy public type was removed from src/types.ts in v7.
+// This file (and src/transformers-embedder.ts) is scheduled for deletion in
+// Task 1.4; this internal copy keeps it compiling in the meantime.
+export interface SemanticModelInfo {
+  id: string
+  version: string
+}
 
 export interface SemanticRecord {
   checkpointId: string
