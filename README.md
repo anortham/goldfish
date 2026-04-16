@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 6.7.0** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 7.0.0** -- Subtract sprint: Orama BM25 search, brief-first storage, and the /handoff skill. See CHANGELOG.md for breaking changes.
 
 ---
 
