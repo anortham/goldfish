@@ -19,7 +19,7 @@ AI coding sessions have a memory problem:
 - Switching projects loses context
 - No way to answer "what was I working on yesterday?"
 
-Goldfish solves this with four MCP tools (checkpoint, recall, brief, consolidate), 8 skills including compatibility aliases, repo-local skill discovery for compatible clients, and client hooks where the harness supports them.
+Goldfish solves this with four MCP tools (checkpoint, recall, brief, consolidate), 5 skills, repo-local skill discovery for compatible clients, and client hooks where the harness supports them.
 
 ---
 
@@ -37,7 +37,7 @@ bun install
 
 ### Claude Code
 
-Claude Code is the fullest adapter today. You get MCP tools, slash-command skills (`/checkpoint`, `/recall`, `/consolidate`, `/brief`, `/brief-status`, `/standup`, plus compatibility aliases `/plan` and `/plan-status`), and the SessionStart/PreCompact hooks.
+Claude Code is the fullest adapter today. You get MCP tools, slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/standup`), and the SessionStart/PreCompact hooks.
 
 Install from the marketplace:
 
@@ -249,15 +249,13 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 7 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
+Goldfish ships 5 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
 | `/brief` | Create and manage durable strategic briefs |
 | `/brief-status` | Assess progress against the active brief |
 | `/checkpoint` | Save a checkpoint with rich description and tags |
-| `/plan` | Compatibility alias for `/brief` |
-| `/plan-status` | Compatibility alias for `/brief-status` |
 | `/recall` | Restore context from recent checkpoints and the active brief |
 | `/standup` | Generate a cross-project standup report |
 
