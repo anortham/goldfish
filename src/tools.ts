@@ -136,7 +136,6 @@ Key parameters (all optional):
 - full: Return full descriptions + metadata including files and git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - briefId: Filter checkpoints to those created under a specific brief
-- planId: Legacy alias for briefId during migration
 
 Examples:
 - recall() - last 5 checkpoints regardless of age
@@ -184,10 +183,6 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
           briefId: {
             type: 'string',
             description: 'Filter to checkpoints created while a specific brief was active. Use to see progress on a particular direction.'
-          },
-          planId: {
-            type: 'string',
-            description: 'Legacy alias for briefId during migration.'
           }
         }
       }
@@ -228,15 +223,11 @@ Returns: Brief details, status updates, or list of briefs.`,
           },
           id: {
             type: 'string',
-            description: 'Brief ID (auto-generated from title if not provided). Aliases: briefId, planId'
+            description: 'Brief ID (auto-generated from title if not provided). Alias: briefId'
           },
           briefId: {
             type: 'string',
             description: 'Alias for id. Prefer briefId for new callers.'
-          },
-          planId: {
-            type: 'string',
-            description: 'Legacy alias for id. Supported for compatibility.'
           },
           title: {
             type: 'string',

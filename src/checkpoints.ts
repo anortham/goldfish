@@ -14,7 +14,7 @@ import { getGitContext } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
-import { getActiveBrief } from './plans';
+import { getActiveBrief } from './briefs';
 import { getLogger } from './logger';
 
 interface CheckpointDependencies {
@@ -409,12 +409,14 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
     checkpoint.summary = summary;
   }
 
-  // Attach active brief ID if one exists
+  // Attach active brief ID if one exists. Only briefId is set on new
+  // checkpoints — the legacy `planId` field on the Checkpoint type is
+  // populated by parseCheckpointFile when it reads older frontmatter, so
+  // readers can still match by planId, but new writes do not emit it.
   try {
     const activeBrief = await getActiveBrief(projectPath);
     if (activeBrief) {
       checkpoint.briefId = activeBrief.id;
-      checkpoint.planId = activeBrief.id;
     }
   } catch {
     // Silently ignore — brief affinity is best-effort

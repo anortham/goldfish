@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
-import { savePlan } from '../src/plans';
+import { saveBrief } from '../src/briefs';
 import { ensureMemoriesDir } from '../src/workspace';
 import { rm, mkdtemp, mkdir, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -143,7 +143,7 @@ describe('Tool handlers', () => {
     it('includes active brief when present', async () => {
       const { handleRecall } = await import('../src/server');
 
-      await savePlan({
+      await saveBrief({
         id: 'test-plan',
         title: 'Test Plan',
         content: 'Plan content',

@@ -155,7 +155,7 @@ export async function handleRecall(args: RecallArgs) {
 
   // Build readable markdown response
   const count = result.checkpoints.length;
-  const activeBrief = result.activeBrief ?? result.activePlan;
+  const activeBrief = result.activeBrief;
   const briefText = activeBrief ? ' + active brief' : '';
   const fish = getFishEmoji();
 

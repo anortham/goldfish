@@ -2,7 +2,7 @@ import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach 
 import { recall, parseSince } from '../src/recall';
 import { formatCheckpoint, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
-import { savePlan } from '../src/plans';
+import { saveBrief } from '../src/briefs';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -261,7 +261,7 @@ describe('Search functionality', () => {
       workspace: TEST_DIR_A
     });
 
-    await savePlan({
+    await saveBrief({
       id: 'session-plan',
       title: 'Session Hardening',
       content: 'Plan content',
@@ -464,7 +464,7 @@ describe('Active brief integration', () => {
   });
 
   it('includes active brief in recall results', async () => {
-    await savePlan({
+    await saveBrief({
       id: 'auth-plan',
       title: 'Authentication System',
       content: '## Goals\n- JWT\n- OAuth2',
@@ -486,7 +486,7 @@ describe('Active brief integration', () => {
   });
 
   it('includes active brief even with search filter', async () => {
-    await savePlan({
+    await saveBrief({
       id: 'test-plan',
       title: 'Test Plan',
       content: 'Content',
@@ -858,7 +858,7 @@ describe('recall with limit parameter', () => {
   });
 
   it('allows limit: 0 to return no checkpoints (brief only)', async () => {
-    await savePlan({
+    await saveBrief({
       id: 'test-plan',
       title: 'Test Plan',
       content: 'Plan content',
@@ -876,7 +876,7 @@ describe('recall with limit parameter', () => {
   });
 
   it('limit: 0 single-workspace returns brief but skips checkpoints', async () => {
-    await savePlan({
+    await saveBrief({
       id: 'plan-shortcircuit',
       title: 'Short Circuit Plan',
       content: 'Plan content',

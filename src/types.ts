@@ -21,7 +21,11 @@ export interface Checkpoint {
   git?: GitContext;        // Git context at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
   briefId?: string;       // ID of active brief when checkpoint was created
-  planId?: string;        // Legacy alias for the active brief ID during migration
+  // Read-side legacy: existing checkpoint markdown in .memories/<date>/*.md may
+  // still carry a `planId:` frontmatter field from before the rename. The
+  // checkpoint parser populates this field so older files keep parsing without
+  // error. New writes only emit `briefId` — see src/checkpoints.ts.
+  planId?: string;
   filePath?: string;        // Absolute path to checkpoint file on disk
 }
 
@@ -41,7 +45,7 @@ export interface CheckpointInput {
   workspace?: string;     // Defaults to current workspace
 }
 
-export interface Plan {
+export interface Brief {
   id: string;
   title: string;
   content: string;        // Markdown body (without frontmatter)
@@ -51,9 +55,7 @@ export interface Plan {
   tags: string[];
 }
 
-export type Brief = Plan;
-
-export interface PlanInput {
+export interface BriefInput {
   id?: string;            // Auto-generated if not provided
   title: string;
   content: string;
@@ -63,16 +65,12 @@ export interface PlanInput {
   tags?: string[];
 }
 
-export type BriefInput = PlanInput;
-
-export interface PlanUpdate {
+export interface BriefUpdate {
   title?: string;
   content?: string;
   status?: 'active' | 'completed' | 'archived';
   tags?: string[];
 }
-
-export type BriefUpdate = PlanUpdate;
 
 export interface RecallOptions {
   workspace?: string;     // 'current' | 'all' | specific path
@@ -84,14 +82,12 @@ export interface RecallOptions {
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief
-  planId?: string;        // Legacy alias for briefId during migration
   _registryDir?: string;  // Internal: override registry dir for test isolation
 }
 
 export interface RecallResult {
   checkpoints: Checkpoint[];
   activeBrief?: Brief | null;
-  activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
 }
 
@@ -152,8 +148,6 @@ export interface RecallArgs {
   full?: boolean;
   briefId?: string;
   brief_id?: string;
-  planId?: string;
-  plan_id?: string;
   _registryDir?: string;
 }
 
@@ -162,8 +156,6 @@ export interface BriefArgs {
   id?: string;
   briefId?: string;
   brief_id?: string;
-  planId?: string;
-  plan_id?: string;
   title?: string;
   content?: string;
   workspace?: string;

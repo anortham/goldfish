@@ -1157,9 +1157,9 @@ describe('saveCheckpoint', () => {
   });
 
   it('attaches briefId when an active brief exists', async () => {
-    // Set up an active plan
-    const { savePlan } = await import('../src/plans');
-    await savePlan({
+    // Set up an active brief
+    const { saveBrief } = await import('../src/briefs');
+    await saveBrief({
       title: 'Test Plan',
       content: 'Plan content',
       workspace: tempDir,

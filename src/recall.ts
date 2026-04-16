@@ -5,10 +5,10 @@
  * search delegated to ranking.ts.
  */
 
-import type { Checkpoint, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
+import type { Brief, Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints, hasValidCalendarDate } from './checkpoints';
 import { buildCompactSearchDescription } from './digests';
-import { getActiveBrief } from './plans';
+import { getActiveBrief } from './briefs';
 import { listRegisteredProjects } from './registry';
 import { searchCheckpoints } from './ranking';
 import { resolveWorkspace } from './workspace';
@@ -18,6 +18,10 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return trimmed ? trimmed : undefined;
 }
 
+// Read-side legacy: existing checkpoint markdown may still carry a `planId`
+// frontmatter field. The Checkpoint type retains that field and the parser
+// populates it for older files, so the briefId filter has to consult both
+// during recall. New writes only emit `briefId` (see src/checkpoints.ts).
 function getCheckpointBriefId(checkpoint: Checkpoint): string | undefined {
   return checkpoint.briefId ?? checkpoint.planId;
 }
@@ -26,7 +30,7 @@ function normalizeRecallOptions(options: RecallOptions): RecallOptions {
   const days = typeof options.days === 'number' && Number.isFinite(options.days) && options.days > 0
     ? options.days
     : undefined;
-  const briefId = normalizeOptionalString(options.briefId) ?? normalizeOptionalString(options.planId);
+  const briefId = normalizeOptionalString(options.briefId);
 
   return {
     ...options,
@@ -36,8 +40,7 @@ function normalizeRecallOptions(options: RecallOptions): RecallOptions {
     from: normalizeOptionalString(options.from),
     to: normalizeOptionalString(options.to),
     search: normalizeOptionalString(options.search),
-    briefId,
-    planId: briefId
+    briefId
   };
 }
 
@@ -205,8 +208,7 @@ async function recallFromWorkspace(
   options: RecallOptions
 ): Promise<{
   checkpoints: Checkpoint[];
-  activeBrief: Plan | null;
-  activePlan: Plan | null;
+  activeBrief: Brief | null;
 }> {
   // Short-circuit: limit=0 means brief only, skip checkpoint I/O
   const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
@@ -214,8 +216,7 @@ async function recallFromWorkspace(
     const activeBrief = await getActiveBrief(workspace);
     return {
       checkpoints: [],
-      activeBrief,
-      activePlan: activeBrief
+      activeBrief
     };
   }
 
@@ -248,8 +249,7 @@ async function recallFromWorkspace(
 
   return {
     checkpoints,
-    activeBrief,
-    activePlan: activeBrief
+    activeBrief
   };
 }
 
@@ -266,12 +266,11 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   if (workspace !== 'all') {
     const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
-    const { checkpoints, activeBrief, activePlan } = await recallFromWorkspace(projectPath, normalizedOptions);
+    const { checkpoints, activeBrief } = await recallFromWorkspace(projectPath, normalizedOptions);
 
     return {
       checkpoints,
-      activeBrief,
-      activePlan
+      activeBrief
     };
   }
 

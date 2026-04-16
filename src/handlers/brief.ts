@@ -9,7 +9,7 @@ import {
   listBriefs,
   setActiveBrief,
   updateBrief
-} from '../plans.js';
+} from '../briefs.js';
 import { getFishEmoji } from '../emoji.js';
 import { resolveWorkspace } from '../workspace.js';
 import type { Brief, BriefArgs } from '../types.js';
@@ -44,7 +44,7 @@ function textResponse(text: string) {
 }
 
 async function resolveId(args: BriefArgs, workspace: string): Promise<string | null> {
-  const id = args.id || args.briefId || args.brief_id || args.planId || args.plan_id;
+  const id = args.id || args.briefId || args.brief_id;
   if (id) return id;
 
   const active = await getActiveBrief(workspace);
@@ -59,7 +59,7 @@ export async function handleBrief(args: BriefArgs) {
   switch (action) {
     case 'save': {
       const { title, content, activate, id, tags, status } = args;
-      const briefId = id || args.briefId || args.brief_id || args.planId || args.plan_id;
+      const briefId = id || args.briefId || args.brief_id;
       const shouldActivate = activate !== false;
       if (!title || !content) {
         throw new Error('Title and content are required for save action');
@@ -108,7 +108,7 @@ export async function handleBrief(args: BriefArgs) {
     }
 
     case 'activate': {
-      const id = args.id || args.briefId || args.brief_id || args.planId || args.plan_id;
+      const id = args.id || args.briefId || args.brief_id;
       if (!id) throw new Error('Brief ID is required for activate action');
 
       await setActiveBrief(workspace, id);
