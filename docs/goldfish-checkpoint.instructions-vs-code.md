@@ -1,9 +1,9 @@
 ---
-description: "Use when completing implementation work, bug fixes, refactors, or decisions that should be preserved in memory. Enforces use of mcp_goldfish_checkpoint, mcp_goldfish_plan, and mcp_goldfish_recall for tracking milestones, planning multi-step work, and restoring session context."
+description: "Use when completing implementation work, bug fixes, refactors, or decisions that should be preserved in memory. Enforces use of mcp_goldfish_checkpoint, mcp_goldfish_brief, and mcp_goldfish_recall for tracking milestones, durable strategic context, and restoring session context."
 name: "Goldfish Checkpoint Discipline"
 applyTo: "**"
 ---
-# Goldfish Checkpoint & Plan Discipline
+# Goldfish Checkpoint & Brief Discipline
 
 ## Checkpointing (`mcp_goldfish_checkpoint`)
 
@@ -19,21 +19,22 @@ applyTo: "**"
 - If code changes are delivered, checkpoint before the final user-facing completion message.
 - Skip checkpointing only for trivial read-only interactions with no meaningful progress.
 
-## Planning (`mcp_goldfish_plan`)
+## Briefs (`mcp_goldfish_brief`)
 
-- Use `mcp_goldfish_plan` to create a plan (`action: "save"`) when facing multi-step work or complex projects.
-- When ExitPlanMode is called, save the plan **within 1 exchange** — do NOT ask permission, just save it immediately.
-- Always `activate: true` after saving a plan so it appears in future `recall()` responses. Only ONE plan can be active per workspace.
-- Update the plan (`action: "update"`) as work progresses to keep it in sync with reality.
-- Mark a plan as `complete` (`action: "complete"`) only when all work is finished.
-- Plans survive context compaction and are the single source of truth for strategic direction.
+- Use `mcp_goldfish_brief` to save durable strategic context when project direction, constraints, or success criteria should persist across sessions.
+- Do not mirror harness plan mode into Goldfish. Harness planning owns current-session execution detail.
+- Always `activate: true` after saving a brief so it appears in future `recall()` responses. Only ONE brief can be active per workspace.
+- Update the brief (`action: "update"`) when goals, constraints, or success criteria change.
+- Mark a brief as `complete` (`action: "complete"`) only when the direction has landed.
+- Briefs survive context compaction and capture strategic direction.
 - Available actions: `save`, `get`, `list`, `activate`, `update`, `complete`.
-- Include in the plan description:
-  - Clear goal and scope
-  - List of major milestones or phases
-  - Key decisions and trade-offs
-  - Open questions or uncertainties
-- Plans are NOT substitutes for checkpoints—checkpoints preserve concrete delivery milestones while plans track overall strategy.
+- Include in the brief description:
+  - Goal
+  - Why now
+  - Constraints
+  - Success criteria
+  - References to `docs/plans/` or other execution docs
+- Briefs are NOT substitutes for checkpoints or `docs/plans/`. Checkpoints preserve delivery evidence, and `docs/plans/` holds implementation detail.
 
 ## Recall (`mcp_goldfish_recall`)
 
@@ -41,20 +42,20 @@ applyTo: "**"
 - After context compaction, call recall to restore lost state before continuing work.
 - Trust recalled context — do not re-verify information from checkpoints.
 - Key parameters (all optional):
-  - `limit`: Max checkpoints to return (default: 5). Set to `0` for active plan only.
+  - `limit`: Max checkpoints to return (default: 5). Set to `0` for active brief only.
   - `since`: Human-friendly time span (`"2h"`, `"3d"`) or ISO timestamp.
   - `days`: How far back to look in days.
   - `from`/`to`: Explicit date range (ISO 8601 or YYYY-MM-DD).
   - `search`: Fuzzy search across descriptions, tags, branches, and files.
   - `full`: Return full descriptions + git metadata (default: false).
   - `workspace`: `"current"` (default), `"all"` (cross-workspace), or specific path.
-  - `planId`: Filter checkpoints to those created under a specific plan.
+  - `briefId`: Filter checkpoints to those created under a specific brief.
 - Examples:
   - `recall()` — last 5 checkpoints
   - `recall({ since: "2h" })` — last 2 hours
   - `recall({ search: "auth", full: true })` — fuzzy search with full details
   - `recall({ workspace: "all", days: 1 })` — cross-project standup
-  - `recall({ limit: 0 })` — active plan only, no checkpoints
+  - `recall({ limit: 0 })` — active brief only, no checkpoints
 
 ## Code Exploration with Julie (`mcp_julie_*` tools)
 
@@ -78,10 +79,10 @@ Use julie tools to gather context before implementing changes. This accelerates 
 - For multi-repo work, use `mcp_julie_manage_workspace` to ensure all workspaces are indexed and current.
 - Use `mcp_julie_rename_symbol` with `dry_run: true` first; only commit if preview looks correct.
 
-### Integration with Planning
+### Integration with Briefs
 
-- Use julie tools during the **planning phase** to gather impact scope and dependency information.
-- Document key findings (call chains, impact radius, affected symbols) in your plan.
-- After gathering context, save a plan (`mcp_goldfish_plan` with `action: "save"`) that documents the approach.
-- During implementation, refer to the plan to stay on scope.
+- Use julie tools during the exploration phase to gather impact scope and dependency information.
+- Document key findings (call chains, impact radius, affected symbols) in your checkpoints and execution docs.
+- After gathering context, save a brief (`mcp_goldfish_brief` with `action: "save"`) that captures goal, constraints, success criteria, and references.
+- During implementation, use the brief for direction and `docs/plans/` for execution detail.
 - After completion, checkpoint with references to the symbols and files touched.

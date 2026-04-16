@@ -1,4 +1,4 @@
-# Goldfish v6.5.0 - Implementation Specification
+# Goldfish v6.6.0 - Implementation Specification
 
 ## Design Philosophy
 
@@ -20,8 +20,8 @@
 ```
 {project}/.memories/
   {date}/{HHMMSS}_{hash}.md   # Individual checkpoints (YAML frontmatter)
-  plans/{plan-id}.md           # Plans (YAML frontmatter)
-  .active-plan                 # Active plan ID
+  briefs/{brief-id}.md         # Briefs (YAML frontmatter)
+  .active-brief                # Active brief ID
   memory.yaml                  # Consolidated memory (YAML, merge-friendly)
 
 ~/.goldfish/
@@ -32,9 +32,11 @@
   models/transformers/         # Local embedding model cache
 ```
 
+Legacy `.memories/plans/` and `.active-plan` paths are still read during the compatibility window, but new writes land in the brief paths above.
+
 ### Core Principles
 1. **One file per checkpoint** (YAML frontmatter + markdown body)
-2. **One file per plan** (already YAML frontmatter)
+2. **One file per brief** (already YAML frontmatter)
 3. **Project-local storage** (git-committable)
 4. **Cross-project via registry** (~/.goldfish/registry.json)
 5. **Atomic writes** (write-then-rename with locking)
@@ -66,9 +68,9 @@ summary: "Fixed JWT validation bug"
 Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check.
 ```
 
-### Plan Format
+### Brief Format
 
-**File**: `{project}/.memories/plans/auth-system.md`
+**File**: `{project}/.memories/briefs/auth-system.md`
 
 ```markdown
 ---
@@ -81,29 +83,38 @@ tags: [backend, security, high-priority]
 
 # Authentication System Redesign
 
-## Goals
-- Implement JWT with refresh tokens
-- Add OAuth2 support for Google/GitHub
-- Improve session management
+## Goal
 
-## Progress
-- [x] JWT refresh token implementation
-- [ ] OAuth2 integration
-- [ ] Session storage optimization
+Redesign auth around durable refresh-token sessions.
 
-## Notes
-2026-02-14: JWT refresh working, tested with 60min expiry.
+## Why Now
+
+Timeout bugs and session drift keep burning time across sessions.
+
+## Constraints
+
+- Keep one-release compatibility for existing auth clients
+- Do not break admin SSO
+
+## Success Criteria
+
+- Recall and checkpoint evidence line up with the new auth direction
+- `docs/plans/` contains the execution breakdown
+
+## References
+
+- docs/plans/2026-02-14-auth-system-redesign.md
 ```
 
-### Active Plan Tracker
+### Active Brief Tracker
 
-**File**: `{project}/.memories/.active-plan`
+**File**: `{project}/.memories/.active-brief`
 
 ```
 auth-system
 ```
 
-That's it. Just the plan ID. Simple.
+That's it. Just the brief ID. Simple.
 
 ### Cross-Project Registry
 
@@ -134,9 +145,9 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 
 | Module | Purpose |
 |--------|---------|
-| `src/workspace.ts` | Workspace detection, `getMemoriesDir()`, `getPlansDir()`, `ensureMemoriesDir()` |
+| `src/workspace.ts` | Workspace detection, `getMemoriesDir()`, `getBriefsDir()`, `getPlansDir()`, `ensureMemoriesDir()` |
 | `src/checkpoints.ts` | YAML frontmatter individual files, `generateCheckpointId()`, `saveCheckpoint()`, `getCheckpointsForDay()`, `getCheckpointsForDateRange()` |
-| `src/plans.ts` | Plan CRUD, active plan tracking |
+| `src/plans.ts` | Brief CRUD with legacy plan compatibility, active brief tracking |
 | `src/recall.ts` | Search (fuse.js), aggregation, cross-project recall via registry |
 | `src/digests.ts` | Compact retrieval digests for lexical search and compact result presentation |
 | `src/semantic-cache.ts` | Derived semantic manifest/records storage under `~/.goldfish/cache/semantic/` |
@@ -152,7 +163,7 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 | `src/summary.ts` | Auto-summary generation for long descriptions |
 | `src/emoji.ts` | Fish emoji helper |
 | `src/server.ts` | MCP server setup |
-| `src/handlers/` | Tool handlers (checkpoint, recall, plan, consolidate) |
+| `src/handlers/` | Tool handlers (checkpoint, recall, brief, consolidate) |
 | `src/tools.ts` | Tool definitions |
 | `src/instructions.ts` | Server behavioral instructions |
 | `src/types.ts` | TypeScript interfaces |
@@ -167,6 +178,9 @@ goldfish/
 ├── skills/
 │   ├── recall/SKILL.md
 │   ├── checkpoint/SKILL.md
+│   ├── consolidate/SKILL.md
+│   ├── brief/SKILL.md
+│   ├── brief-status/SKILL.md
 │   ├── plan/SKILL.md
 │   ├── standup/SKILL.md
 │   └── plan-status/SKILL.md
@@ -214,9 +228,9 @@ This is a deliberate recalibration. The original aggressive language (from Tusk 
 
 Recall runs **automatically at session start** via the SessionStart hook. Users can also invoke `/recall` manually for targeted queries (search, cross-project, time ranges).
 
-### Plan Tool
-- Keeps strong directive language — plan persistence genuinely represents hours of strategic work
-- Still instructs: save immediately after ExitPlanMode, never ask permission, always activate
+### Brief Tool
+- Keeps strong guidance around maintaining durable strategic direction
+- Does not mirror harness plan mode or copy execution checklists into Goldfish
 
 ---
 
@@ -251,17 +265,17 @@ We achieve this through:
 
 ## Implementation Status
 
-### Complete - v6.5.0
+### Complete - v6.6.0
 
 **ALL MODULES IMPLEMENTED AND TESTED**
 
 1. **Workspace utilities** - Detection, normalization, `.memories/` directory management
 2. **Git context** - Branch, commit, files capture
 3. **Checkpoint storage** - YAML frontmatter individual files, atomic writes, concurrent safety
-4. **Plan storage** - YAML frontmatter, CRUD, active plan tracking, lifecycle management
+4. **Brief storage** - YAML frontmatter, CRUD, active brief tracking, legacy plan compatibility
 5. **Recall with fuse.js** - Fuzzy search, cross-workspace aggregation, date range filtering
 6. **Cross-project registry** - `~/.goldfish/registry.json`, auto-registration, stale filtering
-7. **MCP server** - Tools (checkpoint, recall, plan, consolidate), behavioral guidance
+7. **MCP server** - Tools (checkpoint, recall, brief, consolidate), behavioral guidance
 8. **Claude Code plugin** - Skills, hooks, plugin.json
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety

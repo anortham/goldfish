@@ -1,7 +1,7 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the 4 core tools: checkpoint, recall, plan, and consolidate.
+ * Contains the 4 core tools: checkpoint, recall, brief, and consolidate.
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -117,12 +117,12 @@ BAD (no context): "Fixed auth bug"`
     },
     {
       name: 'recall',
-      description: `Retrieve prior context from developer memory. Use when you need to restore context from previous sessions or find past work.
+      description: `Retrieve prior context from developer memory. Use when you need session history or past work.
 
 When to use:
 - Starting a new session and need prior context (user invokes /recall)
 - After context compaction to restore lost state
-- Searching for past decisions, discoveries, or work on a topic
+- Searching for past decisions, discoveries, or related work
 - Cross-project standup reports
 
 After recall, trust the returned context and continue working — don't re-verify recalled information.
@@ -133,10 +133,11 @@ Key parameters (all optional):
 - days: How far back to look in days
 - from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
 - search: Fuzzy search query (searches descriptions, tags, branches, files)
-- full: Return full descriptions + all metadata including files, git info (default: false)
+- full: Return full descriptions + metadata including files and git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
-- planId: Filter checkpoints to those created under a specific plan
-- includeMemory: Include full memory.yaml in response. Defaults to true (bootstrap mode, no search). Defaults to false (search mode, with search param). Override explicitly with true/false.
+- briefId: Filter checkpoints to those created under a specific brief
+- planId: Legacy alias for briefId during migration
+- includeMemory: Include full memory.yaml in response. Defaults to true without search and false with search. Override explicitly with true/false.
 
 Recall now returns three layers:
 1. Consolidated memory (memory.yaml) - project understanding, included by default
@@ -150,15 +151,15 @@ Examples:
 - recall({ since: "2h" }) - last 2 hours
 - recall({ search: "auth", full: true }) - search with full details
 - recall({ workspace: "all", days: 1 }) - cross-project standup
-- recall({ limit: 0 }) - active plan only, no checkpoints
+- recall({ limit: 0 }) - active brief only, no checkpoints
 
-Returns: Active plan + chronological checkpoints + optional workspace summaries.`,
+Returns: Active brief + chronological checkpoints + optional workspace summaries.`,
       inputSchema: {
         type: 'object',
         properties: {
           limit: {
             type: 'number',
-            description: 'Maximum number of checkpoints to return (default: 5). Use lower values for leaner context. Set to 0 to return plan only.'
+            description: 'Maximum number of checkpoints to return (default: 5). Use lower values for leaner context. Set to 0 to return the active brief only.'
           },
           since: {
             type: 'string',
@@ -188,9 +189,13 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
             type: 'string',
             description: 'Workspace scope: "current" (default), "all" (cross-workspace), or specific path. Optional - defaults to current workspace.'
           },
+          briefId: {
+            type: 'string',
+            description: 'Filter to checkpoints created while a specific brief was active. Use to see progress on a particular direction.'
+          },
           planId: {
             type: 'string',
-            description: 'Filter to checkpoints created while a specific plan was active. Use to see progress on a particular plan.'
+            description: 'Legacy alias for briefId during migration.'
           },
           includeMemory: {
             type: 'boolean',

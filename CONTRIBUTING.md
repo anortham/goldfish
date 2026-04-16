@@ -18,7 +18,7 @@ If you find yourself writing implementation code before tests, STOP. Delete it a
 
 ## Core Philosophy
 
-This is **iteration #5** of a developer memory system, now at **v6.5.0**. We've learned hard lessons:
+This is **iteration #5** of a developer memory system, now at **v6.6.0**. We've learned hard lessons:
 
 ### What We've Tried Before
 1. **Original Goldfish (TS)**: JSON files, good concepts, critical bugs (race conditions, date handling)
@@ -138,9 +138,9 @@ bun test --coverage
 {project}/.memories/
   {date}/
     {HHMMSS}_{hash}.md    # Individual YAML frontmatter checkpoints
-  plans/
-    {plan-id}.md
-  .active-plan
+  briefs/
+    {brief-id}.md
+  .active-brief
   memory.yaml              # Consolidated memory (YAML, merge-friendly)
 
 ~/.goldfish/
@@ -154,7 +154,7 @@ bun test --coverage
 |--------|---------|-----------|
 | `src/workspace.ts` | Workspace detection/normalization | `tests/workspace.test.ts` |
 | `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` |
-| `src/plans.ts` | Plan management | `tests/plans.test.ts` |
+| `src/plans.ts` | Brief management with legacy plan compatibility | `tests/plans.test.ts` |
 | `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` |
 | `src/memory.ts` | Memory file I/O, consolidation state | `tests/memory.test.ts` |
 | `src/semantic.ts` | Embedding runtime, pending semantic work | `tests/semantic.test.ts` |
@@ -170,7 +170,7 @@ bun test --coverage
 | `src/summary.ts` | Auto-summary generation | `tests/summary.test.ts` |
 | `src/emoji.ts` | Fish emoji helper | - |
 | `src/server.ts` | MCP server | `tests/server.test.ts` |
-| `src/handlers/` | Tool handlers (checkpoint, recall, plan, consolidate) | `tests/handlers.test.ts` |
+| `src/handlers/` | Tool handlers (checkpoint, recall, brief, consolidate) | `tests/handlers.test.ts` |
 | `src/tools.ts` | Tool definitions | - |
 | `src/instructions.ts` | Server behavioral instructions | - |
 | `src/types.ts` | TypeScript interfaces | - |
@@ -290,9 +290,9 @@ ls .memories/$(date +%Y-%m-%d)/
 # View a specific checkpoint
 cat .memories/2026-02-14/103000_a1b2c3d4.md
 
-# View active plan
-cat .memories/.active-plan
-cat .memories/plans/$(cat .memories/.active-plan).md
+# View active brief
+cat .memories/.active-brief
+cat .memories/briefs/$(cat .memories/.active-brief).md
 
 # View cross-project registry
 cat ~/.goldfish/registry.json
@@ -349,7 +349,7 @@ MCP tool descriptions are **directive about quality, restrained about frequency*
 - **Quality**: Checkpoint descriptions must be structured markdown. Lazy one-liners are unacceptable. This guidance stays strong.
 - **Frequency**: Checkpoint at milestones, not after every action. No "MANDATORY" or guilt-tripping language pushing agents to over-checkpoint.
 - **Recall**: Runs automatically at session start via the SessionStart hook. Users can also invoke `/recall` for targeted queries.
-- **Plans**: Keep strong directive language — plan persistence genuinely matters.
+- **Briefs**: Keep strong guidance around durable strategic direction, but do not mirror harness plan mode.
 
 This was recalibrated after real-world evidence showed agents over-complying: 100+ checkpoints/day, rapid-fire duplicates within minutes, bloated files. The original aggressive tone solved under-checkpointing but created over-checkpointing.
 

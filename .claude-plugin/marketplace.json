@@ -4,14 +4,14 @@
     "name": "Alan Northam"
   },
   "metadata": {
-    "description": "Developer memory system — checkpoints, recall, plans, and standups for AI-assisted development"
+    "description": "Developer memory system — checkpoints, recall, briefs, and standups for AI-assisted development"
   },
   "plugins": [
     {
       "name": "goldfish",
       "source": "./",
-      "description": "Persistent developer memory with checkpoints, recall, plans, and standups — stored as human-readable markdown",
-      "version": "6.5.3",
+      "description": "Persistent developer memory with checkpoints, recall, briefs, and standups — stored as human-readable markdown",
+      "version": "6.6.0",
       "category": "productivity"
     }
   ]

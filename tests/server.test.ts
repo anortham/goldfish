@@ -123,7 +123,7 @@ describe('Tool handlers', () => {
       expect(text).toContain('Second checkpoint');
     });
 
-    it('includes active plan when present', async () => {
+    it('includes active brief when present', async () => {
       const { handleRecall } = await import('../src/server');
 
       await savePlan({
@@ -139,7 +139,7 @@ describe('Tool handlers', () => {
       });
 
       const text = result.content[0]!.text;
-      expect(text).toContain('## Active Plan: Test Plan');
+      expect(text).toContain('## Active Brief: Test Plan');
       expect(text).toContain('Plan content');
     });
 

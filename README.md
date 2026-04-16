@@ -1,10 +1,10 @@
 # Goldfish 🐠
 
-Persistent developer memory for Claude Code. Checkpoints, recall, plans, standup reports, and built-in semantic recall -- stored as human-readable markdown right in your project.
+Persistent developer memory for Claude Code. Checkpoints, recall, briefs, standup reports, and built-in semantic recall -- stored as human-readable markdown right in your project.
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth (and is git-committable), while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
-**Version 6.5.3** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 6.6.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
@@ -17,7 +17,7 @@ AI coding sessions have a memory problem:
 - Switching projects loses context
 - No way to answer "what was I working on yesterday?"
 
-Goldfish solves this with four MCP tools (checkpoint, recall, plan, consolidate), 6 skills, and three hooks that make memory automatic and transparent.
+Goldfish solves this with four MCP tools (checkpoint, recall, brief, consolidate), 8 skills including compatibility aliases, and two hooks that make memory automatic and transparent.
 
 ---
 
@@ -27,7 +27,7 @@ Goldfish solves this with four MCP tools (checkpoint, recall, plan, consolidate)
 
 ### Option 1: Install from GitHub (Recommended)
 
-This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/consolidate`, `/plan`, `/standup`, `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction, auto-save plans).
+This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/consolidate`, `/brief`, `/brief-status`, `/standup`, plus compatibility aliases `/plan` and `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction).
 
 ```bash
 # Add the Goldfish repository as a plugin marketplace
@@ -69,8 +69,8 @@ Once the plugin is loaded, Goldfish works automatically:
 
 1. **Session starts** -- the `SessionStart` hook fires, calling `recall()` to restore recent context
 2. **You work** -- checkpoint manually with `/checkpoint`, or let the `PreCompact` hook auto-checkpoint before context compaction
-3. **Plans persist** -- the `ExitPlanMode` hook auto-saves plans to `.memories/plans/`
-4. **Next session** -- everything is recalled automatically
+3. **Direction persists** -- save a brief with `/brief` when goals, constraints, or success criteria should survive the session
+4. **Next session** -- recall restores recent checkpoints and the active brief automatically
 
 No configuration needed beyond plugin installation.
 
@@ -97,12 +97,12 @@ cd goldfish && bun install
 }
 ```
 
-**What you get with standalone MCP:** The 4 core tools (`checkpoint`, `recall`, `plan`, `consolidate`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/consolidate`, `/plan`, `/standup`, `/plan-status`) and hooks (auto-recall, auto-checkpoint, auto-plan-save) -- those are Claude Code plugin features.
+**What you get with standalone MCP:** The 4 core tools (`checkpoint`, `recall`, `brief`, `consolidate`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/consolidate`, `/brief`, `/brief-status`, `/standup`, plus compatibility aliases `/plan` and `/plan-status`) and hooks (auto-recall, auto-checkpoint) -- those are Claude Code plugin features.
 
 For standalone MCP usage, you'll want to instruct your agent to:
 - Call `recall()` at session start
 - Call `checkpoint()` after completing work
-- Call `plan()` to save and manage long-running plans
+- Call `brief()` to save and manage durable strategic briefs
 - Call `consolidate()` periodically to distill checkpoints into memory.yaml
 
 ### VS Code with GitHub Copilot
@@ -156,7 +156,7 @@ Claude: [auto-recalls checkpoint, picks up where it left off]
 
 ### Recall -- Restore Context
 
-Every session starts with recall (automatic via `SessionStart` hook). Returns recent checkpoints, active plan, and optional cross-project summaries.
+Every session starts with recall (automatic via `SessionStart` hook). Returns recent checkpoints, the active brief, and optional cross-project summaries.
 
 ```
 recall()                                    # Last 5 checkpoints, no date window
@@ -164,14 +164,14 @@ recall({ since: "2h" })                     # Last 2 hours
 recall({ search: "auth bug" })              # Fuzzy search
 recall({ days: 7, limit: 20, full: true })  # Extended history with metadata
 recall({ workspace: "all", days: 1 })       # Cross-project (for standups)
-recall({ limit: 0 })                        # Active plan only
+recall({ limit: 0 })                        # Active brief only
 ```
 
 When you search with `recall({ search: "..." })`, results are compact by default so agents get dense, low-token snippets. Pass `full: true` to return full descriptions and metadata instead.
 
-### Plan -- Track Long-Running Work
+### Brief -- Track Durable Direction
 
-Plans are strategic markdown documents that survive across sessions. They appear at the top of every `recall()` response.
+Briefs are compact strategic markdown documents that survive across sessions. They appear at the top of every `recall()` response.
 
 ```markdown
 ---
@@ -183,19 +183,30 @@ updated: 2026-02-14T14:30:00.000Z
 tags: [auth, architecture, security]
 ---
 
-## Goals
-- Implement JWT refresh tokens
-- Add OAuth2 support
-- Migrate existing sessions
+## Goal
 
-## Progress
-- [x] Designed token rotation strategy
-- [x] Updated auth middleware
-- [ ] Adding OAuth2 providers (in progress)
-- [ ] Session migration (pending)
+Redesign auth around durable refresh-token sessions.
+
+## Why Now
+
+Timeout bugs and session drift keep burning time across sessions.
+
+## Constraints
+
+- Keep one-release compatibility for existing auth clients
+- Do not break admin SSO
+
+## Success Criteria
+
+- Recall and checkpoint evidence line up with the new auth direction
+- `docs/plans/` contains the execution breakdown
+
+## References
+
+- docs/plans/2026-02-14-auth-system-redesign.md
 ```
 
-**Saved to:** `{project}/.memories/plans/auth-system-redesign.md`
+**Saved to:** `{project}/.memories/briefs/auth-system-redesign.md`
 
 ---
 
@@ -205,11 +216,13 @@ Skills are invocable via `/skill-name` in Claude Code. They provide guided workf
 
 | Skill | What It Does |
 |-------|-------------|
+| `/brief` | Create and manage durable strategic briefs |
+| `/brief-status` | Assess progress against the active brief |
 | `/checkpoint` | Save a checkpoint with rich description and tags |
 | `/consolidate` | Prepare memory consolidation work for the background subagent |
-| `/plan` | Create and manage persistent plans for multi-session work |
-| `/plan-status` | Assess progress against the active plan |
-| `/recall` | Restore context from recent checkpoints and active plan |
+| `/plan` | Compatibility alias for `/brief` |
+| `/plan-status` | Compatibility alias for `/brief-status` |
+| `/recall` | Restore context from recent checkpoints and the active brief |
 | `/standup` | Generate a cross-project standup report |
 
 Skills live in the `skills/` directory, each with a `SKILL.md` file containing behavioral instructions.
@@ -224,7 +237,6 @@ Hooks fire automatically at key moments. No manual trigger needed.
 |------|---------|--------|
 | `PreCompact` | Context window compaction | Auto-checkpoint current progress before memory is lost |
 | `SessionStart` | New session begins | Auto-recall recent work to restore context |
-| `PostToolUse` (ExitPlanMode) | Plan mode exits | Auto-save the plan to `.memories/plans/` |
 
 Hook definitions live in `hooks/hooks.json`.
 
@@ -244,12 +256,14 @@ your-project/
       143022_c3d4.md
     2026-02-14/
       101530_e5f6.md
-    plans/
-      auth-system-redesign.md  # Plan (YAML frontmatter + markdown body)
+    briefs/
+      auth-system-redesign.md  # Brief (YAML frontmatter + markdown body)
       api-v2-migration.md
-    .active-plan               # Contains the active plan ID
+    .active-brief              # Contains the active brief ID
     memory.yaml                # Consolidated memory (YAML, merge-friendly)
 ```
+
+Legacy `.memories/plans/` and `.active-plan` paths are still read during the compatibility window, but new writes land in the brief paths above.
 
 ### Checkpoint File Format
 
@@ -346,7 +360,7 @@ Key decisions for v5.0.0:
 | Atomic file operations | Write-to-temp then rename prevents corruption on crash |
 | UTC timestamps everywhere | No timezone bugs (learned the hard way in v1) |
 | Quality-focused behavioral language | Directive about checkpoint quality, restrained about frequency |
-| 4 tools, not more | Checkpoint, recall, plan, consolidate cover all use cases without bloat |
+| 4 tools, not more | Checkpoint, recall, brief, consolidate cover all use cases without bloat |
 | Skills over slash commands | Plugin-native, no manual `bun setup` step |
 | Evidence-based features only | Complexity is added only when real usage demands it |
 
@@ -359,21 +373,23 @@ goldfish/
   .claude-plugin/
     plugin.json           # Claude Code plugin manifest (auto-discovery)
   hooks/
-    hooks.json            # Hook definitions (PreCompact, SessionStart, ExitPlanMode)
+    hooks.json            # Hook definitions (PreCompact, SessionStart)
   skills/
+    brief/SKILL.md        # /brief skill
+    brief-status/SKILL.md # /brief-status skill
     checkpoint/SKILL.md   # /checkpoint skill
     consolidate/SKILL.md  # /consolidate skill
     recall/SKILL.md       # /recall skill
     standup/SKILL.md      # /standup skill
-    plan/SKILL.md         # /plan skill
-    plan-status/SKILL.md  # /plan-status skill
+    plan/SKILL.md         # /plan compatibility alias
+    plan-status/SKILL.md  # /plan-status compatibility alias
   src/
     server.ts             # MCP server entry point
-    tools.ts              # Tool definitions (checkpoint, recall, plan, consolidate)
+    tools.ts              # Tool definitions (checkpoint, recall, brief, consolidate)
     instructions.ts       # Server behavioral instructions
     types.ts              # TypeScript interfaces
     checkpoints.ts        # Checkpoint storage and retrieval
-    plans.ts              # Plan management
+    plans.ts              # Brief management with legacy plan compatibility
     recall.ts             # Fuzzy + semantic hybrid recall
     digests.ts            # Compact retrieval/search digests
     semantic-cache.ts     # Derived semantic manifest + JSONL records
@@ -389,7 +405,7 @@ goldfish/
     lock.ts               # File locking for concurrent writes
     summary.ts            # Auto-summary generation
     emoji.ts              # Emoji utilities
-    handlers/             # Tool handler implementations (checkpoint, recall, plan, consolidate)
+    handlers/             # Tool handler implementations (checkpoint, recall, brief, consolidate)
   tests/                  # Test files
 ```
 
