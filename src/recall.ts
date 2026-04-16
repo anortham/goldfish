@@ -411,7 +411,7 @@ async function recallFromWorkspace(
   matchedMemorySections?: MemorySection[];
   consolidation?: { needed: boolean; staleCheckpoints: number; lastConsolidated: string | null };
 }> {
-  // Short-circuit: limit=0 means plan/consolidation only, skip all checkpoint I/O
+  // Short-circuit: limit=0 means brief/consolidation only, skip all checkpoint I/O
   const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
   if (limit === 0) {
     const activeBrief = await getActiveBrief(workspace);
@@ -631,7 +631,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   // Apply global limit (default: 5, clamp negative to 0)
   const globalLimit = Math.max(0, normalizedOptions.limit !== undefined ? normalizedOptions.limit : 5);
 
-  // Short-circuit: limit=0 means plan-only, skip all project I/O
+  // Short-circuit: limit=0 means brief-only, skip all project I/O
   if (globalLimit === 0) {
     return { checkpoints: [], workspaces: [] };
   }
@@ -745,7 +745,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   }
 
   // Fetch from all registered projects in parallel.
-  // Lightweight path: only load checkpoints and memory, skip plan/consolidation per project.
+  // Lightweight path: only load checkpoints and memory, skip brief/consolidation per project.
   // Load without limit so checkpointCount in summaries reflects total matches.
   const projectResults = await Promise.all(
     projects.map(async (project) => {

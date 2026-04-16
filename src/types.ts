@@ -21,7 +21,7 @@ export interface Checkpoint {
   git?: GitContext;        // Git context at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
   briefId?: string;       // ID of active brief when checkpoint was created
-  planId?: string;        // ID of active plan when checkpoint was created
+  planId?: string;        // Legacy alias for the active brief ID during migration
   filePath?: string;        // Absolute path to checkpoint file on disk
 }
 
@@ -58,7 +58,7 @@ export interface PlanInput {
   title: string;
   content: string;
   workspace?: string;
-  activate?: boolean;     // Make this the active plan
+  activate?: boolean;     // Make this the active brief
   status?: 'active' | 'completed' | 'archived';
   tags?: string[];
 }
@@ -84,7 +84,7 @@ export interface RecallOptions {
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief
-  planId?: string;        // Filter to checkpoints associated with this plan
+  planId?: string;        // Legacy alias for briefId during migration
   includeMemory?: boolean;  // Include memory.yaml in response. Defaults: true (no search), false (with search). Override explicitly.
   _registryDir?: string;  // Internal: override registry dir for test isolation
   _semanticRuntime?: SemanticRuntime; // Internal: semantic runtime override for test isolation
@@ -168,7 +168,7 @@ export interface ConsolidationPayload {
   memoryPath?: string;                 // Absolute path to .memories/memory.yaml
   lastConsolidatedPath?: string;       // Absolute path to ~/.goldfish/consolidation-state/{workspace}.json
   activeBriefPath?: string;            // Absolute path to active brief file, if one exists
-  activePlanPath?: string;             // Absolute path to active plan file, if one exists
+  activePlanPath?: string;             // Legacy alias for activeBriefPath during migration
   checkpointCount?: number;            // Number of checkpoints in this batch
   remainingCount?: number;             // Unconsolidated checkpoints beyond this batch
   previousTotal?: number;              // Running total for incrementing checkpointsConsolidated
