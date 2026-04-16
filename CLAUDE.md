@@ -245,11 +245,11 @@ Keep documentation honest: do not hardcode stale test counts or module line coun
 MCP tool descriptions are **directive about quality, encouraging about frequency**.
 
 - **Quality guidance stays strong**: checkpoint descriptions must be structured markdown with WHAT/WHY/HOW/IMPACT. Lazy descriptions are unacceptable.
-- **Frequency guidance is purely positive**: "when in doubt, checkpoint" is the tiebreaker. Use concrete positive triggers (after committing, at stopping points) — no "Do NOT" lists or "Avoid" phrasing that suppresses the impulse. Frame cadence positively: "space out checkpoints so each captures distinct progress."
+- **Frequency guidance is positive**: "when in doubt, checkpoint" with concrete triggers (after committing, at stopping points). No "Do NOT" lists.
 - **Recall is invoked manually**: agents call `recall()` at session start or when context is missing; users can also invoke `/recall` for targeted queries.
 - **Briefs keep strong language**: brief persistence genuinely matters and the directive tone is warranted there.
 
-Recalibrated twice: first after overuse (100+ checkpoints/day, rapid-fire duplicates), then after underuse (agents stopped checkpointing autonomously because the "Do NOT" list was too prominent and specific while positive triggers were vague).
+Recalibrated twice (first overuse, then underuse) before landing here. The lesson: positive triggers drive adoption better than prohibitions.
 
 ### Character Limits (Claude Code MCP Cap)
 

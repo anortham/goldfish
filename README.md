@@ -1,10 +1,8 @@
 # Goldfish 🐠
 
-Persistent developer memory for MCP-compatible coding clients. Checkpoints, recall, briefs, and standup reports, stored as human-readable markdown right in your project.
+An evidence ledger for AI coding sessions. Checkpoints capture what changed and why; briefs hold durable strategic direction; recall pulls both back when the next session needs context. Everything lives as markdown in your repo, so it travels with the code, diffs in PRs, and outlasts any single harness.
 
 Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
-
-Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` is the source of truth. Goldfish also keeps a lightweight cross-project registry at `~/.goldfish/registry.json` for cross-workspace recall.
 
 **Version 6.7.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
@@ -12,14 +10,9 @@ Goldfish gives AI coding sessions memory that survives context compaction, crash
 
 ## Why Goldfish?
 
-AI coding sessions have a memory problem:
+Coding harnesses already plan, summarize, and recover from compaction. What they don't do is keep a durable record of *why* a project moved the way it did, in a place the next session (or the next harness) can read.
 
-- Context windows get compacted, losing work history
-- Sessions crash, losing planning and decisions
-- Switching projects loses context
-- No way to answer "what was I working on yesterday?"
-
-Goldfish solves this with three MCP tools (checkpoint, recall, brief), a small set of skills, and repo-local skill discovery for compatible clients.
+Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and five skills, with markdown as the source of truth.
 
 ---
 
@@ -353,8 +346,10 @@ This is **iteration #5** of a developer memory system. Each iteration taught som
 2. **Tusk (Bun + SQLite)** -- Fixed bugs, added complexity, hook spam disaster
 3. **.NET rewrite** -- Over-engineered, never finished
 4. **Goldfish 4.0 (Bun + Markdown)** -- Radical simplicity, centralized `~/.goldfish/` storage, proved the markdown-only approach
+5. **Goldfish 5.x-6.x** -- Claude Code plugin, project-local `.memories/`, hybrid semantic recall, consolidation, hooks
+6. **Goldfish 7.0** -- Subtract sprint: removed hooks, semantic stack, consolidation, and the plan tool; settled on Orama BM25 over markdown and brief-first storage
 
-Key decisions for v5.0.0:
+Foundational decisions (load-bearing since v5):
 
 | Decision | Rationale |
 |----------|-----------|
@@ -364,9 +359,18 @@ Key decisions for v5.0.0:
 | Atomic file operations | Write-to-temp then rename prevents corruption on crash |
 | UTC timestamps everywhere | No timezone bugs (learned the hard way in v1) |
 | Quality-focused behavioral language | Directive about checkpoint quality, restrained about frequency |
+| Evidence-based features only | Complexity is added only when real usage demands it |
+
+What v7 subtracted, and why:
+
+| Decision | Rationale |
+|----------|-----------|
+| Orama BM25 over hybrid fuse + embeddings | LLM-issued queries are well-formed; relevance ranking matters more than typo tolerance, and BM25 is a fraction of the runtime weight |
+| No hooks | Behavioral adoption travels with the tool description; hooks tied us to one harness and produced spam |
+| No consolidation | Token math was net-negative; reading consolidated digests cost more than reading checkpoints directly |
+| Briefs replace plans | Harnesses own session execution planning; Goldfish owns durable strategic context that outlasts a session |
 | 3 tools, not more | Checkpoint, recall, brief cover all use cases without bloat |
 | Skills over slash commands | Plugin-native, no manual `bun setup` step |
-| Evidence-based features only | Complexity is added only when real usage demands it |
 
 ---
 

@@ -183,14 +183,9 @@ goldfish/
 
 ## Behavioral Language Strategy
 
-Tool descriptions are **directive about quality, restrained about frequency**.
+Tool descriptions are **directive about quality, encouraging about frequency**. Quality guidance is strong (structured markdown, WHAT/WHY/HOW/IMPACT). Frequency guidance is positive ("when in doubt, checkpoint") with concrete triggers, not "Do NOT" lists.
 
-This is a deliberate recalibration. The original aggressive language (from Tusk patterns) solved under-checkpointing but caused severe over-checkpointing in practice: 100+ checkpoints/day, rapid-fire duplicates, bloated files.
-
-### Checkpoint Tool
-- Describes when to checkpoint (milestones, decisions, discoveries) and when NOT to (every small step, routine test runs, rapid-fire)
-- Strong on description quality: structured markdown, WHAT/WHY/HOW/IMPACT
-- No guilt-tripping or "MANDATORY" language about frequency
+The rule was recalibrated twice: aggressive language caused overuse (100+ checkpoints/day), then a defensive "Do NOT" list caused underuse. The current balance lands between those failure modes.
 
 ### Recall Tool
 

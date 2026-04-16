@@ -466,7 +466,7 @@ describe('Server exports', () => {
   it('documents Goldfish as a cross-client memory system with first-class client setup guides', async () => {
     const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
 
-    expect(readme).toContain('Persistent developer memory for MCP-compatible coding clients.');
+    expect(readme).toContain('cross-client MCP memory system');
     expect(readme).toContain('### Claude Code');
     expect(readme).toContain('### Codex Desktop');
     expect(readme).toContain('### OpenCode');
