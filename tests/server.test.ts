@@ -560,6 +560,40 @@ describe('Server exports', () => {
     expect(readme).toContain(`${skillDirs.length} skills`);
     expect(readmeSkillTable).toEqual(skillDirs);
   });
+
+  it('includes a script to sync repo-local agent skills', async () => {
+    const packageJson = JSON.parse(
+      await Bun.file(new URL('../package.json', import.meta.url)).text()
+    ) as { scripts?: Record<string, string> };
+
+    expect(packageJson.scripts).toBeDefined();
+    expect(packageJson.scripts!['sync:agent-skills']).toBeDefined();
+    expect(packageJson.scripts!['sync:agent-skills']).toContain('scripts/sync-agent-skills.ts');
+  });
+
+  it('keeps canonical skills and repo-local agent skills mirrored', async () => {
+    const { readdir } = await import('fs/promises');
+
+    const canonicalSkillsDir = new URL('../skills/', import.meta.url);
+    const mirroredSkillsDir = new URL('../.agents/skills/', import.meta.url);
+
+    const canonicalSkillDirs = (await readdir(canonicalSkillsDir, { withFileTypes: true }))
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort();
+    const mirroredSkillDirs = (await readdir(mirroredSkillsDir, { withFileTypes: true }))
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort();
+
+    expect(mirroredSkillDirs).toEqual(canonicalSkillDirs);
+
+    for (const skillDir of canonicalSkillDirs) {
+      const canonicalContent = await Bun.file(new URL(`../skills/${skillDir}/SKILL.md`, import.meta.url)).text();
+      const mirroredContent = await Bun.file(new URL(`../.agents/skills/${skillDir}/SKILL.md`, import.meta.url)).text();
+      expect(mirroredContent).toBe(canonicalContent);
+    }
+  });
 });
 
 describe('Request-time workspace hydration', () => {

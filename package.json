@@ -11,6 +11,7 @@
     "test:coverage": "bun test --coverage",
     "build": "bun build src/server.ts --outdir dist --target node",
     "typecheck": "tsc --noEmit",
+    "sync:agent-skills": "bun run scripts/sync-agent-skills.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
   "keywords": [
