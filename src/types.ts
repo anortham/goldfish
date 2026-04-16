@@ -127,18 +127,9 @@ export interface Registry {
   projects: RegisteredProject[];
 }
 
-export interface ConsolidationState {
-  timestamp: string;              // ISO 8601 UTC - timestamp of last consolidated checkpoint (cursor for next batch)
-  checkpointsConsolidated: number; // Running total across all consolidations
-}
-
-export interface MemoryData {
-  decisions?: string[];
-  open_questions?: string[];
-  deferred_work?: string[];
-  gotchas?: string[];
-}
-
+// REMOVED IN 2.6: MemorySection is still referenced by RecallResult.matchedMemorySections
+// and the search-time code in recall.ts. Phase 2.6 strips both, after which this
+// type can be deleted.
 export interface MemorySection {
   slug: string;      // e.g., "decisions" (the YAML key)
   header: string;    // e.g., "Decisions" (display name)

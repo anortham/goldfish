@@ -10,11 +10,20 @@ import { join } from 'path';
 import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
 import { getCheckpointsForDateRange, getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS, hasValidCalendarDate } from './checkpoints';
 import { buildCompactSearchDescription } from './digests';
-import { readMemory, readConsolidationState, getMemorySummary, parseMemorySections } from './memory';
 import { getActiveBrief } from './plans';
 import { listRegisteredProjects } from './registry';
 import { searchCheckpoints } from './ranking';
 import { resolveWorkspace } from './workspace';
+
+// REMOVED IN 2.6: src/memory.ts is gone. The helpers below are local stubs that
+// keep recall.ts compiling until Phase 2.6 strips the consolidation/memory code
+// paths from this file (search-time memory section synthesis, includeMemory,
+// consolidation block, cross-workspace memorySummary). Do not add new callers.
+type ConsolidationStateStub = { timestamp: string; checkpointsConsolidated: number };
+async function readMemory(_workspace: string): Promise<string | null> { return null; }
+async function readConsolidationState(_workspace: string): Promise<ConsolidationStateStub | null> { return null; }
+function getMemorySummary(_content: string | null): string | null { return null; }
+function parseMemorySections(_content: string): MemorySection[] { return []; }
 
 export const MEMORY_SECTION_PREFIX = 'memory_section_';
 

@@ -1327,9 +1327,12 @@ describe('Phase 2 consolidation removal', () => {
   it('no longer exports writeMemory or writeConsolidationState from src/memory', async () => {
     // Phase 2.5 deletes the consolidation-state I/O helpers. The module
     // itself may also disappear — either outcome satisfies the contract.
+    // Build the specifier dynamically so the typechecker does not resolve it
+    // statically once the module is gone.
+    const memorySpecifier = '../src/memory';
     let memoryModule: Record<string, unknown> | null = null;
     try {
-      memoryModule = (await import('../src/memory')) as Record<string, unknown>;
+      memoryModule = (await import(memorySpecifier)) as Record<string, unknown>;
     } catch {
       memoryModule = null;
     }

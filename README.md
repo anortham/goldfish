@@ -249,14 +249,13 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 8 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
+Goldfish ships 7 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
 | `/brief` | Create and manage durable strategic briefs |
 | `/brief-status` | Assess progress against the active brief |
 | `/checkpoint` | Save a checkpoint with rich description and tags |
-| `/consolidate` | Prepare memory consolidation work for the background subagent |
 | `/plan` | Compatibility alias for `/brief` |
 | `/plan-status` | Compatibility alias for `/brief-status` |
 | `/recall` | Restore context from recent checkpoints and the active brief |

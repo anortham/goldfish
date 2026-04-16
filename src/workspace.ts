@@ -5,10 +5,9 @@
  * its memories in a local .memories/ directory.
  */
 
-import { createHash } from 'crypto';
 import { mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 export interface WorkspaceRoot {
@@ -135,25 +134,6 @@ export function getGoldfishHomeDir(): string {
   if (process.env.GOLDFISH_HOME) return process.env.GOLDFISH_HOME;
   const homeDir = process.env.HOME || process.env.USERPROFILE || tmpdir();
   return join(homeDir, '.goldfish');
-}
-
-export function getSemanticWorkspaceKey(projectPath: string): string {
-  const normalizedPath = resolve(projectPath);
-
-  return createHash('sha256')
-    .update(normalizedPath)
-    .digest('hex')
-    .slice(0, 12);
-}
-
-export function getConsolidationStateDir(): string {
-  return join(getGoldfishHomeDir(), 'consolidation-state');
-}
-
-export function getConsolidationStatePath(projectPath: string): string {
-  const name = normalizeWorkspace(projectPath);
-  const key = getSemanticWorkspaceKey(projectPath);
-  return join(getConsolidationStateDir(), `${name}_${key}.json`);
 }
 
 /**
