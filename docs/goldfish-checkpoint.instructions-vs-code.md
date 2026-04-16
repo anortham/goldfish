@@ -45,14 +45,14 @@ applyTo: "**"
   - `since`: Human-friendly time span (`"2h"`, `"3d"`) or ISO timestamp.
   - `days`: How far back to look in days.
   - `from`/`to`: Explicit date range (ISO 8601 or YYYY-MM-DD).
-  - `search`: Fuzzy search across descriptions, tags, branches, and files.
+  - `search`: BM25 search across descriptions, tags, branches, and files.
   - `full`: Return full descriptions + git metadata (default: false).
   - `workspace`: `"current"` (default), `"all"` (cross-workspace), or specific path.
   - `briefId`: Filter checkpoints to those created under a specific brief.
 - Examples:
   - `recall()` — last 5 checkpoints
   - `recall({ since: "2h" })` — last 2 hours
-  - `recall({ search: "auth", full: true })` — fuzzy search with full details
+  - `recall({ search: "auth", full: true })` — BM25 search with full details
   - `recall({ workspace: "all", days: 1 })` — cross-project standup
   - `recall({ limit: 0 })` — active brief only, no checkpoints
 

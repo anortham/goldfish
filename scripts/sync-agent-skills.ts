@@ -1,5 +1,17 @@
 #!/usr/bin/env bun
 
+/**
+ * Sync script for repo-local agent assets.
+ *
+ * Two responsibilities:
+ *   1. Mirror canonical skills from `skills/` into `.agents/skills/` so
+ *      non-Claude harnesses (Codex, OpenCode, etc.) can discover them.
+ *   2. Generate `AGENTS.md` from the canonical `CLAUDE.md` at repo root.
+ *      `CLAUDE.md` is the single source of truth; `AGENTS.md` is a byte-for-byte
+ *      copy maintained for harnesses that read AGENTS.md instead. Edit CLAUDE.md
+ *      and rerun `bun run sync:agent-skills`. Never edit AGENTS.md by hand.
+ */
+
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -45,3 +57,9 @@ for (const skillDir of canonicalSkillDirs) {
 }
 
 console.log(`Synced ${canonicalSkillDirs.length} Goldfish skills into .agents/skills`);
+
+const claudeMdPath = join(repoRoot, 'CLAUDE.md');
+const agentsMdPath = join(repoRoot, 'AGENTS.md');
+const claudeMdContent = await readFile(claudeMdPath, 'utf-8');
+await writeAtomically(agentsMdPath, claudeMdContent);
+console.log('Synced AGENTS.md from CLAUDE.md');

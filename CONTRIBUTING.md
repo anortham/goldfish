@@ -18,19 +18,20 @@ If you find yourself writing implementation code before tests, STOP. Delete it a
 
 ## Core Philosophy
 
-This is **iteration #5** of a developer memory system, now at **v6.6.0**. We've learned hard lessons:
+This is **iteration #5** of a developer memory system. We've learned hard lessons:
 
 ### What We've Tried Before
 1. **Original Goldfish (TS)**: JSON files, good concepts, critical bugs (race conditions, date handling)
 2. **Tusk (Bun + SQLite)**: Fixed bugs, added features, became too complex, hook spam disaster
 3. **.NET rewrite**: Over-engineered, never finished
 4. **Goldfish 4.0**: Radical simplicity, markdown storage
-5. **Goldfish 5.x-6.x**: cross-client MCP memory, Claude Code adapter, project-local .memories/, semantic recall, memory consolidation
+5. **Goldfish 5.x-6.x**: cross-client MCP memory, Claude Code adapter with hooks, project-local .memories/, hybrid semantic recall, memory consolidation
+6. **Goldfish 7.0**: Subtract sprint -- removed semantic stack, hooks, consolidation, and the plan tool; settled on Orama BM25 search and a brief-first storage model
 
 ### What We're Building Now
-**Radical simplicity**: Markdown storage, fuse.js search, quality-focused behavioral guidance. No database.
+**Radical simplicity**: Markdown storage, BM25 search via Orama, quality-focused behavioral guidance. No database, no derived caches.
 
-**Goldfish is a cross-client MCP memory system.** Claude Code currently has the fullest adapter, with plugin packaging, skills, and hooks on top of the shared MCP server.
+**Goldfish is a cross-client MCP memory system.** Claude Code currently has the fullest adapter, with plugin packaging and skills on top of the shared MCP server.
 
 **We only add complexity when we have EVIDENCE we need it.**
 
@@ -141,11 +142,9 @@ bun test --coverage
   briefs/
     {brief-id}.md
   .active-brief
-  memory.yaml              # Consolidated memory (YAML, merge-friendly)
 
 ~/.goldfish/
   registry.json            # Cross-project registry
-  consolidation-state/     # Per-workspace consolidation cursors
 ```
 
 ### Core Modules
@@ -154,23 +153,19 @@ bun test --coverage
 |--------|---------|-----------|
 | `src/workspace.ts` | Workspace detection/normalization | `tests/workspace.test.ts` |
 | `src/checkpoints.ts` | Checkpoint storage/retrieval | `tests/checkpoints.test.ts` |
-| `src/plans.ts` | Brief management with legacy plan compatibility | `tests/plans.test.ts` |
-| `src/recall.ts` | Search and aggregation | `tests/recall.test.ts` |
-| `src/memory.ts` | Memory file I/O, consolidation state | `tests/memory.test.ts` |
-| `src/semantic.ts` | Embedding runtime, pending semantic work | `tests/semantic.test.ts` |
-| `src/ranking.ts` | Hybrid ranking, scoring helpers | `tests/ranking.test.ts` |
-| `src/semantic-cache.ts` | Derived semantic manifest + JSONL records | `tests/semantic-cache.test.ts` |
-| `src/transformers-embedder.ts` | Local embedding runtime | `tests/transformers-embedder.test.ts` |
+| `src/briefs.ts` | Brief storage and activation | `tests/briefs.test.ts` |
+| `src/recall.ts` | Recall aggregation across date ranges and workspaces | `tests/recall.test.ts` |
+| `src/ranking.ts` | Orama BM25 search ranking | `tests/ranking.test.ts` |
 | `src/digests.ts` | Compact retrieval/search digests | `tests/digests.test.ts` |
-| `src/consolidation-prompt.ts` | Consolidation subagent prompt builder | - |
-| `src/logger.ts` | File-based logging | - |
+| `src/file-io.ts` | Atomic write helpers | `tests/file-io.test.ts` |
+| `src/logger.ts` | File-based logging | `tests/logger.test.ts` |
 | `src/registry.ts` | Cross-project registry | `tests/registry.test.ts` |
 | `src/git.ts` | Git context capture | `tests/git.test.ts` |
 | `src/lock.ts` | File locking utilities | `tests/lock.test.ts` |
 | `src/summary.ts` | Auto-summary generation | `tests/summary.test.ts` |
 | `src/emoji.ts` | Fish emoji helper | - |
 | `src/server.ts` | MCP server | `tests/server.test.ts` |
-| `src/handlers/` | Tool handlers (checkpoint, recall, brief, consolidate) | `tests/handlers.test.ts` |
+| `src/handlers/` | Tool handlers (checkpoint, recall, brief) | `tests/handlers.test.ts` |
 | `src/tools.ts` | Tool definitions | - |
 | `src/instructions.ts` | Server behavioral instructions | - |
 | `src/types.ts` | TypeScript interfaces | - |
@@ -187,7 +182,7 @@ interface Checkpoint {
   summary?: string;
 }
 
-interface Plan {
+interface Brief {
   id: string;
   title: string;
   content: string;        // Markdown body
@@ -204,8 +199,9 @@ interface RecallOptions {
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
   since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
-  search?: string;        // Fuzzy search query (fuse.js)
+  search?: string;        // BM25 search query (Orama)
   full?: boolean;         // Include full descriptions + git metadata (default: false)
+  briefId?: string;       // Filter to checkpoints associated with this brief
 }
 ```
 
@@ -348,7 +344,7 @@ MCP tool descriptions are **directive about quality, restrained about frequency*
 
 - **Quality**: Checkpoint descriptions must be structured markdown. Lazy one-liners are unacceptable. This guidance stays strong.
 - **Frequency**: Checkpoint at milestones, not after every action. No "MANDATORY" or guilt-tripping language pushing agents to over-checkpoint.
-- **Recall**: Runs automatically at session start via the SessionStart hook. Users can also invoke `/recall` for targeted queries.
+- **Recall**: Agents call `recall()` at session start; users can also run `/recall` for targeted queries.
 - **Briefs**: Keep strong guidance around durable strategic direction, but do not mirror harness plan mode.
 
 This was recalibrated after real-world evidence showed agents over-complying: 100+ checkpoints/day, rapid-fire duplicates within minutes, bloated files. The original aggressive tone solved under-checkpointing but created over-checkpointing.
@@ -439,7 +435,7 @@ You're doing it right when:
 
 ## Remember
 
-**This is iteration #5, now at v6.5.0. We've made mistakes before.**
+**This is iteration #5. We've made mistakes before.**
 
 The difference this time: **radical simplicity** and **evidence-based feature development**.
 

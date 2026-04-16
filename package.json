@@ -1,6 +1,6 @@
 {
   "name": "goldfish",
-  "version": "6.7.0",
+  "version": "7.0.0",
   "description": "Cross-client MCP memory with checkpoints, recall, briefs, and standups",
   "type": "module",
   "main": "src/server.ts",
@@ -24,8 +24,8 @@
   "author": "anortham",
   "license": "MIT",
   "dependencies": {
-    "@huggingface/transformers": "^3.7.6",
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "@orama/orama": "^3.1.18",
     "fuse.js": "^7.0.0",
     "yaml": "^2.8.2"
   },

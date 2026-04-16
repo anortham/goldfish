@@ -7,13 +7,8 @@ import {
   getPlansDir,
   ensureMemoriesDir,
   getGoldfishHomeDir,
-  getModelCacheDir,
-  getSemanticWorkspaceKey,
-  getSemanticCacheDir,
-  getConsolidationStateDir,
-  getConsolidationStatePath,
 } from '../src/workspace';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { tmpdir } from 'os';
 import { rm, stat } from 'fs/promises';
 import { pathToFileURL } from 'url';
@@ -263,7 +258,7 @@ describe('resolveWorkspace', () => {
   });
 });
 
-describe('Semantic cache paths', () => {
+describe('Goldfish home directory', () => {
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;
 
@@ -273,22 +268,6 @@ describe('Semantic cache paths', () => {
 
     if (originalUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = originalUserProfile;
-  });
-
-  it('stores semantic cache under ~/.goldfish/cache/semantic', () => {
-    process.env.HOME = '/test/home';
-    delete process.env.USERPROFILE;
-
-    expect(getSemanticCacheDir('/workspace/project'))
-      .toBe(join('/test/home', '.goldfish', 'cache', 'semantic', getSemanticWorkspaceKey('/workspace/project')));
-  });
-
-  it('stores model cache under ~/.goldfish/models/transformers', () => {
-    process.env.HOME = '/test/home';
-    delete process.env.USERPROFILE;
-
-    expect(getModelCacheDir())
-      .toBe(join('/test/home', '.goldfish', 'models', 'transformers'));
   });
 
   it('uses the goldfish home directory from HOME or USERPROFILE', () => {
@@ -313,52 +292,5 @@ describe('Semantic cache paths', () => {
       if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
       else process.env.GOLDFISH_HOME = originalGoldfishHome;
     }
-  });
-
-  it('normalizes relative and absolute paths to the same workspace key', () => {
-    const absolutePath = resolve(process.cwd(), 'fixtures/semantic-workspace');
-    const relativePath = './fixtures/semantic-workspace';
-
-    expect(getSemanticWorkspaceKey(relativePath))
-      .toBe(getSemanticWorkspaceKey(absolutePath));
-  });
-
-  it('returns a stable key for the same path and a different key for different paths', () => {
-    const firstPath = resolve('/workspace/one');
-    const secondPath = resolve('/workspace/two');
-
-    expect(getSemanticWorkspaceKey(firstPath))
-      .toBe(getSemanticWorkspaceKey(firstPath));
-    expect(getSemanticWorkspaceKey(firstPath))
-      .not.toBe(getSemanticWorkspaceKey(secondPath));
-  });
-});
-
-describe('getConsolidationStateDir', () => {
-  it('returns path under goldfish home', () => {
-    const result = getConsolidationStateDir();
-    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state'));
-  });
-});
-
-describe('getConsolidationStatePath', () => {
-  it('returns per-workspace JSON file path with hash suffix', () => {
-    const projectPath = '/Users/dev/source/goldfish';
-    const key = getSemanticWorkspaceKey(projectPath);
-    const result = getConsolidationStatePath(projectPath);
-    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', `goldfish_${key}.json`));
-  });
-
-  it('normalizes workspace name and appends hash suffix', () => {
-    const projectPath = '/Users/dev/source/@org/my-project';
-    const key = getSemanticWorkspaceKey(projectPath);
-    const result = getConsolidationStatePath(projectPath);
-    expect(result).toBe(join(getGoldfishHomeDir(), 'consolidation-state', `org-my-project_${key}.json`));
-  });
-
-  it('produces different filenames for two projects with the same directory name', () => {
-    const workPath = '/work/app';
-    const personalPath = '/personal/app';
-    expect(getConsolidationStatePath(workPath)).not.toBe(getConsolidationStatePath(personalPath));
   });
 });

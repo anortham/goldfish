@@ -2,13 +2,14 @@
 /**
  * Goldfish MCP Server
  *
- * Provides 4 core tools for AI agents:
+ * Provides core tools for AI agents:
  * - checkpoint: Save work progress
  * - recall: Restore context
  * - brief: Manage durable strategic context
- * - consolidate: Prepare memory consolidation
  */
 
+import { rm } from 'fs/promises';
+import { join } from 'path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -20,18 +21,17 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
-import { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } from './handlers/index.js';
-import type { CheckpointArgs, RecallArgs, BriefArgs, PlanArgs, ConsolidateArgs } from './types.js';
-import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
+import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js';
+import type { CheckpointArgs, RecallArgs, BriefArgs } from './types.js';
 import { getLogger } from './logger.js';
-import { resolveWorkspace } from './workspace.js';
+import { getGoldfishHomeDir, resolveWorkspace } from './workspace.js';
 
-export const SERVER_VERSION = '6.7.0';
-const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief', 'plan', 'consolidate']);
+export const SERVER_VERSION = '7.0.0';
+const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 
 // Re-export for backward compatibility with tests
-export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate };
+export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief };
 
 function getSessionKey(sessionId?: string): string {
   return sessionId ?? DEFAULT_SESSION_KEY;
@@ -97,7 +97,41 @@ async function hydrateWorkspaceArguments(
   };
 }
 
+/**
+ * v7.0-only migration cleanup. REMOVE IN v7.1.0.
+ *
+ * v6 wrote a derived semantic cache and downloaded MiniLM model weights
+ * under ~/.goldfish/, plus per-workspace consolidation cursors under
+ * ~/.goldfish/consolidation-state/. v7 dropped the entire semantic stack
+ * in favor of Orama BM25 and removed the consolidation pipeline, leaving
+ * those three directories as dead bytes on every upgrade.
+ *
+ * This helper deletes all three directories on first server startup. After
+ * one v7 startup per machine the dirs are gone and this becomes permanent
+ * dead code, so it must be removed in v7.1.0.
+ */
+export async function cleanupV7LegacyDirectories(): Promise<void> {
+  try {
+    const home = getGoldfishHomeDir();
+    await Promise.all([
+      rm(join(home, 'cache', 'semantic'), { recursive: true, force: true }),
+      rm(join(home, 'models', 'transformers'), { recursive: true, force: true }),
+      rm(join(home, 'consolidation-state'), { recursive: true, force: true })
+    ]);
+  } catch {
+    // Best-effort: never propagate errors from migration cleanup.
+  }
+}
+
+let v7CleanupRan = false;
+
 export function createServer() {
+  // v7.0-only migration cleanup. REMOVE IN v7.1.0 (see cleanupV7LegacyDirectories).
+  if (!v7CleanupRan) {
+    v7CleanupRan = true;
+    void cleanupV7LegacyDirectories();
+  }
+
   const server = new Server(
     {
       name: 'goldfish',
@@ -111,11 +145,6 @@ export function createServer() {
     }
   );
   const rootsCache = new Map<string, Root[] | null | undefined>();
-
-  // Prune orphaned semantic caches (fire-and-forget)
-  pruneOrphanedSemanticCaches().catch(() => {
-    // Silently ignore, pruning is best-effort
-  });
 
   server.setNotificationHandler(RootsListChangedNotificationSchema, () => {
     rootsCache.clear();
@@ -148,12 +177,6 @@ export function createServer() {
           break;
         case 'brief':
           result = await handleBrief(hydratedArgs as unknown as BriefArgs);
-          break;
-        case 'plan':
-          result = await handlePlan(hydratedArgs as unknown as PlanArgs);
-          break;
-        case 'consolidate':
-          result = await handleConsolidate(hydratedArgs as ConsolidateArgs);
           break;
         default:
           throw new Error(`Unknown tool: ${name}`);
@@ -194,7 +217,7 @@ export async function startServer() {
   log.cleanup(); // Fire-and-forget old log cleanup
 
   console.error('Goldfish MCP Server started');
-  console.error('Tools: checkpoint, recall, brief, consolidate (plan supported as compatibility alias)');
+  console.error('Tools: checkpoint, recall, brief');
 }
 
 // Run server if executed directly

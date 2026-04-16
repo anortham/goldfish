@@ -21,7 +21,11 @@ export interface Checkpoint {
   git?: GitContext;        // Git context at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
   briefId?: string;       // ID of active brief when checkpoint was created
-  planId?: string;        // Legacy alias for the active brief ID during migration
+  // Read-side legacy: existing checkpoint markdown in .memories/<date>/*.md may
+  // still carry a `planId:` frontmatter field from before the rename. The
+  // checkpoint parser populates this field so older files keep parsing without
+  // error. New writes only emit `briefId` — see src/checkpoints.ts.
+  planId?: string;
   filePath?: string;        // Absolute path to checkpoint file on disk
 }
 
@@ -41,7 +45,7 @@ export interface CheckpointInput {
   workspace?: string;     // Defaults to current workspace
 }
 
-export interface Plan {
+export interface Brief {
   id: string;
   title: string;
   content: string;        // Markdown body (without frontmatter)
@@ -51,9 +55,7 @@ export interface Plan {
   tags: string[];
 }
 
-export type Brief = Plan;
-
-export interface PlanInput {
+export interface BriefInput {
   id?: string;            // Auto-generated if not provided
   title: string;
   content: string;
@@ -63,16 +65,12 @@ export interface PlanInput {
   tags?: string[];
 }
 
-export type BriefInput = PlanInput;
-
-export interface PlanUpdate {
+export interface BriefUpdate {
   title?: string;
   content?: string;
   status?: 'active' | 'completed' | 'archived';
   tags?: string[];
 }
-
-export type BriefUpdate = PlanUpdate;
 
 export interface RecallOptions {
   workspace?: string;     // 'current' | 'all' | specific path
@@ -84,35 +82,13 @@ export interface RecallOptions {
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief
-  planId?: string;        // Legacy alias for briefId during migration
-  includeMemory?: boolean;  // Include memory.yaml in response. Defaults: true (no search), false (with search). Override explicitly.
   _registryDir?: string;  // Internal: override registry dir for test isolation
-  _semanticRuntime?: SemanticRuntime; // Internal: semantic runtime override for test isolation
-}
-
-export interface SemanticRuntime {
-  isReady(): boolean
-  getModelInfo?(): SemanticModelInfo | undefined
-  embedTexts(texts: string[], signal?: AbortSignal): Promise<number[][]>
-}
-
-export interface SemanticModelInfo {
-  id: string
-  version: string
 }
 
 export interface RecallResult {
   checkpoints: Checkpoint[];
   activeBrief?: Brief | null;
-  activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
-  memory?: string;                     // memory.yaml content (when includeMemory is true)
-  matchedMemorySections?: MemorySection[];  // Memory sections that matched search query
-  consolidation?: {
-    needed: boolean;
-    staleCheckpoints: number;
-    lastConsolidated: string | null;    // ISO 8601 UTC or null if never consolidated
-  };
 }
 
 export interface WorkspaceSummary {
@@ -120,7 +96,6 @@ export interface WorkspaceSummary {
   path: string;
   checkpointCount: number;
   lastActivity?: string;  // ISO 8601 UTC
-  memorySummary?: string | null;  // First lines of memory.yaml (up to 300 chars)
 }
 
 export interface GitContext {
@@ -139,41 +114,9 @@ export interface Registry {
   projects: RegisteredProject[];
 }
 
-export interface ConsolidationState {
-  timestamp: string;              // ISO 8601 UTC - timestamp of last consolidated checkpoint (cursor for next batch)
-  checkpointsConsolidated: number; // Running total across all consolidations
-}
-
-export interface MemoryData {
-  decisions?: string[];
-  open_questions?: string[];
-  deferred_work?: string[];
-  gotchas?: string[];
-}
-
-export interface MemorySection {
-  slug: string;      // e.g., "decisions" (the YAML key)
-  header: string;    // e.g., "Decisions" (display name)
-  content: string;   // Joined entries as text for search
-}
-
 export interface ScoredCheckpoint {
   checkpoint: Checkpoint
   score: number
-}
-
-export interface ConsolidationPayload {
-  status: 'ready' | 'current';
-  message?: string;                    // Only when status === 'current'
-  memoryPath?: string;                 // Absolute path to .memories/memory.yaml
-  lastConsolidatedPath?: string;       // Absolute path to ~/.goldfish/consolidation-state/{workspace}.json
-  activeBriefPath?: string;            // Absolute path to active brief file, if one exists
-  activePlanPath?: string;             // Legacy alias for activeBriefPath during migration
-  checkpointCount?: number;            // Number of checkpoints in this batch
-  remainingCount?: number;             // Unconsolidated checkpoints beyond this batch
-  previousTotal?: number;              // Running total for incrementing checkpointsConsolidated
-  skippedOldCount?: number;            // Checkpoints older than age limit that were excluded
-  prompt?: string;                     // Subagent instructions (checkpoint file paths embedded)
 }
 
 /** MCP tool argument types for compile-time safety */
@@ -205,33 +148,19 @@ export interface RecallArgs {
   full?: boolean;
   briefId?: string;
   brief_id?: string;
-  planId?: string;
-  plan_id?: string;
-  includeMemory?: boolean;
-  include_memory?: boolean;
   _registryDir?: string;
-  _semanticRuntime?: SemanticRuntime;
 }
 
-export interface PlanArgs {
+export interface BriefArgs {
   action: string;
   id?: string;
   briefId?: string;
   brief_id?: string;
-  planId?: string;
-  plan_id?: string;
   title?: string;
   content?: string;
   workspace?: string;
   tags?: string[];
   activate?: boolean;
   status?: string;
-  updates?: PlanUpdate;
-}
-
-export type BriefArgs = PlanArgs;
-
-export interface ConsolidateArgs {
-  all?: boolean;
-  workspace?: string;
+  updates?: BriefUpdate;
 }

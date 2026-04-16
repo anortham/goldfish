@@ -14,9 +14,6 @@ import {
 import type { Checkpoint, CheckpointInput } from '../src/types';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { listRegisteredProjects, unregisterProject } from '../src/registry';
-import { buildRetrievalDigest, DIGEST_VERSION } from '../src/digests';
-import { loadSemanticState } from '../src/semantic-cache';
-import { createHash } from 'crypto';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { rm, readdir, readFile, writeFile, mkdir } from 'fs/promises';
@@ -1160,9 +1157,9 @@ describe('saveCheckpoint', () => {
   });
 
   it('attaches briefId when an active brief exists', async () => {
-    // Set up an active plan
-    const { savePlan } = await import('../src/plans');
-    await savePlan({
+    // Set up an active brief
+    const { saveBrief } = await import('../src/briefs');
+    await saveBrief({
       title: 'Test Plan',
       content: 'Plan content',
       workspace: tempDir,
@@ -1222,56 +1219,6 @@ describe('saveCheckpoint', () => {
     expect(content).toContain('type: decision');
     expect(content).toContain('context: API contract mismatch between services');
     expect(content).toContain('confidence: 4');
-  });
-
-  it('creates a pending semantic record with the checkpoint retrieval digest', async () => {
-    const checkpoint = await saveCheckpoint({
-      description: '# Retrieval heading\n\nCheckpoint body for semantic indexing',
-      workspace: tempDir,
-      context: 'Recall context',
-      decision: 'Queue semantic indexing after save',
-      tags: ['semantic', 'checkpoint'],
-      symbols: ['saveCheckpoint']
-    });
-
-    const expectedDigest = buildRetrievalDigest(checkpoint);
-    const expectedDigestHash = createHash('sha256').update(expectedDigest).digest('hex');
-    const state = await loadSemanticState(tempDir);
-
-    expect(state.records).toContainEqual({
-      checkpointId: checkpoint.id,
-      digest: expectedDigest,
-      digestHash: expectedDigestHash,
-      status: 'pending',
-      updatedAt: expect.any(String)
-    });
-    expect(state.manifest.checkpoints[checkpoint.id]).toEqual({
-      checkpointTimestamp: checkpoint.timestamp,
-      digestHash: expectedDigestHash,
-      digestVersion: DIGEST_VERSION
-    });
-  });
-
-  it('still saves the checkpoint when semantic queueing fails', async () => {
-    restoreCheckpointDependencies = __setCheckpointDependenciesForTests({
-      queueSemanticRecord: async () => {
-        throw new Error('semantic queue unavailable');
-      }
-    });
-
-    const checkpoint = await saveCheckpoint({
-      description: 'Checkpoint survives semantic queue failure',
-      workspace: tempDir
-    });
-
-    const today = checkpoint.timestamp.split('T')[0]!;
-    const dateDir = join(getMemoriesDir(tempDir), today);
-    const files = await readdir(dateDir);
-    const content = await readFile(join(dateDir, files[0]!), 'utf-8');
-
-    expect(checkpoint.description).toBe('Checkpoint survives semantic queue failure');
-    expect(files).toHaveLength(1);
-    expect(content).toContain(`id: ${checkpoint.id}`);
   });
 
   it('saves multiple checkpoints as separate files', async () => {

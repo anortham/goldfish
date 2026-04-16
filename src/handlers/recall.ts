@@ -155,7 +155,7 @@ export async function handleRecall(args: RecallArgs) {
 
   // Build readable markdown response
   const count = result.checkpoints.length;
-  const activeBrief = result.activeBrief ?? result.activePlan;
+  const activeBrief = result.activeBrief;
   const briefText = activeBrief ? ' + active brief' : '';
   const fish = getFishEmoji();
 
@@ -182,49 +182,13 @@ export async function handleRecall(args: RecallArgs) {
     lines.push(formatActiveBrief(activeBrief));
   }
 
-  // Consolidated memory section
-  if (result.memory) {
-    lines.push('');
-    lines.push('---');
-    lines.push('');
-    lines.push('## Consolidated Memory');
-    lines.push(result.memory);
-  }
-
-  // Consolidation recommendation
-  if (result.consolidation?.needed) {
-    const since = result.consolidation.lastConsolidated
-      ? ` since last consolidation (${result.consolidation.lastConsolidated})`
-      : '';
-    lines.push('');
-    lines.push(`> **Consolidation recommended:** ${result.consolidation.staleCheckpoints} checkpoint(s)${since}. Dispatch a background consolidation subagent.`);
-  }
-
   // Workspace summaries for cross-project recall
   if (result.workspaces && result.workspaces.length > 0) {
     lines.push('');
     lines.push('## Workspaces');
     for (const ws of result.workspaces) {
-      let line = `- **${ws.name}** (${ws.path}): ${ws.checkpointCount} checkpoints${ws.lastActivity ? `, last: ${ws.lastActivity}` : ''}`;
+      const line = `- **${ws.name}** (${ws.path}): ${ws.checkpointCount} checkpoints${ws.lastActivity ? `, last: ${ws.lastActivity}` : ''}`;
       lines.push(line);
-      if (ws.memorySummary) {
-        lines.push(`  Memory: ${ws.memorySummary.split('\n')[0]}`);
-      }
-    }
-  }
-
-  // Matched memory sections (from search)
-  if (result.matchedMemorySections?.length) {
-    lines.push('');
-    lines.push('---');
-    lines.push('');
-    lines.push('## Matched Memory Sections');
-    lines.push('');
-    for (const section of result.matchedMemorySections) {
-      lines.push(`### ${section.header}`);
-      lines.push('');
-      lines.push(section.content);
-      lines.push('');
     }
   }
 

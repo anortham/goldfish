@@ -1,17 +1,18 @@
-# Goldfish v6.6.0 - Implementation Specification
+# Goldfish - Implementation Specification
 
 ## Design Philosophy
 
-**Radical Simplicity**: Everything is markdown. No database. Let the agent's intelligence handle complexity, we just provide transparent storage and retrieval.
+**Radical Simplicity**: Everything is markdown. No database, no derived caches. Let the agent's intelligence handle complexity, we just provide transparent storage and retrieval.
 
 **Test-Driven Development**: Write tests first. Every feature starts with a failing test.
 
 **Lessons Learned**: This is iteration #5. We're taking the best from each previous attempt:
-- Original Goldfish: Workspace normalization, fuse.js search, transparency
+- Original Goldfish: Workspace normalization, transparency
 - Tusk: Directive behavioral language (recalibrated for quality over frequency)
 - .NET attempt: Behavioral adoption patterns, tool priorities
 - Goldfish 4.0: Markdown-only storage, radical simplicity, centralized ~/.goldfish/
 - Fixing: Race conditions, date bugs, cross-workspace issues, hook spam
+- Goldfish 7.0 subtract sprint: removed semantic stack, hooks, consolidation, and the plan tool; settled on Orama BM25 over the markdown corpus
 
 ---
 
@@ -22,17 +23,12 @@
   {date}/{HHMMSS}_{hash}.md   # Individual checkpoints (YAML frontmatter)
   briefs/{brief-id}.md         # Briefs (YAML frontmatter)
   .active-brief                # Active brief ID
-  memory.yaml                  # Consolidated memory (YAML, merge-friendly)
 
 ~/.goldfish/
   registry.json                # Cross-project registry
-  consolidation-state/         # Per-workspace consolidation cursors
-    {workspace}_{hash}.json
-  cache/semantic/              # Derived semantic manifest + JSONL records
-  models/transformers/         # Local embedding model cache
 ```
 
-Legacy `.memories/plans/` and `.active-plan` paths are still read during the compatibility window, but new writes land in the brief paths above.
+Legacy `.memories/plans/` and `.active-plan` paths are still read so older repos keep working, but new writes land in the brief paths above.
 
 ### Core Principles
 1. **One file per checkpoint** (YAML frontmatter + markdown body)
@@ -40,7 +36,7 @@ Legacy `.memories/plans/` and `.active-plan` paths are still read during the com
 3. **Project-local storage** (git-committable)
 4. **Cross-project via registry** (~/.goldfish/registry.json)
 5. **Atomic writes** (write-then-rename with locking)
-6. **Derived semantic cache stays rebuildable** (JSON/JSONL outside `.memories/`)
+6. **No derived caches** -- search runs over the markdown corpus on demand
 
 ---
 
@@ -145,17 +141,13 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 
 | Module | Purpose |
 |--------|---------|
-| `src/workspace.ts` | Workspace detection, `getMemoriesDir()`, `getBriefsDir()`, `getPlansDir()`, `ensureMemoriesDir()` |
+| `src/workspace.ts` | Workspace detection, `getMemoriesDir()`, `getBriefsDir()`, `ensureMemoriesDir()` (legacy `getPlansDir()` is retained internally for reading old plan files) |
 | `src/checkpoints.ts` | YAML frontmatter individual files, `generateCheckpointId()`, `saveCheckpoint()`, `getCheckpointsForDay()`, `getCheckpointsForDateRange()` |
-| `src/plans.ts` | Brief CRUD with legacy plan compatibility, active brief tracking |
-| `src/recall.ts` | Search (fuse.js), aggregation, cross-project recall via registry |
-| `src/digests.ts` | Compact retrieval digests for lexical search and compact result presentation |
-| `src/semantic-cache.ts` | Derived semantic manifest/records storage under `~/.goldfish/cache/semantic/` |
-| `src/semantic.ts` | Embedding runtime and pending semantic work processing |
-| `src/ranking.ts` | Hybrid ranking and scoring helpers |
-| `src/transformers-embedder.ts` | Lazy local embedding runtime backed by `@huggingface/transformers` |
-| `src/memory.ts` | Memory file I/O (memory.yaml), consolidation state I/O |
-| `src/consolidation-prompt.ts` | Consolidation subagent prompt builder |
+| `src/briefs.ts` | Brief CRUD, active brief tracking, legacy plan-path reads |
+| `src/recall.ts` | Aggregation across date ranges and workspaces, cross-project recall via registry |
+| `src/ranking.ts` | Orama BM25 search ranking |
+| `src/digests.ts` | Compact retrieval digests and compact result presentation |
+| `src/file-io.ts` | Atomic write helpers |
 | `src/logger.ts` | File-based logging |
 | `src/registry.ts` | `~/.goldfish/registry.json` management, auto-registration, stale filtering |
 | `src/git.ts` | Git context capture (branch, commit, files) |
@@ -163,7 +155,7 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 | `src/summary.ts` | Auto-summary generation for long descriptions |
 | `src/emoji.ts` | Fish emoji helper |
 | `src/server.ts` | MCP server setup |
-| `src/handlers/` | Tool handlers (checkpoint, recall, brief, consolidate) |
+| `src/handlers/` | Tool handlers (checkpoint, recall, brief) |
 | `src/tools.ts` | Tool definitions |
 | `src/instructions.ts` | Server behavioral instructions |
 | `src/types.ts` | TypeScript interfaces |
@@ -178,13 +170,9 @@ goldfish/
 ├── skills/
 │   ├── recall/SKILL.md
 │   ├── checkpoint/SKILL.md
-│   ├── consolidate/SKILL.md
 │   ├── brief/SKILL.md
 │   ├── brief-status/SKILL.md
-│   ├── plan/SKILL.md
-│   ├── standup/SKILL.md
-│   └── plan-status/SKILL.md
-├── hooks/hooks.json
+│   └── standup/SKILL.md
 ├── src/
 ├── tests/
 ├── CLAUDE.md
@@ -195,38 +183,23 @@ goldfish/
 
 ## Behavioral Language Strategy
 
-Tool descriptions are **directive about quality, restrained about frequency**.
+Tool descriptions are **directive about quality, encouraging about frequency**. Quality guidance is strong (structured markdown, WHAT/WHY/HOW/IMPACT). Frequency guidance is positive ("when in doubt, checkpoint") with concrete triggers, not "Do NOT" lists.
 
-This is a deliberate recalibration. The original aggressive language (from Tusk patterns) solved under-checkpointing but caused severe over-checkpointing in practice: 100+ checkpoints/day, rapid-fire duplicates, bloated files.
-
-### Checkpoint Tool
-- Describes when to checkpoint (milestones, decisions, discoveries) and when NOT to (every small step, routine test runs, rapid-fire)
-- Strong on description quality: structured markdown, WHAT/WHY/HOW/IMPACT
-- No guilt-tripping or "MANDATORY" language about frequency
+The rule was recalibrated twice: aggressive language caused overuse (100+ checkpoints/day), then a defensive "Do NOT" list caused underuse. The current balance lands between those failure modes.
 
 ### Recall Tool
 
-**Dual-mode recall (v5.0.6+):**
+**Dual-mode recall:**
 - **Last-N mode** (default): When no date parameters are provided, returns the last `limit` checkpoints (default: 5) regardless of age. No date window.
 - **Date-window mode**: When `days`, `since`, `from`, or `to` is provided, filters checkpoints to that date range.
 
-**Hybrid recall flow:**
+**Recall flow:**
 1. Load markdown checkpoints from `.memories/` and build compact retrieval digests.
-2. Run Fuse lexical search over those digests so search always has a fast fallback path.
-3. Start query embedding opportunistically with a short timeout. If it resolves in budget, blend lexical, semantic, metadata, and recency signals into a hybrid ranking.
-4. If semantic work times out, fails, or the derived cache is broken, return lexical results and recover semantic state lazily.
-5. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
-6. After search, process a bounded amount of pending semantic work so indexing debt amortizes across searches instead of blocking one request.
+2. When `search` is supplied, run an Orama BM25 query over those digests with field-weighted ranking (description body, summary, tags, git metadata).
+3. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
+4. Aggregate the active brief and (when `workspace: "all"`) results from peer projects discovered through the registry.
 
-**Semantic maintenance details:**
-- Pending semantic work is queued on checkpoint save.
-- Search-triggered maintenance is best-effort and bounded by per-search item/time budgets; recall always succeeds even if embedding work fails.
-- Model-version invalidation marks derived records stale without touching checkpoint markdown.
-- Corrupted or inconsistent derived cache state is detected, warned, and reset to empty; backfill recreates it from source markdown.
-- Semantic cache and model downloads live under `~/.goldfish/`, outside `.memories/`, and can be rebuilt from source markdown.
-- Pruning orphaned semantic caches acquires the cache lock before deletion, skipping caches with active operations.
-
-Recall runs **automatically at session start** via the SessionStart hook. Users can also invoke `/recall` manually for targeted queries (search, cross-project, time ranges).
+Agents call `recall()` at session start. Users can also invoke `/recall` for targeted queries (search, cross-project, time ranges).
 
 ### Brief Tool
 - Keeps strong guidance around maintaining durable strategic direction
@@ -252,37 +225,33 @@ Based on lessons from previous iterations:
 - Checkpoint save: < 50ms
 - Recall (7 days, single workspace): < 100ms
 - Recall (7 days, all workspaces): < 500ms
-- Search (fuzzy, 100 checkpoints): < 50ms
+- Search (BM25, 100 checkpoints): < 50ms
 - Workspace detection: < 10ms
 
 We achieve this through:
 - Individual file writes (no append locking needed)
 - Smart caching of workspace list
 - Efficient YAML frontmatter parsing
-- Fuse.js for fast fuzzy search
+- Orama BM25 ranking built fresh per query over compact digests
 
 ---
 
 ## Implementation Status
 
-### Complete - v6.6.0
-
-**ALL MODULES IMPLEMENTED AND TESTED**
+### Complete
 
 1. **Workspace utilities** - Detection, normalization, `.memories/` directory management
 2. **Git context** - Branch, commit, files capture
 3. **Checkpoint storage** - YAML frontmatter individual files, atomic writes, concurrent safety
-4. **Brief storage** - YAML frontmatter, CRUD, active brief tracking, legacy plan compatibility
-5. **Recall with fuse.js** - Fuzzy search, cross-workspace aggregation, date range filtering
+4. **Brief storage** - YAML frontmatter, CRUD, active brief tracking, legacy plan-path reads
+5. **Recall** - BM25 search via Orama, cross-workspace aggregation, date range filtering
 6. **Cross-project registry** - `~/.goldfish/registry.json`, auto-registration, stale filtering
-7. **MCP server** - Tools (checkpoint, recall, brief, consolidate), behavioral guidance
-8. **Claude Code plugin** - Skills, hooks, plugin.json
+7. **MCP server** - Tools (checkpoint, recall, brief), behavioral guidance
+8. **Claude Code plugin** - Skills, plugin.json
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
-11. **Semantic recall** - Hybrid ranking, embedding runtime, derived cache
-12. **Memory consolidation** - memory.yaml, consolidation state, subagent prompt builder
 
-**Current architecture:** markdown source data in-project, derived semantic cache in `~/.goldfish/cache/semantic/`, and 4 runtime dependencies (`@huggingface/transformers`, `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`).
+**Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/sdk`, `@orama/orama`, `yaml`.
 
 ---
 

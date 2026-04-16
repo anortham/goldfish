@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
-import { savePlan } from '../src/plans';
-import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
+import { saveBrief } from '../src/briefs';
 import { ensureMemoriesDir } from '../src/workspace';
-import { rm, mkdtemp, stat } from 'fs/promises';
+import { rm, mkdtemp, mkdir, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -18,12 +17,6 @@ let TEST_DIR: string;
 let restoreDeps: (() => void) | undefined;
 const ORIGINAL_CWD = process.cwd();
 const ORIGINAL_GOLDFISH_WORKSPACE = process.env.GOLDFISH_WORKSPACE;
-
-const TEST_DEFAULT_RUNTIME = {
-  isReady: () => false,
-  getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
-  embedTexts: async () => [[1, 0]]
-};
 
 function getFirstTextContent(result: unknown): string {
   if (!result || typeof result !== 'object' || !('content' in result)) {
@@ -45,14 +38,6 @@ function getFirstTextContent(result: unknown): string {
 
   return '';
 }
-
-beforeAll(() => {
-  setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
-});
-
-afterAll(() => {
-  setDefaultSemanticRuntime(undefined);
-});
 
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-server-'));
@@ -158,7 +143,7 @@ describe('Tool handlers', () => {
     it('includes active brief when present', async () => {
       const { handleRecall } = await import('../src/server');
 
-      await savePlan({
+      await saveBrief({
         id: 'test-plan',
         title: 'Test Plan',
         content: 'Plan content',
@@ -203,126 +188,6 @@ describe('Tool handlers', () => {
     });
   });
 
-  describe('plan tool', () => {
-    it('saves plan and returns readable confirmation', async () => {
-      const { handlePlan } = await import('../src/server');
-
-      const result = await handlePlan({
-        action: 'save',
-        title: 'Test Plan',
-        content: 'Plan content',
-        workspace: TEST_DIR
-      });
-
-      expect(result.content[0]!.type).toBe('text');
-
-      const text = result.content[0]!.text;
-      expect(text).not.toStartWith('{');
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
-    });
-
-    it('gets plan by ID', async () => {
-      const { handlePlan } = await import('../src/server');
-
-      await savePlan({
-        id: 'test-plan',
-        title: 'Test Plan',
-        content: 'Content',
-        workspace: TEST_DIR
-      });
-
-      const result = await handlePlan({
-        action: 'get',
-        id: 'test-plan',
-        workspace: TEST_DIR
-      });
-
-      const text = result.content[0]!.text;
-      expect(text).toContain('# Test Plan');
-      expect(text).toContain('Content');
-    });
-
-    it('lists all plans', async () => {
-      const { handlePlan } = await import('../src/server');
-
-      await savePlan({
-        id: 'plan-1',
-        title: 'Plan 1',
-        content: 'Content',
-        workspace: TEST_DIR
-      });
-
-      await savePlan({
-        id: 'plan-2',
-        title: 'Plan 2',
-        content: 'Content',
-        workspace: TEST_DIR
-      });
-
-      const result = await handlePlan({
-        action: 'list',
-        workspace: TEST_DIR
-      });
-
-      const text = result.content[0]!.text;
-      expect(text).not.toStartWith('{');
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found/);
-      expect(text).toContain('Plan 1');
-      expect(text).toContain('Plan 2');
-    });
-
-    it('activates plan', async () => {
-      const { handlePlan } = await import('../src/server');
-
-      await savePlan({
-        id: 'test-plan',
-        title: 'Test',
-        content: 'Content',
-        workspace: TEST_DIR
-      });
-
-      const result = await handlePlan({
-        action: 'activate',
-        id: 'test-plan',
-        workspace: TEST_DIR
-      });
-
-      const text = result.content[0]!.text;
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief activated: test-plan/);
-    });
-
-    it('updates plan', async () => {
-      const { handlePlan } = await import('../src/server');
-
-      await savePlan({
-        id: 'test-plan',
-        title: 'Original',
-        content: 'Original content',
-        workspace: TEST_DIR
-      });
-
-      const result = await handlePlan({
-        action: 'update',
-        id: 'test-plan',
-        updates: { title: 'Updated' },
-        workspace: TEST_DIR
-      });
-
-      const text = result.content[0]!.text;
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief updated: test-plan/);
-    });
-
-    it('handles invalid action gracefully', async () => {
-      const { handlePlan } = await import('../src/server');
-
-      await expect(
-        handlePlan({
-          action: 'invalid' as any,
-          workspace: TEST_DIR
-        })
-      ).rejects.toThrow();
-    });
-  });
 });
 
 describe('Tool descriptions', () => {
@@ -331,8 +196,11 @@ describe('Tool descriptions', () => {
 
     const tools = getTools();
 
-    expect(tools).toHaveLength(5);
-    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'recall', 'brief', 'plan', 'consolidate']);
+    // Phase 2 deletes the `consolidate` tool. Phase 3 deletes the `plan`
+    // compatibility alias. Pin the v7.0 final shape here so both phases see
+    // the failure they need.
+    expect(tools).toHaveLength(3);
+    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'recall', 'brief']);
 
     // Each tool should have description and inputSchema
     for (const tool of tools) {
@@ -359,10 +227,11 @@ describe('Tool descriptions', () => {
     expect(recallTool!.description).toContain('user invokes /recall');
 
     const briefTool = tools.find(t => t.name === 'brief');
-    const planTool = tools.find(t => t.name === 'plan');
     expect(briefTool!.description).toContain('strategic context');
-    expect(planTool!.description).toContain('Compatibility alias');
-    expect(planTool!.description).toContain('Use `brief` for new work');
+
+    // Phase 2/3: `plan` and `consolidate` are removed from the tool list.
+    expect(tools.find(t => t.name === 'plan')).toBeUndefined();
+    expect(tools.find(t => t.name === 'consolidate')).toBeUndefined();
   });
 
   it('uses consistent workspace parameter description across tools', async () => {
@@ -377,17 +246,6 @@ describe('Tool descriptions', () => {
         expect(props.workspace.description).not.toContain('Workspace name');
       }
     }
-  });
-
-  it('plan tool includes tags parameter in schema', async () => {
-    const { getTools } = await import('../src/server');
-
-    const tools = getTools();
-    const planTool = tools.find(t => t.name === 'plan');
-    const props = planTool!.inputSchema.properties as Record<string, any>;
-
-    expect(props.tags).toBeDefined();
-    expect(props.tags.type).toBe('array');
   });
 
   it('checkpoint tool exposes structured memory schema fields', async () => {
@@ -411,20 +269,6 @@ describe('Tool descriptions', () => {
     expect(props.confidence.maximum).toBe(5);
   });
 
-  it('plan tool documents updates schema with properties', async () => {
-    const { getTools } = await import('../src/server');
-
-    const tools = getTools();
-    const planTool = tools.find(t => t.name === 'plan');
-    const props = planTool!.inputSchema.properties as Record<string, any>;
-
-    expect(props.updates.properties).toBeDefined();
-    expect(props.updates.properties.title).toBeDefined();
-    expect(props.updates.properties.content).toBeDefined();
-    expect(props.updates.properties.status).toBeDefined();
-    expect(props.updates.properties.tags).toBeDefined();
-  });
-
   it('publishes brief as the canonical forward-looking tool', async () => {
     const { getTools } = await import('../src/server');
 
@@ -435,15 +279,6 @@ describe('Tool descriptions', () => {
     expect(briefTool!.description).toContain('brief');
   });
 
-  it('plan tool includes activate guidance in description', async () => {
-    const { getTools } = await import('../src/server');
-
-    const tools = getTools();
-    const planTool = tools.find(t => t.name === 'plan');
-
-    expect(planTool!.description).toContain('Saving an active plan makes it active by default');
-    expect(planTool!.description).toContain('activate: false preserves the opt-out');
-  });
 });
 
 describe('Server instructions', () => {
@@ -505,14 +340,24 @@ describe('Server instructions', () => {
     expect(recallTool.description).toContain('workspace:');
     expect(recallTool.description).toContain('search:');
   });
-});
 
-describe('Server startup', () => {
-  it('calls pruneOrphanedSemanticCaches on startup without blocking', async () => {
-    const { pruneOrphanedSemanticCaches } = await import('../src/semantic-cache');
+  it('migrates session-start hook nudges into the instructions string', async () => {
+    const { getInstructions } = await import('../src/server');
 
-    // The function should not throw even on a clean environment
-    await expect(pruneOrphanedSemanticCaches()).resolves.toBeUndefined();
+    const instructions = getInstructions();
+
+    // Nudge 1: checkpoint BEFORE git commits, not after, so the checkpoint
+    // file is included in the commit and travels to other machines.
+    expect(instructions).toContain('BEFORE a git commit');
+    expect(instructions).toContain('other machines');
+
+    // Nudge 2: always commit .memories/, never gitignore it. Already present
+    // in the Source Control section but pinned here so the regression is loud.
+    expect(instructions).toContain('.memories/');
+    expect(instructions).toContain('.gitignore');
+
+    // Nudge 3: don't ask permission to checkpoint or save briefs.
+    expect(instructions).toContain("Don't ask permission");
   });
 });
 
@@ -527,13 +372,15 @@ describe('Server exports', () => {
   });
 
   it('exports all handler functions', async () => {
-    const { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } = await import('../src/server');
+    const serverModule = await import('../src/server');
 
-    expect(typeof handleCheckpoint).toBe('function');
-    expect(typeof handleRecall).toBe('function');
-    expect(typeof handleBrief).toBe('function');
-    expect(typeof handlePlan).toBe('function');
-    expect(typeof handleConsolidate).toBe('function');
+    expect(typeof serverModule.handleCheckpoint).toBe('function');
+    expect(typeof serverModule.handleRecall).toBe('function');
+    expect(typeof serverModule.handleBrief).toBe('function');
+
+    // Phase 2/3: plan and consolidate handlers are removed from the server.
+    expect((serverModule as Record<string, unknown>).handlePlan).toBeUndefined();
+    expect((serverModule as Record<string, unknown>).handleConsolidate).toBeUndefined();
   });
 
   it('exports getTools and getInstructions', async () => {
@@ -619,7 +466,7 @@ describe('Server exports', () => {
   it('documents Goldfish as a cross-client memory system with first-class client setup guides', async () => {
     const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
 
-    expect(readme).toContain('Persistent developer memory for MCP-compatible coding clients.');
+    expect(readme).toContain('cross-client MCP memory system');
     expect(readme).toContain('### Claude Code');
     expect(readme).toContain('### Codex Desktop');
     expect(readme).toContain('### OpenCode');
@@ -866,5 +713,88 @@ describe('Error handling', () => {
     const text = result.content[0]!.text;
     // Should be readable markdown with "No checkpoints found"
     expect(text).toMatch(/No checkpoints found/);
+  });
+});
+
+describe('v7.0 legacy directory cleanup', () => {
+  let tempGoldfishHome: string;
+  const originalGoldfishHome = process.env.GOLDFISH_HOME;
+
+  beforeEach(async () => {
+    tempGoldfishHome = await mkdtemp(join(tmpdir(), 'goldfish-v7-cleanup-'));
+    process.env.GOLDFISH_HOME = tempGoldfishHome;
+  });
+
+  afterEach(async () => {
+    if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
+    else process.env.GOLDFISH_HOME = originalGoldfishHome;
+    await rm(tempGoldfishHome, { recursive: true, force: true });
+  });
+
+  it('removes ~/.goldfish/cache/semantic, ~/.goldfish/models/transformers, and ~/.goldfish/consolidation-state when present', async () => {
+    const { cleanupV7LegacyDirectories } = await import('../src/server');
+
+    const semanticDir = join(tempGoldfishHome, 'cache', 'semantic');
+    const modelsDir = join(tempGoldfishHome, 'models', 'transformers');
+    const consolidationStateDir = join(tempGoldfishHome, 'consolidation-state');
+
+    await mkdir(join(semanticDir, 'workspace-hash-1'), { recursive: true });
+    await writeFile(join(semanticDir, 'workspace-hash-1', 'records.jsonl'), '{"id":"x"}\n');
+    await writeFile(join(semanticDir, 'workspace-hash-1', 'manifest.json'), '{}');
+    await mkdir(join(modelsDir, 'Xenova', 'all-MiniLM-L6-v2'), { recursive: true });
+    await writeFile(join(modelsDir, 'Xenova', 'all-MiniLM-L6-v2', 'model.bin'), 'fake-weights');
+    await mkdir(consolidationStateDir, { recursive: true });
+    await writeFile(join(consolidationStateDir, 'goldfish.json'), '{"cursor":"2026-01-01"}');
+
+    await cleanupV7LegacyDirectories();
+
+    await expect(stat(semanticDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(modelsDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(consolidationStateDir)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('is a no-op when none of the legacy directories exist', async () => {
+    const { cleanupV7LegacyDirectories } = await import('../src/server');
+
+    // Directories intentionally absent — temp goldfish home is empty.
+    await expect(cleanupV7LegacyDirectories()).resolves.toBeUndefined();
+
+    await expect(stat(join(tempGoldfishHome, 'cache', 'semantic'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(join(tempGoldfishHome, 'models', 'transformers'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(join(tempGoldfishHome, 'consolidation-state'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('swallows deletion errors silently', async () => {
+    const { cleanupV7LegacyDirectories } = await import('../src/server');
+
+    // Point GOLDFISH_HOME at a path that resolves to a file, not a directory.
+    // rm({ recursive: true, force: true }) on a missing nested path is a no-op,
+    // but on a path whose parent is a regular file we get ENOTDIR. The helper
+    // must swallow that and resolve.
+    const filePath = join(tempGoldfishHome, 'home-as-file');
+    await writeFile(filePath, 'not a directory');
+    process.env.GOLDFISH_HOME = filePath;
+
+    await expect(cleanupV7LegacyDirectories()).resolves.toBeUndefined();
+  });
+
+  it('is invoked from createServer() without throwing', async () => {
+    const { createServer, cleanupV7LegacyDirectories } = await import('../src/server');
+
+    const semanticDir = join(tempGoldfishHome, 'cache', 'semantic');
+    const modelsDir = join(tempGoldfishHome, 'models', 'transformers');
+    const consolidationStateDir = join(tempGoldfishHome, 'consolidation-state');
+    await mkdir(semanticDir, { recursive: true });
+    await mkdir(modelsDir, { recursive: true });
+    await mkdir(consolidationStateDir, { recursive: true });
+
+    // Trigger fire-and-forget cleanup via createServer(), then await directly
+    // to deterministically observe the result without racing the background work.
+    expect(() => createServer()).not.toThrow();
+    await cleanupV7LegacyDirectories();
+
+    await expect(stat(semanticDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(modelsDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(consolidationStateDir)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

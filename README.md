@@ -1,25 +1,18 @@
 # Goldfish 🐠
 
-Persistent developer memory for MCP-compatible coding clients. Checkpoints, recall, briefs, standup reports, and built-in semantic recall, stored as human-readable markdown right in your project.
+An evidence ledger for AI coding sessions. Checkpoints capture what changed and why; briefs hold durable strategic direction; recall pulls both back when the next session needs context. Everything lives as markdown in your repo, so it travels with the code, diffs in PRs, and outlasts any single harness.
 
-Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation, slash-command skills, and lifecycle hooks. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
+Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth, while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
-
-**Version 6.7.0** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 7.0.0** -- Subtract sprint: Orama BM25 search, brief-first storage, and the /handoff skill. See CHANGELOG.md for breaking changes.
 
 ---
 
 ## Why Goldfish?
 
-AI coding sessions have a memory problem:
+Coding harnesses already plan, summarize, and recover from compaction. What they don't do is keep a durable record of *why* a project moved the way it did, in a place the next session (or the next harness) can read.
 
-- Context windows get compacted, losing work history
-- Sessions crash, losing planning and decisions
-- Switching projects loses context
-- No way to answer "what was I working on yesterday?"
-
-Goldfish solves this with four MCP tools (checkpoint, recall, brief, consolidate), 8 skills including compatibility aliases, repo-local skill discovery for compatible clients, and client hooks where the harness supports them.
+Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and six skills, with markdown as the source of truth.
 
 ---
 
@@ -37,7 +30,7 @@ bun install
 
 ### Claude Code
 
-Claude Code is the fullest adapter today. You get MCP tools, slash-command skills (`/checkpoint`, `/recall`, `/consolidate`, `/brief`, `/brief-status`, `/standup`, plus compatibility aliases `/plan` and `/plan-status`), and the SessionStart/PreCompact hooks.
+Claude Code is the fullest adapter today. You get MCP tools and slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/handoff`, `/standup`).
 
 Install from the marketplace:
 
@@ -64,12 +57,12 @@ For development, load the plugin from the local directory each time:
 claude --plugin-dir /path/to/goldfish
 ```
 
-Once the plugin is loaded, Goldfish works automatically:
+Once the plugin is loaded, Goldfish works through manual invocation and agent-driven calls:
 
-1. **Session starts** -- the `SessionStart` hook fires and calls `recall()`
-2. **You work** -- checkpoint manually with `/checkpoint`, or let the `PreCompact` hook auto-checkpoint before compaction
+1. **Session starts** -- run `/recall` (or let the agent call `recall()`) to restore recent checkpoints and the active brief
+2. **You work** -- checkpoint with `/checkpoint` at meaningful milestones
 3. **Direction persists** -- save a brief with `/brief` when goals, constraints, or success criteria should survive the session
-4. **Next session** -- recall restores recent checkpoints and the active brief automatically
+4. **Next session** -- recall replays the same context
 
 ### Codex Desktop
 
@@ -146,25 +139,24 @@ Create `.vscode/mcp.json`:
 }
 ```
 
-If you want Copilot to consistently checkpoint and recall with Goldfish, copy `docs/goldfish-checkpoint.instructions-vs-code.md` into your repo's `.github/instructions/` folder (or adapt it to your preferred instructions layout). That file gives VS Code users a ready-made Goldfish + Julie instruction set instead of starting from a blank page.
+If you want Copilot to consistently checkpoint and recall with Goldfish, copy `docs/goldfish-checkpoint.instructions-vs-code.md` into your repo's `.github/instructions/` folder (or adapt it to your preferred instructions layout). That file gives VS Code users a ready-made Goldfish instruction set instead of starting from a blank page.
 
-If you want the closer Claude-style experience, VS Code's agent plugins preview can also load Claude-format plugins. Goldfish already ships `.claude-plugin/plugin.json` and `hooks/hooks.json`, which VS Code can detect for plugin skills and hooks.
+If you want the closer Claude-style experience, VS Code's agent plugins preview can also load Claude-format plugins. Goldfish already ships `.claude-plugin/plugin.json`, which VS Code can detect for plugin skills.
 
 Two ways to wire that up:
 
 - Register a local Goldfish clone with the `chat.pluginLocations` setting in `settings.json`
 - Add a marketplace with `chat.plugins.marketplaces` if you want shared discovery instead of a direct local path
 
-Use `.vscode/mcp.json` when you only want the MCP tools. Use the plugin path when you want skills and hook automation in VS Code as well.
+Use `.vscode/mcp.json` when you only want the MCP tools. Use the plugin path when you want skills as well.
 
 ### Any MCP Client
 
-Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server, so any client that can launch a local stdio server can use the four core tools (`checkpoint`, `recall`, `brief`, `consolidate`) and the server instructions.
+Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server, so any client that can launch a local stdio server can use the three core tools (`checkpoint`, `recall`, `brief`) and the server instructions.
 
 What varies by client:
 
 - **Skills** depend on whether the harness reads repo-local skill files such as `.agents/skills`
-- **Hooks** depend on whether the harness exposes lifecycle automation
 - **Workspace binding** depends on roots support, explicit cwd, or `GOLDFISH_WORKSPACE`
 
 ---
@@ -193,12 +185,12 @@ Claude: [auto-recalls checkpoint, picks up where it left off]
 
 ### Recall -- Restore Context
 
-Every session starts with recall (automatic via `SessionStart` hook). Returns recent checkpoints, the active brief, and optional cross-project summaries.
+Recall returns recent checkpoints, the active brief, and optional cross-project summaries. Agents call it at session start; users can run `/recall` for targeted queries.
 
 ```
 recall()                                    # Last 5 checkpoints, no date window
 recall({ since: "2h" })                     # Last 2 hours
-recall({ search: "auth bug" })              # Fuzzy search
+recall({ search: "auth bug" })              # BM25 search across descriptions
 recall({ days: 7, limit: 20, full: true })  # Extended history with metadata
 recall({ workspace: "all", days: 1 })       # Cross-project (for standups)
 recall({ limit: 0 })                        # Active brief only
@@ -249,16 +241,14 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 8 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
+Goldfish ships 6 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
 | `/brief` | Create and manage durable strategic briefs |
 | `/brief-status` | Assess progress against the active brief |
 | `/checkpoint` | Save a checkpoint with rich description and tags |
-| `/consolidate` | Prepare memory consolidation work for the background subagent |
-| `/plan` | Compatibility alias for `/brief` |
-| `/plan-status` | Compatibility alias for `/brief-status` |
+| `/handoff` | Produce a structured session-resumption summary for a returning or different agent |
 | `/recall` | Restore context from recent checkpoints and the active brief |
 | `/standup` | Generate a cross-project standup report |
 
@@ -266,22 +256,9 @@ Goldfish ships 8 skills. Claude Code exposes them as slash commands, and Codex D
 
 ---
 
-## Hooks
-
-Claude Code currently gets the Goldfish hook adapter. Other clients still get the same MCP tools and memory model, but hook automation depends on what the harness exposes.
-
-| Hook | Trigger | Action |
-|------|---------|--------|
-| `PreCompact` | Context window compaction | Auto-checkpoint current progress before memory is lost |
-| `SessionStart` | New session begins | Auto-recall recent work to restore context |
-
-Hook definitions live in `hooks/hooks.json`.
-
----
-
 ## Storage Format
 
-Markdown in `.memories/` is still the source of truth. Goldfish also keeps derived JSON/JSONL semantic search artifacts outside `.memories/` so search stays fast without turning your project memory into an opaque database.
+Markdown in `.memories/` is the source of truth. Goldfish does not maintain derived caches; search runs over the markdown corpus on demand.
 
 ### Project-Level Storage
 
@@ -297,10 +274,9 @@ your-project/
       auth-system-redesign.md  # Brief (YAML frontmatter + markdown body)
       api-v2-migration.md
     .active-brief              # Contains the active brief ID
-    memory.yaml                # Consolidated memory (YAML, merge-friendly)
 ```
 
-Legacy `.memories/plans/` and `.active-plan` paths are still read during the compatibility window, but new writes land in the brief paths above.
+Legacy `.memories/plans/` and `.active-plan` paths are still read so older repos keep working, but new writes land in the brief paths above.
 
 ### Checkpoint File Format
 
@@ -330,26 +306,9 @@ the edge case and verified the fix prevents token reuse attacks.
 ```
 ~/.goldfish/
   registry.json              # Auto-populated list of projects using Goldfish
-  consolidation-state/       # Per-workspace consolidation cursors
-    {workspace}_{hash}.json
 ```
 
 The registry tracks which projects have `.memories/` directories. It is populated automatically on checkpoint save and used by cross-project recall for standup reports.
-
-### Derived Semantic Cache
-
-```
-~/.goldfish/
-  cache/
-    semantic/
-      <workspace-hash>/
-        manifest.json   # Checkpoint digest/version metadata
-        records.jsonl   # Pending/ready embedding records
-  models/
-    transformers/       # Downloaded model artifacts
-```
-
-These files are derived from checkpoint markdown and can be rebuilt. They live outside `.memories/` on purpose: project history stays human-readable and git-friendly, while embeddings and model downloads stay local machine cache.
 
 ---
 
@@ -388,8 +347,10 @@ This is **iteration #5** of a developer memory system. Each iteration taught som
 2. **Tusk (Bun + SQLite)** -- Fixed bugs, added complexity, hook spam disaster
 3. **.NET rewrite** -- Over-engineered, never finished
 4. **Goldfish 4.0 (Bun + Markdown)** -- Radical simplicity, centralized `~/.goldfish/` storage, proved the markdown-only approach
+5. **Goldfish 5.x-6.x** -- Claude Code plugin, project-local `.memories/`, hybrid semantic recall, consolidation, hooks
+6. **Goldfish 7.0** -- Subtract sprint: removed hooks, semantic stack, consolidation, and the plan tool; settled on Orama BM25 over markdown and brief-first storage
 
-Key decisions for v5.0.0:
+Foundational decisions (load-bearing since v5):
 
 | Decision | Rationale |
 |----------|-----------|
@@ -399,9 +360,18 @@ Key decisions for v5.0.0:
 | Atomic file operations | Write-to-temp then rename prevents corruption on crash |
 | UTC timestamps everywhere | No timezone bugs (learned the hard way in v1) |
 | Quality-focused behavioral language | Directive about checkpoint quality, restrained about frequency |
-| 4 tools, not more | Checkpoint, recall, brief, consolidate cover all use cases without bloat |
-| Skills over slash commands | Plugin-native, no manual `bun setup` step |
 | Evidence-based features only | Complexity is added only when real usage demands it |
+
+What v7 subtracted, and why:
+
+| Decision | Rationale |
+|----------|-----------|
+| Orama BM25 over hybrid fuse + embeddings | LLM-issued queries are well-formed; relevance ranking matters more than typo tolerance, and BM25 is a fraction of the runtime weight |
+| No hooks | Behavioral adoption travels with the tool description; hooks tied us to one harness and produced spam |
+| No consolidation | Token math was net-negative; reading consolidated digests cost more than reading checkpoints directly |
+| Briefs replace plans | Harnesses own session execution planning; Goldfish owns durable strategic context that outlasts a session |
+| 3 tools, not more | Checkpoint, recall, brief cover all use cases without bloat |
+| Skills over slash commands | Plugin-native, no manual `bun setup` step |
 
 ---
 
@@ -413,32 +383,24 @@ goldfish/
     skills/               # Repo-local skill mirror for Codex/OpenCode
   .claude-plugin/
     plugin.json           # Claude Code plugin manifest
-  hooks/
-    hooks.json            # Claude Code hook definitions
   skills/
     brief/SKILL.md        # Canonical brief skill
     brief-status/SKILL.md # Canonical brief-status skill
     checkpoint/SKILL.md   # Canonical checkpoint skill
-    consolidate/SKILL.md  # Canonical consolidate skill
+    handoff/SKILL.md      # Canonical handoff skill
     recall/SKILL.md       # Canonical recall skill
     standup/SKILL.md      # Canonical standup skill
-    plan/SKILL.md         # Canonical plan compatibility alias
-    plan-status/SKILL.md  # Canonical plan-status alias
   src/
     server.ts             # MCP server entry point
-    tools.ts              # Tool definitions (checkpoint, recall, brief, consolidate)
+    tools.ts              # Tool definitions (checkpoint, recall, brief)
     instructions.ts       # Server behavioral instructions
     types.ts              # TypeScript interfaces
     checkpoints.ts        # Checkpoint storage and retrieval
-    plans.ts              # Brief management with legacy plan compatibility
-    recall.ts             # Fuzzy + semantic hybrid recall
+    briefs.ts             # Brief storage and activation
+    recall.ts             # Recall aggregation across date ranges and workspaces
+    ranking.ts            # Orama BM25 search ranking
     digests.ts            # Compact retrieval/search digests
-    semantic-cache.ts     # Derived semantic manifest + JSONL records
-    semantic.ts           # Embedding runtime and pending semantic work processing
-    ranking.ts            # Hybrid ranking and scoring helpers
-    transformers-embedder.ts # Local embedding runtime
-    memory.ts             # Memory file I/O (memory.yaml)
-    consolidation-prompt.ts # Consolidation subagent prompt builder
+    file-io.ts            # Atomic write helpers
     logger.ts             # File-based logging
     registry.ts           # Cross-project registry (~/.goldfish/registry.json)
     workspace.ts          # Workspace detection and normalization
@@ -446,7 +408,7 @@ goldfish/
     lock.ts               # File locking for concurrent writes
     summary.ts            # Auto-summary generation
     emoji.ts              # Emoji utilities
-    handlers/             # Tool handler implementations (checkpoint, recall, brief, consolidate)
+    handlers/             # Tool handler implementations (checkpoint, recall, brief)
   tests/                  # Test files
 ```
 
@@ -475,9 +437,8 @@ bun run typecheck
 
 ### Stats
 
-- **Storage:** markdown source of truth in `.memories/`, derived semantic cache in `~/.goldfish/cache/semantic/`
-- **Model runtime:** `@huggingface/transformers` cache in `~/.goldfish/models/transformers/`
-- **Runtime dependencies:** `@huggingface/transformers`, `@modelcontextprotocol/sdk`, `fuse.js`, `yaml`
+- **Storage:** markdown source of truth in `.memories/`; cross-project registry at `~/.goldfish/registry.json`
+- **Runtime dependencies:** `@modelcontextprotocol/sdk`, `@orama/orama`, `yaml`
 
 ### TDD Workflow
 
@@ -497,7 +458,7 @@ See `CONTRIBUTING.md` for detailed development patterns.
 | Checkpoint save | < 50ms | ~10ms |
 | Recall (7 days, single project) | < 100ms | ~30ms |
 | Recall (7 days, all projects) | < 500ms | ~150ms |
-| Fuzzy search (100 checkpoints) | < 50ms | ~15ms |
+| BM25 search (100 checkpoints) | < 50ms | ~15ms |
 
 Benchmarked on Apple Silicon (M-series).
 
@@ -528,12 +489,6 @@ Benchmarked on Apple Silicon (M-series).
 1. The registry at `~/.goldfish/registry.json` must have entries
 2. Projects are auto-registered on first checkpoint save
 3. Check that listed projects still have `.memories/` directories
-
-### Hooks not firing
-
-1. Hooks require Claude Code plugin support -- ensure your Claude Code version supports hooks
-2. Check `hooks/hooks.json` for syntax errors
-3. The `SessionStart` hook only fires once per session
 
 ---
 

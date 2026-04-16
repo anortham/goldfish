@@ -1,7 +1,7 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the 4 core tools: checkpoint, recall, brief, and consolidate.
+ * Contains the core tools: checkpoint, recall, and brief.
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -136,15 +136,6 @@ Key parameters (all optional):
 - full: Return full descriptions + metadata including files and git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - briefId: Filter checkpoints to those created under a specific brief
-- planId: Legacy alias for briefId during migration
-- includeMemory: Include full memory.yaml in response. Defaults to true without search and false with search. Override explicitly with true/false.
-
-Recall now returns three layers:
-1. Consolidated memory (memory.yaml) - project understanding, included by default
-2. Delta checkpoints - events since last consolidation, included when stale
-3. Consolidation flag - metadata indicating if consolidation is needed
-
-If consolidation.needed is true: dispatch a BACKGROUND consolidation subagent (call consolidate() first to get the payload).
 
 Examples:
 - recall() - last 5 checkpoints regardless of age
@@ -192,14 +183,6 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
           briefId: {
             type: 'string',
             description: 'Filter to checkpoints created while a specific brief was active. Use to see progress on a particular direction.'
-          },
-          planId: {
-            type: 'string',
-            description: 'Legacy alias for briefId during migration.'
-          },
-          includeMemory: {
-            type: 'boolean',
-            description: 'Include full memory.yaml in response. Default: true when no search param (bootstrap mode), false when search param provided (search mode). Memory sections are always searchable regardless of this setting.'
           }
         }
       }
@@ -240,15 +223,11 @@ Returns: Brief details, status updates, or list of briefs.`,
           },
           id: {
             type: 'string',
-            description: 'Brief ID (auto-generated from title if not provided). Aliases: briefId, planId'
+            description: 'Brief ID (auto-generated from title if not provided). Alias: briefId'
           },
           briefId: {
             type: 'string',
             description: 'Alias for id. Prefer briefId for new callers.'
-          },
-          planId: {
-            type: 'string',
-            description: 'Legacy alias for id. Supported for compatibility.'
           },
           title: {
             type: 'string',
@@ -288,103 +267,6 @@ Returns: Brief details, status updates, or list of briefs.`,
           }
         },
         required: ['action']
-      }
-    },
-    {
-      name: 'plan',
-      description: `Compatibility alias for the brief tool.
-
-Use \`brief\` for new work. \`plan\` remains available for older callers during migration.
-
-Saving an active plan makes it active by default, and activate: false preserves the opt-out.
-
-Returns: The same results as the brief tool.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          action: {
-            type: 'string',
-            enum: ['save', 'get', 'list', 'activate', 'update', 'complete'],
-            description: 'Action to perform'
-          },
-          id: {
-            type: 'string',
-            description: 'Plan ID (auto-generated from title if not provided). Alias: planId'
-          },
-          planId: {
-            type: 'string',
-            description: 'Alias for id. Either id or planId can be used.'
-          },
-          title: {
-            type: 'string',
-            description: 'Plan title (required for save)'
-          },
-          content: {
-            type: 'string',
-            description: 'Plan content in markdown (required for save)'
-          },
-          workspace: {
-            type: 'string',
-            description: 'Workspace path (defaults to current directory)'
-          },
-          tags: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Optional tags for categorization (e.g., ["milestone", "auth"]). Used with save action.'
-          },
-          activate: {
-            type: 'boolean',
-            description: 'Activate plan after saving. Defaults to true for active-status saves; pass false to keep the current active plan unchanged.'
-          },
-          status: {
-            type: 'string',
-            enum: ['active', 'completed', 'archived'],
-            description: 'Plan status (for filtering)'
-          },
-          updates: {
-            type: 'object',
-            description: 'Updates to apply (for update action). Accepts: title (string), content (string), status ("active" | "completed" | "archived"), tags (string[])',
-            properties: {
-              title: { type: 'string' },
-              content: { type: 'string' },
-              status: { type: 'string', enum: ['active', 'completed', 'archived'] },
-              tags: { type: 'array', items: { type: 'string' } }
-            }
-          }
-        },
-        required: ['action']
-      }
-    },
-    {
-      name: 'consolidate',
-      description: `Prepare memory consolidation. Returns file paths and metadata for a consolidation subagent. No checkpoint content is returned through this tool.
-
-When to use:
-- When recall flags consolidation.needed: true
-- Before ending a long session with significant new work
-- On a scheduled cadence (e.g., daily wrap-up)
-
-Workflow:
-1. Call consolidate() - returns file paths, counts, and subagent prompt
-2. If status is "ready": dispatch a BACKGROUND subagent with the prompt field. The subagent reads checkpoint files from disk.
-3. If status is "current": nothing to do, memory is up to date
-4. If remainingCount > 0: more checkpoints need processing. Run consolidate again or tell the user.
-
-The subagent reads checkpoint files directly from disk and writes two files: .memories/memory.yaml (version-controlled) and a machine-local consolidation state file.
-
-Returns: JSON with status, checkpointCount, remainingCount, memoryPath, lastConsolidatedPath, and subagent prompt.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          workspace: {
-            type: 'string',
-            description: 'Workspace path (defaults to current directory)'
-          },
-          all: {
-            type: 'boolean',
-            description: 'Raise batch cap from 50 to 100 checkpoints. Use for initial consolidation or catching up.'
-          }
-        }
       }
     }
   ];
