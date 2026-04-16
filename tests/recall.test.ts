@@ -1246,16 +1246,18 @@ Work without a plan`;
     expect(result.checkpoints[0]!.id).toBe('checkpoint_bbb');
   });
 
-  test('accepts planId as a compatibility alias for briefId filtering', async () => {
+  test('ignores legacy planId option (no longer accepted as a briefId alias)', async () => {
+    // Phase 3 retires the planId compat alias on RecallOptions. Passing it
+    // must not filter results: with no briefId set, all 3 checkpoints come back.
     const result = await recall({
       workspace: PLAN_DIR,
+      // @ts-expect-error -- planId is intentionally removed from RecallOptions in v7
       planId: 'legacy-brief-b',
       limit: 10,
       days: 365
     });
 
-    expect(result.checkpoints).toHaveLength(1);
-    expect(result.checkpoints[0]!.id).toBe('checkpoint_bbb');
+    expect(result.checkpoints).toHaveLength(3);
   });
 
   test('returns all checkpoints when briefId is not specified', async () => {
