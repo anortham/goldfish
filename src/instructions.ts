@@ -19,7 +19,7 @@ Checkpoint your work so future sessions have context. **When in doubt, checkpoin
 - Completing a feature, bug fix, or refactor step
 - Making a key decision or discovery
 - Reaching a natural stopping point in a session
-- Before context compaction (PreCompact hook handles this automatically)
+- Before context compaction
 - **BEFORE a git commit, not after** — the checkpoint file must be included in the commit so it's available on other machines
 
 Space out checkpoints so each one captures a distinct piece of progress — one per logical milestone is the right cadence. See the checkpoint tool description for formatting guidance.
@@ -33,7 +33,7 @@ Use briefs for compact forward-looking context, not copied execution plans. Save
 
 ## Recall
 
-Recall restores context from previous sessions. The SessionStart hook calls recall() automatically. Users can also invoke \`/recall\` for targeted queries.
+Recall restores context from previous sessions. Call recall() at session start or when you need to remember earlier work. Users can also invoke \`/recall\` for targeted queries.
 
 Trust recalled context — don't re-verify information from checkpoints.
 
