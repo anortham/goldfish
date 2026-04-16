@@ -16,6 +16,7 @@ import {
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { rm, stat } from 'fs/promises';
+import { pathToFileURL } from 'url';
 
 describe('Workspace normalization', () => {
   it('normalizes full Unix path to simple name', () => {
@@ -204,9 +205,39 @@ describe('resolveWorkspace', () => {
     expect(resolveWorkspace()).toBe('/env/path');
   });
 
+  it('uses the first valid file root when no explicit path or env var exists', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    expect(resolveWorkspace(undefined, {
+      roots: [
+        { uri: 'https://example.com/not-a-file-root' },
+        { uri: pathToFileURL('/roots/project one').href }
+      ],
+      cwd: '/fallback/cwd'
+    })).toBe('/roots/project one');
+  });
+
   it('treats "current" same as undefined', () => {
     process.env.GOLDFISH_WORKSPACE = '/env/path';
     expect(resolveWorkspace('current')).toBe('/env/path');
+  });
+
+  it('treats "current" as a roots-aware fallback when env is unset', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    expect(resolveWorkspace('current', {
+      roots: [{ uri: pathToFileURL('/roots/current-project').href }],
+      cwd: '/fallback/cwd'
+    })).toBe('/roots/current-project');
+  });
+
+  it('prefers env var over roots', () => {
+    process.env.GOLDFISH_WORKSPACE = '/env/path';
+
+    expect(resolveWorkspace(undefined, {
+      roots: [{ uri: pathToFileURL('/roots/project').href }],
+      cwd: '/fallback/cwd'
+    })).toBe('/env/path');
   });
 
   it('falls back to cwd when no env var', () => {
@@ -217,6 +248,18 @@ describe('resolveWorkspace', () => {
   it('ignores empty string GOLDFISH_WORKSPACE', () => {
     process.env.GOLDFISH_WORKSPACE = '';
     expect(resolveWorkspace()).toBe(process.cwd());
+  });
+
+  it('falls back to cwd when roots are empty or invalid', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    expect(resolveWorkspace(undefined, {
+      roots: [
+        { uri: 'notaurl' },
+        { uri: 'https://example.com/not-a-file-root' }
+      ],
+      cwd: '/fallback/cwd'
+    })).toBe('/fallback/cwd');
   });
 });
 

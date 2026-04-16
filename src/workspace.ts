@@ -9,6 +9,18 @@ import { createHash } from 'crypto';
 import { mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+export interface WorkspaceRoot {
+  uri: string;
+  name?: string;
+}
+
+export interface ResolveWorkspaceOptions {
+  env?: string;
+  roots?: WorkspaceRoot[] | null;
+  cwd?: string;
+}
 
 /**
  * Normalize a workspace identifier (path or name) to a simple name
@@ -60,13 +72,36 @@ export function normalizeWorkspace(pathOrName: string): string {
 
 /**
  * Resolve the effective workspace path.
- * Priority: explicit arg > GOLDFISH_WORKSPACE env var > process.cwd()
+ * Priority: explicit arg > GOLDFISH_WORKSPACE env var > roots > process.cwd()
  */
-export function resolveWorkspace(explicit?: string): string {
+export function resolveWorkspace(explicit?: string, options: ResolveWorkspaceOptions = {}): string {
   if (explicit && explicit !== 'current') return explicit;
-  const fromEnv = process.env.GOLDFISH_WORKSPACE;
+  const fromEnv = options.env ?? process.env.GOLDFISH_WORKSPACE;
   if (fromEnv) return fromEnv;
-  return process.cwd();
+  const fromRoots = getWorkspaceFromRoots(options.roots);
+  if (fromRoots) return fromRoots;
+  return options.cwd ?? process.cwd();
+}
+
+export function getWorkspaceFromRootUri(uri: string): string | undefined {
+  if (!uri.startsWith('file://')) return undefined;
+
+  try {
+    return fileURLToPath(uri);
+  } catch {
+    return undefined;
+  }
+}
+
+export function getWorkspaceFromRoots(roots?: WorkspaceRoot[] | null): string | undefined {
+  if (!roots || roots.length === 0) return undefined;
+
+  for (const root of roots) {
+    const path = getWorkspaceFromRootUri(root.uri);
+    if (path) return path;
+  }
+
+  return undefined;
 }
 
 // ─── Project-level .memories/ storage ────────────────────────────────

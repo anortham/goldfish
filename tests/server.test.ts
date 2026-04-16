@@ -3,15 +3,21 @@ import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/chec
 import { savePlan } from '../src/plans';
 import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir } from '../src/workspace';
-import { rm, mkdtemp } from 'fs/promises';
+import { rm, mkdtemp, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { ListRootsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 // We'll test the server module functions directly since running a full MCP server
 // in tests is complex. We'll validate tool handlers work correctly.
 
 let TEST_DIR: string;
 let restoreDeps: (() => void) | undefined;
+const ORIGINAL_CWD = process.cwd();
+const ORIGINAL_GOLDFISH_WORKSPACE = process.env.GOLDFISH_WORKSPACE;
 
 const TEST_DEFAULT_RUNTIME = {
   isReady: () => false,
@@ -32,12 +38,17 @@ beforeEach(async () => {
   restoreDeps = __setCheckpointDependenciesForTests({
     getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
   });
+  delete process.env.GOLDFISH_WORKSPACE;
+  process.chdir(ORIGINAL_CWD);
   await ensureMemoriesDir(TEST_DIR);
 });
 
 afterEach(async () => {
   restoreDeps?.();
   restoreDeps = undefined;
+  process.chdir(ORIGINAL_CWD);
+  if (ORIGINAL_GOLDFISH_WORKSPACE === undefined) delete process.env.GOLDFISH_WORKSPACE;
+  else process.env.GOLDFISH_WORKSPACE = ORIGINAL_GOLDFISH_WORKSPACE;
   await rm(TEST_DIR, { recursive: true, force: true });
 });
 
@@ -486,8 +497,10 @@ describe('Server startup', () => {
 
 describe('Server exports', () => {
   it('exports startServer function', async () => {
-    const { startServer } = await import('../src/server');
+    const { createServer, startServer } = await import('../src/server');
 
+    expect(createServer).toBeDefined();
+    expect(typeof createServer).toBe('function');
     expect(startServer).toBeDefined();
     expect(typeof startServer).toBe('function');
   });
@@ -546,6 +559,181 @@ describe('Server exports', () => {
     expect(readme).toContain(`**Version ${SERVER_VERSION}**`);
     expect(readme).toContain(`${skillDirs.length} skills`);
     expect(readmeSkillTable).toEqual(skillDirs);
+  });
+});
+
+describe('Request-time workspace hydration', () => {
+  async function connectServerWithRoots(getRoots: () => Array<{ uri: string }>, rootsCapability = true) {
+    const { createServer } = await import('../src/server');
+
+    const server = createServer();
+    const client = new Client(
+      { name: 'goldfish-test-client', version: '1.0.0' },
+      rootsCapability ? { capabilities: { roots: { listChanged: true } } } : {}
+    );
+    let rootsCalls = 0;
+
+    client.setRequestHandler(ListRootsRequestSchema, async () => {
+      rootsCalls += 1;
+      return { roots: getRoots() };
+    });
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport)
+    ]);
+
+    return {
+      client,
+      server,
+      get rootsCalls() {
+        return rootsCalls;
+      }
+    };
+  }
+
+  it('does not request roots until a tool call needs a default workspace', async () => {
+    const connection = await connectServerWithRoots(() => [{ uri: pathToFileURL(TEST_DIR).href }]);
+
+    try {
+      expect(connection.rootsCalls).toBe(0);
+
+      const result = await connection.client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'checkpoint through lazy roots lookup' }
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(connection.rootsCalls).toBe(1);
+    } finally {
+      await Promise.all([connection.client.close(), connection.server.close()]);
+    }
+  });
+
+  it('hydrates missing and current workspace arguments from roots', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'test-server-root-'));
+    const connection = await connectServerWithRoots(() => [{ uri: pathToFileURL(rootDir).href }]);
+
+    try {
+      const firstCheckpoint = await connection.client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'checkpoint without workspace' }
+      });
+      expect(firstCheckpoint.isError).not.toBe(true);
+
+      const secondCheckpoint = await connection.client.callTool({
+        name: 'checkpoint',
+        arguments: {
+          description: 'checkpoint with current workspace',
+          workspace: 'current'
+        }
+      });
+      expect(secondCheckpoint.isError).not.toBe(true);
+
+      expect((await stat(join(rootDir, '.memories'))).isDirectory()).toBe(true);
+      expect(connection.rootsCalls).toBe(1);
+
+      const recall = await connection.client.callTool({
+        name: 'recall',
+        arguments: { workspace: rootDir, full: true }
+      });
+
+      const text = recall.content?.[0]?.type === 'text' ? recall.content[0].text : '';
+      expect(text).toContain('checkpoint without workspace');
+      expect(text).toContain('checkpoint with current workspace');
+    } finally {
+      await Promise.all([connection.client.close(), connection.server.close()]);
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('refreshes cached roots after notifications/roots/list_changed', async () => {
+    const rootDirA = await mkdtemp(join(tmpdir(), 'test-server-root-a-'));
+    const rootDirB = await mkdtemp(join(tmpdir(), 'test-server-root-b-'));
+    let activeRoot = rootDirA;
+
+    const connection = await connectServerWithRoots(() => [{ uri: pathToFileURL(activeRoot).href }]);
+
+    try {
+      const firstCheckpoint = await connection.client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'checkpoint on root A' }
+      });
+      expect(firstCheckpoint.isError).not.toBe(true);
+
+      expect(connection.rootsCalls).toBe(1);
+
+      activeRoot = rootDirB;
+      await connection.client.notification({ method: 'notifications/roots/list_changed' });
+
+      const secondCheckpoint = await connection.client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'checkpoint on root B' }
+      });
+      expect(secondCheckpoint.isError).not.toBe(true);
+
+      expect(connection.rootsCalls).toBe(2);
+
+      const recallA = await connection.client.callTool({
+        name: 'recall',
+        arguments: { workspace: rootDirA, full: true }
+      });
+      const recallB = await connection.client.callTool({
+        name: 'recall',
+        arguments: { workspace: rootDirB, full: true }
+      });
+
+      const textA = recallA.content?.[0]?.type === 'text' ? recallA.content[0].text : '';
+      const textB = recallB.content?.[0]?.type === 'text' ? recallB.content[0].text : '';
+
+      expect(textA).toContain('checkpoint on root A');
+      expect(textA).not.toContain('checkpoint on root B');
+      expect(textB).toContain('checkpoint on root B');
+    } finally {
+      await Promise.all([connection.client.close(), connection.server.close()]);
+      await rm(rootDirA, { recursive: true, force: true });
+      await rm(rootDirB, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to cwd when roots lookup is unavailable', async () => {
+    const cwdFallback = await mkdtemp(join(tmpdir(), 'test-server-cwd-'));
+    process.chdir(cwdFallback);
+
+    const { createServer } = await import('../src/server');
+    const server = createServer();
+    const client = new Client(
+      { name: 'goldfish-test-client', version: '1.0.0' },
+      {}
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport)
+      ]);
+
+      const checkpoint = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'checkpoint through cwd fallback' }
+      });
+      expect(checkpoint.isError).not.toBe(true);
+
+      const recall = await client.callTool({
+        name: 'recall',
+        arguments: { workspace: cwdFallback, full: true }
+      });
+
+      const text = recall.content?.[0]?.type === 'text' ? recall.content[0].text : '';
+      expect(text).toContain('checkpoint through cwd fallback');
+      expect((await stat(join(cwdFallback, '.memories'))).isDirectory()).toBe(true);
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+      process.chdir(ORIGINAL_CWD);
+      await rm(cwdFallback, { recursive: true, force: true });
+    }
   });
 });
 
