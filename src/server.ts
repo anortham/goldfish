@@ -26,7 +26,7 @@ import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 import { getLogger } from './logger.js';
 import { resolveWorkspace } from './workspace.js';
 
-export const SERVER_VERSION = '6.6.0';
+export const SERVER_VERSION = '6.7.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief', 'plan', 'consolidate']);
 const DEFAULT_SESSION_KEY = 'default';
 

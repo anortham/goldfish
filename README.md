@@ -6,7 +6,7 @@ Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapt
 
 Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth, while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
-**Version 6.6.0** -- Fifth iteration, built on hard lessons from four previous attempts.
+**Version 6.7.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
 ---
 
