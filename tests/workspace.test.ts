@@ -7,9 +7,7 @@ import {
   getPlansDir,
   ensureMemoriesDir,
   getGoldfishHomeDir,
-  getModelCacheDir,
   getSemanticWorkspaceKey,
-  getSemanticCacheDir,
   getConsolidationStateDir,
   getConsolidationStatePath,
 } from '../src/workspace';
@@ -263,7 +261,7 @@ describe('resolveWorkspace', () => {
   });
 });
 
-describe('Semantic cache paths', () => {
+describe('Goldfish home and workspace key', () => {
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;
 
@@ -273,22 +271,6 @@ describe('Semantic cache paths', () => {
 
     if (originalUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = originalUserProfile;
-  });
-
-  it('stores semantic cache under ~/.goldfish/cache/semantic', () => {
-    process.env.HOME = '/test/home';
-    delete process.env.USERPROFILE;
-
-    expect(getSemanticCacheDir('/workspace/project'))
-      .toBe(join('/test/home', '.goldfish', 'cache', 'semantic', getSemanticWorkspaceKey('/workspace/project')));
-  });
-
-  it('stores model cache under ~/.goldfish/models/transformers', () => {
-    process.env.HOME = '/test/home';
-    delete process.env.USERPROFILE;
-
-    expect(getModelCacheDir())
-      .toBe(join('/test/home', '.goldfish', 'models', 'transformers'));
   });
 
   it('uses the goldfish home directory from HOME or USERPROFILE', () => {

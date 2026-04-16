@@ -4,7 +4,6 @@ import { formatCheckpoint, saveCheckpoint, __setCheckpointDependenciesForTests }
 import { buildCompactSearchDescription } from '../src/digests';
 import { writeMemory, writeConsolidationState } from '../src/memory';
 import { savePlan } from '../src/plans';
-import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -17,23 +16,12 @@ let restoreCheckpointDeps: (() => void) | undefined;
 let tempGoldfishHome: string;
 const originalGoldfishHome = process.env.GOLDFISH_HOME;
 
-// The default semantic runtime is suppressed during tests so that the
-// semantic-cache queueing in checkpoints.ts remains a no-op. The hybrid
-// ranking layer was removed in v7; recall now uses Orama BM25 directly.
-const TEST_DEFAULT_RUNTIME = {
-  isReady: () => false,
-  getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
-  embedTexts: async (texts: string[]) => texts.map(() => [1, 0])
-};
-
 beforeAll(async () => {
   tempGoldfishHome = await mkdtemp(join(tmpdir(), 'goldfish-home-recall-'));
   process.env.GOLDFISH_HOME = tempGoldfishHome;
-  setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
 });
 
 afterAll(async () => {
-  setDefaultSemanticRuntime(undefined);
   if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
   else process.env.GOLDFISH_HOME = originalGoldfishHome;
   await rm(tempGoldfishHome, { recursive: true, force: true });
@@ -57,18 +45,22 @@ afterEach(async () => {
 
 describe('Basic recall functionality', () => {
   beforeEach(async () => {
-    // Create some test checkpoints
+    // Create some test checkpoints. Space them apart so timestamps strictly
+    // increase — Goldfish sorts by timestamp with no tiebreaker, and three
+    // saves in the same millisecond produce non-deterministic recall order.
     await saveCheckpoint({
       description: 'Fixed authentication bug',
       tags: ['bug-fix', 'auth'],
       workspace: TEST_DIR_A
     });
+    await new Promise(resolve => setTimeout(resolve, 2));
 
     await saveCheckpoint({
       description: 'Added OAuth2 support',
       tags: ['feature', 'auth'],
       workspace: TEST_DIR_A
     });
+    await new Promise(resolve => setTimeout(resolve, 2));
 
     await saveCheckpoint({
       description: 'Refactored database queries',

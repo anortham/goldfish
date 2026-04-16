@@ -8,7 +8,6 @@
 import { join } from 'path';
 import { readFile, writeFile, readdir, rename, unlink, mkdir } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { createHash } from 'crypto';
 import type { Checkpoint, CheckpointInput } from './types';
 import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
 import { getGitContext } from './git';
@@ -16,28 +15,16 @@ import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
 import { getActiveBrief } from './plans';
-import { buildRetrievalDigest, DIGEST_VERSION } from './digests';
-import { upsertPendingSemanticRecord } from './semantic-cache';
 import { getLogger } from './logger';
 
 /** Checkpoints older than this are excluded from consolidation. Shared by recall, consolidate handler, and hooks. */
 export const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
 
-type SemanticQueueInput = {
-  checkpointId: string;
-  checkpointTimestamp: string;
-  digest: string;
-  digestHash: string;
-  digestVersion: number;
-};
-
 interface CheckpointDependencies {
-  queueSemanticRecord: (workspace: string, input: SemanticQueueInput) => Promise<void>;
   getGitContext: (cwd?: string) => import('./types').GitContext;
 }
 
 const defaultCheckpointDependencies: CheckpointDependencies = {
-  queueSemanticRecord: upsertPendingSemanticRecord,
   getGitContext
 };
 
@@ -468,21 +455,6 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
   registerProject(projectPath).catch(() => {
     // Silently ignore registration failures — this is best-effort
   });
-
-  const digest = buildRetrievalDigest(checkpoint);
-  const digestHash = createHash('sha256').update(digest).digest('hex');
-
-  try {
-    await checkpointDependencies.queueSemanticRecord(projectPath, {
-      checkpointId: checkpoint.id,
-      checkpointTimestamp: checkpoint.timestamp,
-      digest,
-      digestHash,
-      digestVersion: DIGEST_VERSION
-    });
-  } catch {
-    // Silently ignore semantic queue failures — checkpoint saves must still succeed
-  }
 
   return checkpoint;
 }

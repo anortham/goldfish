@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
-import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir } from '../src/workspace';
 import { rm, mkdtemp, stat } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -18,12 +17,6 @@ let TEST_DIR: string;
 let restoreDeps: (() => void) | undefined;
 const ORIGINAL_CWD = process.cwd();
 const ORIGINAL_GOLDFISH_WORKSPACE = process.env.GOLDFISH_WORKSPACE;
-
-const TEST_DEFAULT_RUNTIME = {
-  isReady: () => false,
-  getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
-  embedTexts: async () => [[1, 0]]
-};
 
 function getFirstTextContent(result: unknown): string {
   if (!result || typeof result !== 'object' || !('content' in result)) {
@@ -45,14 +38,6 @@ function getFirstTextContent(result: unknown): string {
 
   return '';
 }
-
-beforeAll(() => {
-  setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
-});
-
-afterAll(() => {
-  setDefaultSemanticRuntime(undefined);
-});
 
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-server-'));
@@ -504,15 +489,6 @@ describe('Server instructions', () => {
     expect(recallTool.description).toContain('full:');
     expect(recallTool.description).toContain('workspace:');
     expect(recallTool.description).toContain('search:');
-  });
-});
-
-describe('Server startup', () => {
-  it('calls pruneOrphanedSemanticCaches on startup without blocking', async () => {
-    const { pruneOrphanedSemanticCaches } = await import('../src/semantic-cache');
-
-    // The function should not throw even on a clean environment
-    await expect(pruneOrphanedSemanticCaches()).resolves.toBeUndefined();
   });
 });
 

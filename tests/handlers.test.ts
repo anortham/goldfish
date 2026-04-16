@@ -5,7 +5,6 @@ import { handleBrief } from '../src/handlers/brief';
 import { handlePlan } from '../src/handlers/plan';
 import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
-import { setDefaultSemanticRuntime } from '../src/transformers-embedder';
 import { ensureMemoriesDir } from '../src/workspace';
 import { rm } from 'fs/promises';
 import { mkdtemp } from 'fs/promises';
@@ -25,20 +24,12 @@ const originalGoldfishHome = process.env.GOLDFISH_HOME;
 let TEST_DIR: string;
 let restoreDeps: (() => void) | undefined;
 
-const TEST_DEFAULT_RUNTIME = {
-  isReady: () => false,
-  getModelInfo: () => ({ id: 'test-default-model', version: '1' }),
-  embedTexts: async () => [[1, 0]]
-};
-
 beforeAll(async () => {
   tempGoldfishHome = await mkdtemp(join(tmpdir(), 'goldfish-home-handlers-'));
   process.env.GOLDFISH_HOME = tempGoldfishHome;
-  setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
 });
 
 afterAll(async () => {
-  setDefaultSemanticRuntime(undefined);
   if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
   else process.env.GOLDFISH_HOME = originalGoldfishHome;
   await rm(tempGoldfishHome, { recursive: true, force: true });

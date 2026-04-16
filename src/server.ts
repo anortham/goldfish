@@ -22,7 +22,6 @@ import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } from './handlers/index.js';
 import type { CheckpointArgs, RecallArgs, BriefArgs, PlanArgs, ConsolidateArgs } from './types.js';
-import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 import { getLogger } from './logger.js';
 import { resolveWorkspace } from './workspace.js';
 
@@ -111,11 +110,6 @@ export function createServer() {
     }
   );
   const rootsCache = new Map<string, Root[] | null | undefined>();
-
-  // Prune orphaned semantic caches (fire-and-forget)
-  pruneOrphanedSemanticCaches().catch(() => {
-    // Silently ignore, pruning is best-effort
-  });
 
   server.setNotificationHandler(RootsListChangedNotificationSchema, () => {
     rootsCache.clear();

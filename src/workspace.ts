@@ -137,10 +137,6 @@ export function getGoldfishHomeDir(): string {
   return join(homeDir, '.goldfish');
 }
 
-export function getModelCacheDir(): string {
-  return join(getGoldfishHomeDir(), 'models', 'transformers');
-}
-
 export function getSemanticWorkspaceKey(projectPath: string): string {
   const normalizedPath = resolve(projectPath);
 
@@ -148,16 +144,6 @@ export function getSemanticWorkspaceKey(projectPath: string): string {
     .update(normalizedPath)
     .digest('hex')
     .slice(0, 12);
-}
-
-export function getSemanticCacheDir(projectPath?: string): string {
-  const workspacePath = resolveWorkspace(projectPath);
-  return join(
-    getGoldfishHomeDir(),
-    'cache',
-    'semantic',
-    getSemanticWorkspaceKey(workspacePath)
-  );
 }
 
 export function getConsolidationStateDir(): string {
