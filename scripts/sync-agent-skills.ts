@@ -9,7 +9,7 @@
  *   2. Generate `AGENTS.md` from the canonical `CLAUDE.md` at repo root.
  *      `CLAUDE.md` is the single source of truth; `AGENTS.md` is a byte-for-byte
  *      copy maintained for harnesses that read AGENTS.md instead. Edit CLAUDE.md
- *      and rerun `bun run sync:agent-skills` — never edit AGENTS.md by hand.
+ *      and rerun `bun run sync:agent-skills`. Never edit AGENTS.md by hand.
  */
 
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'fs/promises';
