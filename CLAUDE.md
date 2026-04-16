@@ -23,7 +23,8 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 2. **Tusk (Bun + SQLite)** - Fixed bugs, became too complex, hook spam disaster
 3. **.NET rewrite** - Over-engineered, never finished
 4. **Goldfish 4.0** - Radical simplicity, markdown storage, evidence-based features
-5. **Goldfish 5.x** - **Claude Code plugin**, project-local `.memories/`, cross-project registry, hybrid semantic recall, skills & hooks
+5. **Goldfish 5.x-6.x** - Claude Code plugin, project-local `.memories/`, cross-project registry, hybrid semantic recall, consolidation, skills & hooks
+6. **Goldfish 7.0** - Subtract sprint: removed semantic stack, hooks, consolidation, and the plan tool in favor of Orama BM25 search and brief-first storage
 
 **Core principle:** We only add complexity when we have EVIDENCE we need it.
 
@@ -37,47 +38,40 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 {project}/.memories/
   {date}/
     {HHMMSS}_{hash}.md    # Individual checkpoint files (YAML frontmatter)
-  plans/
-    {plan-id}.md           # Individual plans (YAML frontmatter)
-  .active-plan             # Contains active plan ID
-  memory.yaml              # Consolidated memory (YAML, merge-friendly)
+  briefs/
+    {brief-id}.md          # Individual briefs (YAML frontmatter)
+  .active-brief            # Contains active brief ID
 
 ~/.goldfish/
   registry.json            # Cross-project registry (auto-populated)
-  consolidation-state/     # Per-workspace consolidation cursors (machine-local)
-    {workspace}.json
-  cache/semantic/          # Derived semantic manifest + JSONL records (rebuildable)
-  models/transformers/     # Local embedding model cache
 ```
 
-**Checkpoint and plan markdown in `.memories/` is the source of truth.** Semantic cache and model files live outside `.memories/` as rebuildable local artifacts.
+**Checkpoint and brief markdown in `.memories/` is the source of truth.** No derived caches or model files; search runs over the markdown corpus on demand.
 
 ### Claude Code Plugin
 
 Goldfish is a **Claude Code plugin** with:
 
 - **`.claude-plugin/plugin.json`** - Plugin manifest (auto-discovery + MCP server registration)
-- **`skills/`** - 5 Claude Code skills (slash commands)
-- **`hooks/`** - 3 Claude Code hooks (lifecycle automation)
+- **`skills/`** - Claude Code skills (slash commands)
 
 ### Core Modules
 
 | Module | Purpose | Test File |
 |--------|---------|-----------|
-| `src/workspace.ts` | Workspace normalization plus `.memories/`, semantic cache, and model cache paths | `tests/workspace.test.ts` |
-| `src/checkpoints.ts` | Checkpoint storage, plan affinity, semantic queueing | `tests/checkpoints.test.ts` |
-| `src/plans.ts` | Plan management | `tests/plans.test.ts` |
-| `src/memory.ts` | Memory file I/O (memory.yaml with MEMORY.md fallback), consolidation state I/O | `tests/memory.test.ts` |
-| `src/recall.ts` | Fuzzy + semantic hybrid recall, aggregation, bounded maintenance | `tests/recall.test.ts` |
+| `src/workspace.ts` | Workspace normalization plus `.memories/` paths | `tests/workspace.test.ts` |
+| `src/checkpoints.ts` | Checkpoint storage and brief affinity | `tests/checkpoints.test.ts` |
+| `src/briefs.ts` | Brief storage and activation | `tests/briefs.test.ts` |
+| `src/recall.ts` | Recall aggregation across date ranges and workspaces | `tests/recall.test.ts` |
+| `src/ranking.ts` | Orama BM25 search ranking | `tests/ranking.test.ts` |
 | `src/digests.ts` | Compact retrieval digests and compact search descriptions | `tests/digests.test.ts` |
-| `src/semantic-cache.ts` | Derived semantic manifest and JSONL record storage | `tests/semantic-cache.test.ts` |
-| `src/semantic.ts` | Hybrid ranking and pending semantic work processing | `tests/semantic.test.ts` |
-| `src/transformers-embedder.ts` | Lazy embedding runtime backed by `@huggingface/transformers` | `tests/transformers-embedder.test.ts` |
 | `src/registry.ts` | Cross-project registry | `tests/registry.test.ts` |
 | `src/git.ts` | Git context capture | `tests/git.test.ts` |
 | `src/lock.ts` | File locking utilities | `tests/lock.test.ts` |
+| `src/file-io.ts` | Atomic write helpers | `tests/file-io.test.ts` |
+| `src/logger.ts` | Structured logging | `tests/logger.test.ts` |
 | `src/server.ts` | MCP server | `tests/server.test.ts` |
-| `src/handlers/` | Tool handlers (checkpoint, recall, plan) | `tests/handlers.test.ts` |
+| `src/handlers/` | Tool handlers (checkpoint, recall, brief) | `tests/handlers.test.ts` |
 | `src/tools.ts` | Tool definitions | - |
 | `src/instructions.ts` | Server instructions | - |
 | `src/types.ts` | Type definitions | - |
@@ -95,7 +89,7 @@ interface Checkpoint {
   tags?: string[];
   git?: GitContext;        // Nested git context
   summary?: string;       // Auto-generated concise summary
-  planId?: string;        // ID of active plan when checkpoint was created
+  briefId?: string;       // ID of active brief when checkpoint was created
   type?: 'checkpoint' | 'decision' | 'incident' | 'learning';
   context?: string;
   decision?: string;
@@ -114,7 +108,7 @@ interface GitContext {
   files?: string[];
 }
 
-interface Plan {
+interface Brief {
   id: string;
   title: string;
   content: string;        // Markdown body
@@ -131,21 +125,9 @@ interface RecallOptions {
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
   since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
-  search?: string;        // Fuzzy search query (fuse.js)
+  search?: string;        // BM25 search query (Orama)
   full?: boolean;         // Include full descriptions + git metadata (default: false)
-  planId?: string;        // Filter to checkpoints associated with this plan
-  _semanticRuntime?: SemanticRuntime; // Internal override used by tests
-}
-
-interface SemanticRuntime {
-  isReady(): boolean;
-  getModelInfo?(): SemanticModelInfo | undefined;
-  embedTexts(texts: string[], signal?: AbortSignal): Promise<number[][]>;
-}
-
-interface SemanticModelInfo {
-  id: string;
-  version: string;
+  briefId?: string;       // Filter to checkpoints associated with this brief
 }
 
 interface RegisteredProject {
@@ -246,7 +228,6 @@ Keep documentation honest: do not hardcode stale test counts or module line coun
 - Keep code well-structured and maintainable
 - Store memories with the project (`.memories/` directory)
 - Always commit `.memories/` — checkpoints are source-controlled project artifacts, never leave them untracked
-- Treat semantic cache/model cache as derived local state under `~/.goldfish/`
 
 ### DON'T
 
@@ -256,7 +237,6 @@ Keep documentation honest: do not hardcode stale test counts or module line coun
 - Add "intelligence" to storage layer (Goldfish is dumb storage, Claude is smart)
 - Add features without evidence from real usage
 - Add aggressive frequency-pushing language back to tool descriptions (we tuned this down deliberately)
-- Treat derived semantic cache as source of truth (it is not)
 
 ---
 
@@ -266,8 +246,8 @@ MCP tool descriptions are **directive about quality, encouraging about frequency
 
 - **Quality guidance stays strong**: checkpoint descriptions must be structured markdown with WHAT/WHY/HOW/IMPACT. Lazy descriptions are unacceptable.
 - **Frequency guidance is purely positive**: "when in doubt, checkpoint" is the tiebreaker. Use concrete positive triggers (after committing, at stopping points) — no "Do NOT" lists or "Avoid" phrasing that suppresses the impulse. Frame cadence positively: "space out checkpoints so each captures distinct progress."
-- **Recall runs automatically at session start** via the SessionStart hook. Users can also invoke `/recall` for targeted queries.
-- **Plans keep strong language**: plan persistence genuinely matters and the directive tone is warranted there.
+- **Recall is invoked manually**: agents call `recall()` at session start or when context is missing; users can also invoke `/recall` for targeted queries.
+- **Briefs keep strong language**: brief persistence genuinely matters and the directive tone is warranted there.
 
 Recalibrated twice: first after overuse (100+ checkpoints/day, rapid-fire duplicates), then after underuse (agents stopped checkpointing autonomously because the "Do NOT" list was too prominent and specific while positive triggers were vague).
 
@@ -342,12 +322,11 @@ Run the group matching your change instead of the full suite. Use the full suite
 
 | Group | Command | Covers |
 |-------|---------|--------|
-| Storage & utils | `bun test workspace lock git summary digests` | Paths, file ops, utilities |
+| Storage & utils | `bun test workspace lock git summary digests file-io logger` | Paths, file ops, utilities |
 | Checkpoints | `bun test checkpoints` | Checkpoint CRUD, formatting, parsing |
-| Plans | `bun test plans` | Plan CRUD, activation |
-| Memory | `bun test consolidate memory` | Consolidation, memory.yaml state |
-| Semantic | `bun test semantic transformers` | Embeddings, ranking, cache |
-| Recall | `bun test recall` | Search, filtering, hybrid ranking |
+| Briefs | `bun test briefs` | Brief CRUD, activation |
+| Search & ranking | `bun test ranking search` | BM25 search via Orama |
+| Recall | `bun test recall` | Aggregation, filtering, date windows |
 | Handlers | `bun test handlers` | MCP tool handler responses |
 | Server & registry | `bun test server registry` | Server startup, cross-project registry |
 
@@ -371,9 +350,8 @@ The version must be updated in three files (a test enforces they stay in sync):
 
 - **Runtime:** Bun (for speed + built-in test runner)
 - **MCP SDK:** `@modelcontextprotocol/sdk` (^1.26.0)
-- **Embeddings:** `@huggingface/transformers` (^3.7.6)
-- **Search:** `fuse.js` (fuzzy search, proven from v1)
-- **YAML:** `yaml` package (for plan frontmatter)
+- **Search:** `@orama/orama` (BM25 ranking over checkpoint markdown)
+- **YAML:** `yaml` package (for brief frontmatter)
 - **Language:** TypeScript
 
 ---
@@ -384,7 +362,6 @@ The version must be updated in three files (a test enforces they stay in sync):
 - **`CONTRIBUTING.md`** - Detailed development guide (comprehensive patterns)
 - **`docs/IMPLEMENTATION.md`** - Technical specification
 - **`skills/`** - Claude Code plugin skills (slash commands)
-- **`hooks/`** - Claude Code plugin hooks (lifecycle automation)
 
 ---
 

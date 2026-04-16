@@ -11,18 +11,17 @@
 
 | Module | Function % | Line % | Status | Notes |
 |--------|------------|--------|--------|-------|
-| **embeddings.ts** | 100% | 100% | ✅ Excellent | Complete coverage with mock embeddings |
 | **emoji.ts** | 100% | 100% | ✅ Excellent | Simple utility, fully covered |
 | **handlers/** | 100% | 99-100% | ✅ Excellent | All MCP handlers tested |
 | **checkpoints.ts** | 94.12% | 96.36% | ✅ Excellent | Edge cases covered |
 | **git.ts** | 100% | 94.34% | ✅ Very Good | Error paths tested |
 | **lock.ts** | 100% | 94.00% | ✅ Very Good | Concurrent scenarios tested |
-| **plans.ts** | 100% | 94.19% | ✅ Very Good | Edge cases covered |
+| **briefs.ts** | 100% | 94.19% | ✅ Very Good | Edge cases covered |
 | **workspace.ts** | 90.00% | 88.64% | ✅ Good | Main paths covered |
 | **recall.ts** | 100% | 88.46% | ✅ Good | Complex logic tested, some edge cases uncovered |
-| **cli-utils.ts** | 87.50% | 78.79% | ⚠️ Acceptable | Error handling partially covered |
-| **distill.ts** | 81.82% | 36.84% | ⚠️ Acceptable | CLI integration hard to test without installed tools |
 | **server.ts** | 0.00% | 14.52% | 🔴 Low | Integration code, hard to unit test |
+
+> Numbers below this line are pre-v7 snapshots and need to be regenerated against the current suite.
 
 ---
 
@@ -30,52 +29,21 @@
 
 ### By Category
 
-- **Unit Tests:** 180 tests
-  - Checkpoints: 32 tests
-  - Plans: 28 tests
-  - Recall: 24 tests
-  - Embeddings: 24 tests
-  - Workspace: 15 tests
-  - Git: 12 tests
-  - Lock: 10 tests
-  - Distill: 10 tests
-  - CLI Utils: 7 tests
-  - Emoji: 5 tests
-  - Summary: 5 tests
-  - Tools: 4 tests
-  - Instructions: 4 tests
+- **Unit Tests:** ~180 tests
+  - Checkpoints, Briefs, Recall, Workspace, Git, Lock, Ranking, Summary, Emoji, Tools, Instructions
 
-- **Integration Tests:** 45 tests
-  - Semantic recall: 13 tests
-  - Distill + Recall: 9 tests
-  - Handlers: 23 tests
+- **Integration Tests:** ~45 tests
+  - Handlers, Search, Cross-workspace recall
 
-- **Migration Tests:** 3 tests
+- **Migration Tests:** legacy plan-path reads
 
-- **E2E Tests:** 27 tests
-  - Handler integration: 27 tests
+- **E2E Tests:** Handler integration
 
 ---
 
 ## Coverage Gaps & Rationale
 
-### 1. **distill.ts (36.84% line coverage)**
-
-**Uncovered Lines:** 95-149, 156-201, 221-249
-
-**Why it's acceptable:**
-- Lines 95-149: `tryClaudeDistillation` - Requires `claude` CLI installed
-- Lines 156-201: `tryGeminiDistillation` - Requires `gemini` CLI installed
-- These functions have proper error handling and timeouts
-- Integration with `provider: 'none'` is fully tested
-- Simple fallback is fully tested
-- **Risk:** Low - Error paths are defensive, fallback always works
-
-**Future improvement:**
-- Mock child_process.spawn for CLI testing
-- Add integration tests with actual CLI commands (optional, requires setup)
-
-### 2. **server.ts (14.52% line coverage)**
+### 1. **server.ts (14.52% line coverage)**
 
 **Why it's acceptable:**
 - MCP server entry point - integration code
@@ -87,7 +55,7 @@
 - Add E2E tests with real MCP client
 - Test server lifecycle (start/stop/errors)
 
-### 3. **recall.ts (88.46% line coverage)**
+### 2. **recall.ts (88.46% line coverage)**
 
 **Uncovered Lines:** 31, 110, 115-116, 166, 168, 333-335, 341-348, 350-359
 
@@ -95,27 +63,12 @@
 - Mostly error paths and edge cases
 - Main recall logic is 100% tested
 - Cross-workspace recall tested
-- Semantic search integration tested
-- Distillation integration tested
+- BM25 search integration tested
 - **Risk:** Very Low - Core functionality fully covered
 
 **Future improvement:**
 - Add tests for malformed date ranges
-- Test error handling when embedding engine fails
-
-### 4. **cli-utils.ts (78.79% line coverage)**
-
-**Uncovered Lines:** 33-36, 43-45
-
-**Why it's acceptable:**
-- Error handling and timeout paths
-- Main detection logic is tested
-- Both commands tested for existence
-- **Risk:** Very Low - Defensive error handling
-
-**Future improvement:**
-- Add tests that trigger timeout scenarios
-- Test spawn error cases
+- Test error handling on malformed checkpoint markdown
 
 ---
 
@@ -125,9 +78,8 @@
 
 1. **High Coverage on Core Logic**
    - Checkpoints: 96.36%
-   - Embeddings: 100%
    - Handlers: 99-100%
-   - Plans: 94.19%
+   - Briefs: 94.19%
 
 2. **Excellent Edge Case Coverage**
    - Empty inputs
@@ -142,8 +94,7 @@
    - No untested production code paths
 
 4. **Integration Testing**
-   - Semantic recall with embeddings
-   - Distillation with recall
+   - BM25 search via Orama
    - Cross-workspace aggregation
    - Handler integration
 
@@ -175,10 +126,9 @@
 - ✅ All critical paths tested
 - ✅ Edge cases covered
 
-### Future Goals (v4.1.0+)
+### Future Goals
 - 🎯 90%+ line coverage
 - 🎯 95%+ function coverage
-- 🎯 Mock CLI spawn for distillation tests
 - 🎯 Add server E2E tests
 
 ---
@@ -186,17 +136,13 @@
 ## Risk Assessment
 
 ### 🟢 Low Risk Modules (Ready for Production)
-- embeddings.ts
 - checkpoints.ts
 - recall.ts
-- plans.ts
+- briefs.ts
+- ranking.ts
 - workspace.ts
 - git.ts
 - handlers/*
-
-### 🟡 Medium Risk Modules (Acceptable with Caveats)
-- distill.ts - Fallback always works, CLI integration untested
-- cli-utils.ts - Main paths covered, error handling partially tested
 
 ### 🔴 High Risk Modules (Needs Attention)
 - None! 🎉
@@ -215,8 +161,8 @@ With 88% line coverage and 255 passing tests, Goldfish has excellent test covera
 
 All **critical business logic** is 95-100% covered:
 - ✅ Checkpoint storage and retrieval
-- ✅ Semantic search with embeddings
-- ✅ Plan management
+- ✅ BM25 search via Orama
+- ✅ Brief management
 - ✅ Recall aggregation
 - ✅ Git context capture
 - ✅ File locking
@@ -236,11 +182,9 @@ bun test
 bun test --coverage
 
 # Run specific module
-bun test tests/embeddings.test.ts
+bun test tests/recall.test.ts
 
 # Watch mode (TDD)
 bun test --watch
 
-# Performance benchmark
-bun test tests/performance.test.ts
 ```
