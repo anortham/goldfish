@@ -2,7 +2,7 @@
 
 ## Goal
 
-Reposition goldfish from "memory" to **evidence ledger**: the source-controlled, harness-agnostic, durable record of why things changed. Three legs survive (checkpoints, briefs, cross-project recall). Everything that was built for the 200K-context era or for Claude-Code-only automation gets cut. The result is a smaller, faster, cross-client-symmetric tool with three MCP surface tools instead of five.
+Reposition goldfish from "memory" to **evidence ledger**: the source-controlled, harness-agnostic, durable record of why things changed. Three legs survive (checkpoints, briefs, cross-project recall). Everything that was built for the 200K-context era or for Claude-Code-only automation gets cut. v7.0.0 also lands one new capability — a handoff skill that turns the evidence ledger into a returning-engineer summary, suitable for a different harness or agent picking up cold. The result is a smaller, faster, cross-client-symmetric tool with three MCP surface tools instead of five, six skills instead of eight, and a major version bump that earns its number with both subtraction and addition.
 
 ## Why
 
@@ -21,12 +21,13 @@ Detailed rationale plus Gemini and Codex second opinions are captured in `.memor
 5. **Doc cleanup** of stale exploration and pre-brief planning artifacts
 6. **Agent docs refreshed** (`CLAUDE.md`, `AGENTS.md`) to match the new module map and skill inventory
 7. **Server instructions updated** to keep behavioral nudges that previously rode in the SessionStart hook
-8. **Version bumped to 7.0.0**
+8. **New `/handoff` skill** that produces a returning-engineer summary from active brief + recent checkpoints + git delta, composed entirely from existing MCP tools and shell commands (no new tool surface)
+9. **Version bumped to 7.0.0**
 
 ### Out
 
-- **Handoff layer build** (slated for v7.1.0; design doc to follow once v7.0.0 ships)
 - **Adding API-based embeddings** (deferred until evidence shows BM25 alone is insufficient; Orama's vector slot keeps the door open)
+- **Adding a `recall({ handoff: true })` MCP shortcut** for the handoff output (the skill composes existing tools first; promote to a tool surface only if token-cost evidence justifies it)
 - **Changes to the on-disk format** of checkpoint files or brief files (no migration of user data)
 
 ---
@@ -83,7 +84,7 @@ English tokenizer with stemming. Boosts mirror current fuse weights so ranking c
 - Modify: `src/ranking.ts` becomes a thin Orama wrapper exporting `searchCheckpoints(query, checkpoints)` only. `rankSearchCheckpoints`, `buildHybridRanking`, hybrid scoring, and lexical-candidate-rebuilding all go.
 - Modify: `src/recall.ts` removes hybrid ranking, query embedding plumbing, semantic maintenance, fallback paths, `_semanticRuntime` parameter handling
 - Modify: `src/types.ts` removes `SemanticRuntime`, `SemanticModelInfo`, `_semanticRuntime` from `RecallOptions`
-- Modify: `src/workspace.ts` deletes `getSemanticCacheDir` and `getModelCacheDir`; renames `getSemanticWorkspaceKey` to `getWorkspaceHashKey` (it's a generic SHA-256 path hasher also used by `getConsolidationStatePath`; the "semantic" naming is incidental)
+- Modify: `src/workspace.ts` deletes `getSemanticCacheDir` and `getModelCacheDir`. Keep `getSemanticWorkspaceKey` under its current name until Pillar 3 deletes it along with consolidation (skip the rename: simpler, one fewer churned symbol).
 - Modify: `src/server.ts` drops `pruneOrphanedSemanticCaches` call
 - Delete: `src/semantic.ts`, `src/semantic-cache.ts`, `src/transformers-embedder.ts`
 - Delete dependency: `@huggingface/transformers`
@@ -150,7 +151,7 @@ Delete the consolidation routine entirely. The token math is net-negative as wir
 
 Existing `.memories/memory.yaml` files in user repos are left alone (read by humans, harmless). Existing `~/.goldfish/consolidation-state/` files are deleted on startup as part of the same one-shot migration that handles the semantic cache. The `getConsolidationStatePath` and `getConsolidationStateDir` functions get deleted too.
 
-Note on the renamed hash function: `getWorkspaceHashKey` was preserved for `getConsolidationStatePath`. Once consolidation is gone, `getWorkspaceHashKey` has no remaining caller. Delete it.
+`getSemanticWorkspaceKey` had been preserved through Pillar 1 because `getConsolidationStatePath` was still calling it. With consolidation gone, it has no remaining caller. Delete the function and `getConsolidationStateDir`/`getConsolidationStatePath` along with it.
 
 ---
 
@@ -213,14 +214,68 @@ After targeted deletes, do one grep pass for references to deleted modules in re
 
 `CLAUDE.md` and `AGENTS.md` are byte-identical today and both stale ("5 Claude Code skills" when there are 8). Two changes:
 
-1. **Update content** to reflect v7.0.0 architecture: 3 tools, 5 skills (brief, brief-status, checkpoint, recall, standup), no hooks, no consolidation, no semantic, no plan. Module map matches reality.
-2. **Reduce duplication**: keep `CLAUDE.md` as canonical, make `AGENTS.md` a symlink or a single-line pointer (decide based on whether harness file-watchers follow symlinks; if not, keep both files but generate `AGENTS.md` via a tiny script during the same `sync:agent-skills` step).
+1. **Update content** to reflect v7.0.0 architecture: 3 tools, 6 skills (brief, brief-status, checkpoint, handoff, recall, standup), no hooks, no consolidation, no semantic, no plan. Module map matches reality.
+2. **Reduce duplication**: keep `CLAUDE.md` as canonical. Generate `AGENTS.md` from `CLAUDE.md` in the same `sync:agent-skills` script (cheap, no symlink portability concerns). Document the generation in the script header so future contributors edit `CLAUDE.md` and run the sync.
 
-Also update `README.md` to remove references to: hooks, consolidation, semantic recall, MiniLM, `@huggingface/transformers`, plan tool, plan/plan-status skills. Tool count goes 4→3 and skill count goes 8→5 in the prose.
+Also update `README.md` to remove references to: hooks, consolidation, semantic recall, MiniLM, `@huggingface/transformers`, plan tool, plan/plan-status skills. Tool count goes 4→3 and skill count goes 8→6 in the prose. Add a short section describing the new `/handoff` skill.
 
 Update `docs/IMPLEMENTATION.md` likewise to reflect the new module map.
 
 Drop stale TODO.md items (e.g. "ExitPlanMode → plan save hook" question that was never implemented).
+
+---
+
+## Pillar 7: Handoff skill
+
+### Decision
+
+Add a single new skill, `/handoff`, that produces a returning-engineer summary suitable for any harness or agent picking up cold. The skill composes existing MCP tools (`recall`, `brief`) plus standard shell (`git status`, `git log`) and synthesizes the result into a structured markdown document. No new MCP tool, no handler, no schema change. Skill-only is the cheapest possible v7.0.0 addition that earns the major version bump.
+
+### What the handoff produces
+
+A markdown document with these sections, in order:
+
+1. **Direction** — pulled from the active brief (`recall({ limit: 0 })`); summarize the goal, constraints, and current status in 3-5 lines
+2. **State at handoff** — current branch (`git rev-parse --abbrev-ref HEAD`), uncommitted changes (`git status -s`), last commit (`git log -1 --oneline`)
+3. **Recent activity** — last 5-10 checkpoints (`recall({ days: 3, limit: 10 })`), grouped by logical milestone, dense format
+4. **Next steps** — pulled from the most recent checkpoint's `next` field, supplemented by anything in the brief's success criteria not yet achieved
+5. **Open questions** — pulled from the most recent checkpoints' `unknowns` fields and from any open items in the active brief
+6. **Source pointers** — paths to the brief file, the most recent checkpoint files, and any referenced `docs/plans/` documents so the receiving agent can read deeper
+
+### Format choice
+
+Markdown, structured headers, dense bullets. Designed to be:
+
+- Read by a human in one pass
+- Parsed by a different agent on a different harness without ambiguity
+- Pasted directly into a new session prompt or appended to a CLAUDE.md-equivalent without reformatting
+
+### Time scoping
+
+The skill takes one optional argument: a time window (`--since 2d`, `--since 4h`). Default is "since the last commit on the current branch" if that's a sensible boundary; otherwise the last 3 days. The skill description explains both modes.
+
+### Distinction from `/standup`
+
+- `/standup` aggregates *across projects* for a daily-update audience (you, looking at what you did everywhere)
+- `/handoff` synthesizes *within one project* for a session-resumption audience (a different agent or a returning you, picking up cold)
+
+The skill descriptions both spell this out so an agent picks the right one.
+
+### Module changes
+
+- Add: `skills/handoff/SKILL.md`
+- The sync script (`scripts/sync-agent-skills.ts`) automatically mirrors it to `.agents/skills/handoff/SKILL.md`
+- Update: `README.md` skill table includes `/handoff`
+- Update: `CLAUDE.md` skill inventory mentions handoff
+- Update: server instructions (`src/instructions.ts`) gets a one-line mention of `/handoff` if there's room under the 2k cap
+
+### Test strategy
+
+The skill is markdown content, not code, so unit tests don't apply. Acceptance is "run `/handoff` in this repo and verify the output is useful for a different agent picking up cold." Capture one example output as a fixture in the design's checkpoint trail.
+
+### Why now (in v7.0.0)
+
+A major version bump should ship a new capability, not only deletions. The handoff skill is cheap (one markdown file), composable (no new tool surface), and directly addresses the cross-client gap the rest of the sprint was implicitly setting up: now that hooks are gone and the surface is unified, handoff is the explicit answer to "how does work resume on a different harness?"
 
 ---
 
@@ -300,19 +355,26 @@ Banned patterns still apply: no tautological tests, no smoke-only tests, no copy
 - [ ] `src/tools.ts` exports 3 tools (checkpoint, recall, brief)
 - [ ] `src/handlers/` exports 3 handlers (handleCheckpoint, handleRecall, handleBrief)
 - [ ] `hooks/` directory deleted
-- [ ] `skills/` contains 5 directories: brief, brief-status, checkpoint, recall, standup
-- [ ] `.agents/skills/` mirrors the same 5
-- [ ] `getWorkspaceHashKey` deleted (no longer needed once consolidation is gone)
+- [ ] `skills/` contains 6 directories: brief, brief-status, checkpoint, handoff, recall, standup
+- [ ] `.agents/skills/` mirrors the same 6
+- [ ] `getSemanticWorkspaceKey`, `getConsolidationStatePath`, `getConsolidationStateDir` all deleted (no remaining callers after consolidation removal)
 - [ ] Server startup deletes `~/.goldfish/cache/semantic/`, `~/.goldfish/models/transformers/`, `~/.goldfish/consolidation-state/` if present
 
 ### Docs
 
-- [ ] `README.md` updated: 3 tools, 5 skills, no hooks/consolidation/semantic/plan/MiniLM mentions
-- [ ] `CLAUDE.md` and `AGENTS.md` updated to reflect v7.0.0 architecture and consolidated to one source of truth (or both kept and generated to stay in sync)
+- [ ] `README.md` updated: 3 tools, 6 skills, no hooks/consolidation/semantic/plan/MiniLM mentions, includes `/handoff` description
+- [ ] `CLAUDE.md` is canonical; `AGENTS.md` generated from `CLAUDE.md` via `scripts/sync-agent-skills.ts` (or a sibling script)
 - [ ] `docs/IMPLEMENTATION.md` updated to reflect new module map
 - [ ] Stale docs deleted per pillar 5 list
 - [ ] `TODO.md` cleaned of items that no longer apply
 - [ ] `test-julie-integration.ts` deleted
+
+### Handoff skill
+
+- [ ] `skills/handoff/SKILL.md` exists, mirrored to `.agents/skills/handoff/`
+- [ ] Skill description disambiguates from `/standup` (cross-project standup vs single-project session resumption)
+- [ ] Skill explains time-window argument and default behavior
+- [ ] One example output captured as a fixture in the design's checkpoint trail (run it on this repo and save the result)
 
 ### Release
 
@@ -342,4 +404,6 @@ Banned patterns still apply: no tautological tests, no smoke-only tests, no copy
 
 **Deleted docs:** per pillar 5 list
 
-**Net change:** roughly minus 4,500 source lines, minus 6,000 test lines, plus 200-400 source lines for the Orama wrapper and migration cleanup, plus 400-600 test lines for new BM25 + migration coverage. Server tools 5→3. Skills 8→5. Hooks 2→0.
+**Added:** `skills/handoff/SKILL.md`, possibly `scripts/sync-claude-md.ts` (or extension of `sync-agent-skills.ts`) for `AGENTS.md` generation
+
+**Net change:** roughly minus 4,500 source lines, minus 6,000 test lines, plus 200-400 source lines for the Orama wrapper and migration cleanup, plus 400-600 test lines for new BM25 + migration coverage, plus one new skill markdown file. Server tools 5→3. Skills 8→6. Hooks 2→0.
