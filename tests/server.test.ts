@@ -490,6 +490,25 @@ describe('Server instructions', () => {
     expect(recallTool.description).toContain('workspace:');
     expect(recallTool.description).toContain('search:');
   });
+
+  it('migrates session-start hook nudges into the instructions string', async () => {
+    const { getInstructions } = await import('../src/server');
+
+    const instructions = getInstructions();
+
+    // Nudge 1: checkpoint BEFORE git commits, not after, so the checkpoint
+    // file is included in the commit and travels to other machines.
+    expect(instructions).toContain('BEFORE a git commit');
+    expect(instructions).toContain('other machines');
+
+    // Nudge 2: always commit .memories/, never gitignore it. Already present
+    // in the Source Control section but pinned here so the regression is loud.
+    expect(instructions).toContain('.memories/');
+    expect(instructions).toContain('.gitignore');
+
+    // Nudge 3: don't ask permission to checkpoint or save briefs.
+    expect(instructions).toContain("Don't ask permission");
+  });
 });
 
 describe('Server exports', () => {
