@@ -53,7 +53,7 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 Goldfish is a **Claude Code plugin** with:
 
 - **`.claude-plugin/plugin.json`** - Plugin manifest (auto-discovery + MCP server registration)
-- **`skills/`** - Claude Code skills (slash commands)
+- **`skills/`** - 6 Claude Code skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
 
 ### Core Modules
 
@@ -361,7 +361,7 @@ The version must be updated in three files (a test enforces they stay in sync):
 - **`README.md`** - User-facing documentation (humans using Goldfish)
 - **`CONTRIBUTING.md`** - Detailed development guide (comprehensive patterns)
 - **`docs/IMPLEMENTATION.md`** - Technical specification
-- **`skills/`** - Claude Code plugin skills (slash commands)
+- **`skills/`** - Claude Code plugin skills (slash commands): `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
 
 ---
 

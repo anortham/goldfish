@@ -12,7 +12,7 @@ Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapt
 
 Coding harnesses already plan, summarize, and recover from compaction. What they don't do is keep a durable record of *why* a project moved the way it did, in a place the next session (or the next harness) can read.
 
-Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and five skills, with markdown as the source of truth.
+Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and six skills, with markdown as the source of truth.
 
 ---
 
@@ -30,7 +30,7 @@ bun install
 
 ### Claude Code
 
-Claude Code is the fullest adapter today. You get MCP tools and slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/standup`).
+Claude Code is the fullest adapter today. You get MCP tools and slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/handoff`, `/standup`).
 
 Install from the marketplace:
 
@@ -241,13 +241,14 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 5 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
+Goldfish ships 6 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
 | `/brief` | Create and manage durable strategic briefs |
 | `/brief-status` | Assess progress against the active brief |
 | `/checkpoint` | Save a checkpoint with rich description and tags |
+| `/handoff` | Produce a structured session-resumption summary for a returning or different agent |
 | `/recall` | Restore context from recent checkpoints and the active brief |
 | `/standup` | Generate a cross-project standup report |
 
@@ -386,6 +387,7 @@ goldfish/
     brief/SKILL.md        # Canonical brief skill
     brief-status/SKILL.md # Canonical brief-status skill
     checkpoint/SKILL.md   # Canonical checkpoint skill
+    handoff/SKILL.md      # Canonical handoff skill
     recall/SKILL.md       # Canonical recall skill
     standup/SKILL.md      # Canonical standup skill
   src/
