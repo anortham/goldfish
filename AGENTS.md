@@ -338,11 +338,15 @@ These work because bun matches filenames containing the given substring.
 
 ## Version Bumping
 
-The version must be updated in three files (a test enforces they stay in sync):
+The version must be updated in five surfaces (tests in `tests/server.test.ts` enforce they stay in sync):
 
-1. `package.json` (`version` field)
-2. `.claude-plugin/plugin.json` (`version` field)
-3. `src/server.ts` (`SERVER_VERSION` constant)
+1. `src/server.ts` (`SERVER_VERSION` constant) — canonical source of truth
+2. `package.json` (`version` field)
+3. `.claude-plugin/plugin.json` (`version` field)
+4. `.claude-plugin/marketplace.json` (`plugins[0].version`)
+5. `README.md` version banner (`**Version X.Y.Z**`)
+
+Add a `## [X.Y.Z]` section to `CHANGELOG.md` at the same time.
 
 ---
 
