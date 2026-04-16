@@ -81,6 +81,14 @@ export function getMemoriesDir(projectPath?: string): string {
 }
 
 /**
+ * Get the .memories/briefs/ directory path for a project.
+ * Falls back to resolveWorkspace() if no projectPath is provided.
+ */
+export function getBriefsDir(projectPath?: string): string {
+  return join(getMemoriesDir(projectPath), 'briefs');
+}
+
+/**
  * Get the .memories/plans/ directory path for a project.
  * Falls back to resolveWorkspace() if no projectPath is provided.
  */
@@ -128,11 +136,15 @@ export function getConsolidationStatePath(projectPath: string): string {
 }
 
 /**
- * Ensure .memories/ and .memories/plans/ directories exist for a project.
+ * Ensure .memories/, .memories/briefs/, and .memories/plans/ directories exist for a project.
  * Falls back to resolveWorkspace() if no projectPath is provided.
  */
 export async function ensureMemoriesDir(projectPath?: string): Promise<void> {
+  const briefsDir = getBriefsDir(projectPath);
   const plansDir = getPlansDir(projectPath);
-  // Creating plans/ with recursive:true also creates .memories/ parent
-  await mkdir(plansDir, { recursive: true });
+
+  await Promise.all([
+    mkdir(briefsDir, { recursive: true }),
+    mkdir(plansDir, { recursive: true })
+  ]);
 }

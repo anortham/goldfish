@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
+  saveBrief,
+  getBrief,
+  getActiveBrief,
   savePlan,
   getPlan,
   getActivePlan,
@@ -13,8 +16,8 @@ import {
 import { handlePlan } from '../src/handlers/plan';
 import { acquireLock } from '../src/lock';
 import type { Plan, PlanInput } from '../src/types';
-import { getPlansDir, ensureMemoriesDir } from '../src/workspace';
-import { mkdtemp, rm } from 'fs/promises';
+import { getBriefsDir, getPlansDir, ensureMemoriesDir } from '../src/workspace';
+import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -271,6 +274,20 @@ describe('Plan save with planId alias', () => {
 });
 
 describe('Plan storage', () => {
+  it('saveBrief writes to briefs storage', async () => {
+    const brief = await saveBrief({
+      id: 'brief-id',
+      title: 'Brief Title',
+      content: 'Brief content',
+      workspace: TEST_DIR
+    });
+
+    const briefPath = join(getBriefsDir(TEST_DIR), 'brief-id.md');
+
+    expect(brief.id).toBe('brief-id');
+    expect(await Bun.file(briefPath).exists()).toBe(true);
+  });
+
   it('saves plan with auto-generated ID', async () => {
     const input: PlanInput = {
       title: 'Test Plan',
@@ -313,7 +330,7 @@ describe('Plan storage', () => {
     expect(plan.id).toBe('custom-id');
   });
 
-  it('creates plan file in plans/ directory', async () => {
+  it('creates new plan writes in briefs/ directory', async () => {
     const input: PlanInput = {
       id: 'test-plan',
       title: 'Test',
@@ -323,10 +340,7 @@ describe('Plan storage', () => {
 
     await savePlan(input);
 
-    const planPath = join(
-      getPlansDir(TEST_DIR),
-      'test-plan.md'
-    );
+    const planPath = join(getBriefsDir(TEST_DIR), 'test-plan.md');
 
     const exists = await Bun.file(planPath).exists();
     expect(exists).toBe(true);
@@ -391,7 +405,7 @@ describe('Plan storage', () => {
     });
 
     const { readdir } = await import('fs/promises');
-    const plansDir = getPlansDir(TEST_DIR);
+    const plansDir = getBriefsDir(TEST_DIR);
     const files = await readdir(plansDir);
     const tmpFiles = files.filter(f => f.includes('.tmp'));
 
@@ -407,7 +421,7 @@ describe('Plan storage', () => {
     });
 
     const { readFile } = await import('fs/promises');
-    const planPath = join(getPlansDir(TEST_DIR), 'newline-test.md');
+    const planPath = join(getBriefsDir(TEST_DIR), 'newline-test.md');
     const content = await readFile(planPath, 'utf-8');
 
     expect(content.endsWith('\n')).toBe(true);
@@ -442,6 +456,38 @@ describe('Plan retrieval', () => {
   it('returns null for non-existent plan', async () => {
     const plan = await getPlan(TEST_DIR, 'nonexistent');
     expect(plan).toBeNull();
+  });
+
+  it('getBrief reads the same data written through savePlan compatibility', async () => {
+    const brief = await getBrief(TEST_DIR, 'plan-1');
+
+    expect(brief).toBeTruthy();
+    expect(brief!.id).toBe('plan-1');
+    expect(brief!.title).toBe('First Plan');
+  });
+
+  it('reads legacy plan files from .memories/plans/', async () => {
+    const legacyDir = getPlansDir(TEST_DIR);
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(
+      join(legacyDir, 'legacy-plan.md'),
+      `---
+id: legacy-plan
+title: Legacy Plan
+status: active
+created: 2026-04-16T10:00:00.000Z
+updated: 2026-04-16T10:00:00.000Z
+tags: []
+---
+
+Legacy content
+`,
+      'utf-8'
+    );
+
+    const plan = await getPlan(TEST_DIR, 'legacy-plan');
+    expect(plan?.title).toBe('Legacy Plan');
+    expect(plan?.content).toBe('Legacy content');
   });
 
   it('lists all plans in workspace', async () => {
@@ -504,6 +550,13 @@ describe('Active plan management', () => {
     expect(activePlan?.id).toBe('plan-1');
   });
 
+  it('writes new active marker to .active-brief', async () => {
+    await setActivePlan(TEST_DIR, 'plan-1');
+
+    const activeMarker = join(TEST_DIR, '.memories', '.active-brief');
+    expect(await Bun.file(activeMarker).text()).toBe('plan-1');
+  });
+
   it('switches active plan', async () => {
     await setActivePlan(TEST_DIR, 'plan-1');
     await setActivePlan(TEST_DIR, 'plan-2');
@@ -515,6 +568,20 @@ describe('Active plan management', () => {
   it('returns null when no active plan set', async () => {
     const activePlan = await getActivePlan(TEST_DIR);
     expect(activePlan).toBeNull();
+  });
+
+  it('falls back to legacy .active-plan marker', async () => {
+    await writeFile(join(TEST_DIR, '.memories', '.active-plan'), 'plan-2', 'utf-8');
+
+    const activePlan = await getActivePlan(TEST_DIR);
+    expect(activePlan?.id).toBe('plan-2');
+  });
+
+  it('getActiveBrief matches getActivePlan during migration', async () => {
+    await setActivePlan(TEST_DIR, 'plan-1');
+
+    const activeBrief = await getActiveBrief(TEST_DIR);
+    expect(activeBrief?.id).toBe('plan-1');
   });
 
   it('returns null when active plan has status completed', async () => {
@@ -784,10 +851,7 @@ describe('Plan deletion', () => {
   });
 
   it('waits for in-flight updates before deleting plan', async () => {
-    const planPath = join(
-      getPlansDir(TEST_DIR),
-      'test-plan.md'
-    );
+    const planPath = join(getBriefsDir(TEST_DIR), 'test-plan.md');
 
     const release = await acquireLock(planPath);
     const deletePromise = deletePlan(TEST_DIR, 'test-plan');

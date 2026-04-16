@@ -50,6 +50,8 @@ export interface Plan {
   tags: string[];
 }
 
+export type Brief = Plan;
+
 export interface PlanInput {
   id?: string;            // Auto-generated if not provided
   title: string;
@@ -60,12 +62,16 @@ export interface PlanInput {
   tags?: string[];
 }
 
+export type BriefInput = PlanInput;
+
 export interface PlanUpdate {
   title?: string;
   content?: string;
   status?: 'active' | 'completed' | 'archived';
   tags?: string[];
 }
+
+export type BriefUpdate = PlanUpdate;
 
 export interface RecallOptions {
   workspace?: string;     // 'current' | 'all' | specific path
@@ -76,6 +82,7 @@ export interface RecallOptions {
   search?: string;        // Fuzzy search query
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
+  briefId?: string;       // Filter to checkpoints associated with this brief
   planId?: string;        // Filter to checkpoints associated with this plan
   includeMemory?: boolean;  // Include memory.yaml in response. Defaults: true (no search), false (with search). Override explicitly.
   _registryDir?: string;  // Internal: override registry dir for test isolation
@@ -95,6 +102,7 @@ export interface SemanticModelInfo {
 
 export interface RecallResult {
   checkpoints: Checkpoint[];
+  activeBrief?: Brief | null;
   activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
   memory?: string;                     // memory.yaml content (when includeMemory is true)
@@ -158,6 +166,7 @@ export interface ConsolidationPayload {
   message?: string;                    // Only when status === 'current'
   memoryPath?: string;                 // Absolute path to .memories/memory.yaml
   lastConsolidatedPath?: string;       // Absolute path to ~/.goldfish/consolidation-state/{workspace}.json
+  activeBriefPath?: string;            // Absolute path to active brief file, if one exists
   activePlanPath?: string;             // Absolute path to active plan file, if one exists
   checkpointCount?: number;            // Number of checkpoints in this batch
   remainingCount?: number;             // Unconsolidated checkpoints beyond this batch
@@ -193,6 +202,8 @@ export interface RecallArgs {
   since?: string;
   search?: string;
   full?: boolean;
+  briefId?: string;
+  brief_id?: string;
   planId?: string;
   plan_id?: string;
   includeMemory?: boolean;
@@ -204,6 +215,8 @@ export interface RecallArgs {
 export interface PlanArgs {
   action: string;
   id?: string;
+  briefId?: string;
+  brief_id?: string;
   planId?: string;
   plan_id?: string;
   title?: string;
@@ -214,6 +227,8 @@ export interface PlanArgs {
   status?: string;
   updates?: PlanUpdate;
 }
+
+export type BriefArgs = PlanArgs;
 
 export interface ConsolidateArgs {
   all?: boolean;

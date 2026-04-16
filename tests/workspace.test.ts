@@ -3,6 +3,7 @@ import {
   normalizeWorkspace,
   resolveWorkspace,
   getMemoriesDir,
+  getBriefsDir,
   getPlansDir,
   ensureMemoriesDir,
   getGoldfishHomeDir,
@@ -129,14 +130,29 @@ describe('Project-level .memories/ storage', () => {
     });
   });
 
+  describe('getBriefsDir', () => {
+    it('returns {cwd}/.memories/briefs/ when no arg is provided', () => {
+      const result = getBriefsDir();
+      expect(result).toBe(join(process.cwd(), '.memories', 'briefs'));
+    });
+
+    it('returns {projectPath}/.memories/briefs/ when a path is provided', () => {
+      expect(getBriefsDir('/some/path')).toBe(join('/some/path', '.memories', 'briefs'));
+      expect(getBriefsDir('/Users/user/source/goldfish')).toBe(join('/Users/user/source/goldfish', '.memories', 'briefs'));
+    });
+  });
+
   describe('ensureMemoriesDir', () => {
-    it('creates .memories/ and .memories/plans/ directories', async () => {
+    it('creates .memories/, .memories/briefs/, and .memories/plans/ directories', async () => {
       const tmpDir = makeTmpDir();
       // tmpDir itself doesn't exist yet — ensureMemoriesDir should create it recursively
       await ensureMemoriesDir(tmpDir);
 
       const memoriesStat = await stat(join(tmpDir, '.memories'));
       expect(memoriesStat.isDirectory()).toBe(true);
+
+      const briefsStat = await stat(join(tmpDir, '.memories', 'briefs'));
+      expect(briefsStat.isDirectory()).toBe(true);
 
       const plansStat = await stat(join(tmpDir, '.memories', 'plans'));
       expect(plansStat.isDirectory()).toBe(true);
@@ -160,6 +176,9 @@ describe('Project-level .memories/ storage', () => {
 
       const memoriesStat = await stat(join(tmpDir, '.memories'));
       expect(memoriesStat.isDirectory()).toBe(true);
+
+      const briefsStat = await stat(join(tmpDir, '.memories', 'briefs'));
+      expect(briefsStat.isDirectory()).toBe(true);
 
       const plansStat = await stat(join(tmpDir, '.memories', 'plans'));
       expect(plansStat.isDirectory()).toBe(true);

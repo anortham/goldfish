@@ -1,10 +1,17 @@
 /**
- * Plan storage and management
+ * Plan and brief storage management.
  *
- * Plans are stored as individual markdown files with YAML frontmatter:
- * {project}/.memories/plans/{plan-id}.md
+ * New writes land in:
+ * {project}/.memories/briefs/{id}.md
  *
- * Active plan is tracked in: {project}/.memories/.active-plan
+ * Legacy reads still support:
+ * {project}/.memories/plans/{id}.md
+ *
+ * New active state is tracked in:
+ * {project}/.memories/.active-brief
+ *
+ * Legacy reads still support:
+ * {project}/.memories/.active-plan
  */
 
 import { join } from 'path';
@@ -12,14 +19,119 @@ import { readFile, readdir, unlink } from 'fs/promises';
 import { atomicWriteFile } from './file-io';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Plan, PlanInput, PlanUpdate } from './types';
-import { getMemoriesDir, getPlansDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
+import {
+  getMemoriesDir,
+  getBriefsDir,
+  getPlansDir,
+  ensureMemoriesDir,
+  resolveWorkspace
+} from './workspace';
 import { withLock } from './lock';
 
+type StoredPlan = {
+  plan: Plan;
+  path: string;
+};
+
 const VALID_PLAN_STATUSES = new Set(['active', 'completed', 'archived']);
+const ACTIVE_BRIEF_FILENAME = '.active-brief';
+const ACTIVE_PLAN_FILENAME = '.active-plan';
 
 function assertValidPlanStatus(status: unknown): asserts status is Plan['status'] {
   if (typeof status !== 'string' || !VALID_PLAN_STATUSES.has(status)) {
     throw new Error(`Invalid plan status '${status}'. Expected active, completed, or archived.`);
+  }
+}
+
+function getBriefPath(projectPath: string, id: string): string {
+  return join(getBriefsDir(projectPath), `${id}.md`);
+}
+
+function getLegacyPlanPath(projectPath: string, id: string): string {
+  return join(getPlansDir(projectPath), `${id}.md`);
+}
+
+function getActiveBriefPath(projectPath: string): string {
+  return join(getMemoriesDir(projectPath), ACTIVE_BRIEF_FILENAME);
+}
+
+function getLegacyActivePlanPath(projectPath: string): string {
+  return join(getMemoriesDir(projectPath), ACTIVE_PLAN_FILENAME);
+}
+
+async function readPlanAtPath(planPath: string): Promise<Plan | null> {
+  try {
+    const content = await readFile(planPath, 'utf-8');
+    return parsePlanFile(content);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function getStoredPlan(projectPath: string, id: string): Promise<StoredPlan | null> {
+  validatePlanId(id);
+
+  const briefPath = getBriefPath(projectPath, id);
+  const brief = await readPlanAtPath(briefPath);
+  if (brief) {
+    return { plan: brief, path: briefPath };
+  }
+
+  const legacyPlanPath = getLegacyPlanPath(projectPath, id);
+  const legacyPlan = await readPlanAtPath(legacyPlanPath);
+  if (legacyPlan) {
+    return { plan: legacyPlan, path: legacyPlanPath };
+  }
+
+  return null;
+}
+
+async function listPlanIds(dirPath: string): Promise<string[]> {
+  let files: string[];
+  try {
+    files = await readdir(dirPath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+
+  return files
+    .filter(file => file.endsWith('.md') && !file.startsWith('.'))
+    .map(file => file.replace(/\.md$/, ''));
+}
+
+async function resolveActivePlanId(projectPath: string): Promise<string | null> {
+  for (const markerPath of [getActiveBriefPath(projectPath), getLegacyActivePlanPath(projectPath)]) {
+    try {
+      const planId = (await readFile(markerPath, 'utf-8')).trim();
+      if (planId) {
+        return planId;
+      }
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function clearActiveMarkerIfMatch(markerPath: string, id: string): Promise<void> {
+  try {
+    const activePlanId = (await readFile(markerPath, 'utf-8')).trim();
+    if (activePlanId === id) {
+      await unlink(markerPath);
+    }
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
   }
 }
 
@@ -44,10 +156,7 @@ export function formatPlanFile(plan: Plan): string {
  * Parse a plan markdown file (YAML frontmatter + content)
  */
 export function parsePlanFile(content: string): Plan {
-  // Strip BOM and normalize CRLF → LF (Windows git checkout / Notepad)
   const normalized = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
-
-  // Extract frontmatter (accept single or double newline after closing ---)
   const match = normalized.match(/^---\n([\s\S]+?)\n---\n\n?([\s\S]*)$/);
 
   if (!match) {
@@ -84,9 +193,6 @@ export function parsePlanFile(content: string): Plan {
   }
 }
 
-/**
- * Generate a plan ID from title (if not provided)
- */
 function generatePlanId(title: string): string {
   const base = title
     .toLowerCase()
@@ -102,10 +208,6 @@ function generatePlanId(title: string): string {
   return fallback.substring(0, 50);
 }
 
-/**
- * Validate that a plan ID is safe for use in file paths.
- * Rejects IDs containing path separators or traversal sequences.
- */
 function validatePlanId(id: string): void {
   if (id.includes('/') || id.includes('\\') || id.includes('..') || id.includes('\0')) {
     throw new Error(`Invalid plan ID '${id}': must not contain path separators or traversal sequences`);
@@ -113,7 +215,7 @@ function validatePlanId(id: string): void {
 }
 
 /**
- * Save a new plan
+ * Save a new plan. Compatibility wrapper for the new brief storage path.
  */
 export async function savePlan(input: PlanInput): Promise<Plan> {
   const projectPath = resolveWorkspace(input.workspace);
@@ -135,23 +237,18 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
     tags: input.tags || []
   };
 
-  // Write plan file atomically under lock to prevent TOCTOU race
-  const planPath = join(getPlansDir(projectPath), `${id}.md`);
+  const planPath = getBriefPath(projectPath, id);
   const content = formatPlanFile(plan);
 
   await withLock(planPath, async () => {
-    // Check for duplicate ID before writing
-    try {
-      await readFile(planPath, 'utf-8');
+    const existing = await getStoredPlan(projectPath, id);
+    if (existing) {
       throw new Error(`Plan with ID '${id}' already exists`);
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') throw error;
     }
 
     await atomicWriteFile(planPath, content);
   });
 
-  // Only active-status plans may become the workspace's active plan.
   if (plan.status === 'active' && input.activate !== false) {
     await setActivePlan(projectPath, id);
   }
@@ -159,54 +256,35 @@ export async function savePlan(input: PlanInput): Promise<Plan> {
   return plan;
 }
 
+export async function saveBrief(input: PlanInput): Promise<Plan> {
+  return savePlan(input);
+}
+
 /**
- * Get a plan by ID
+ * Get a plan by ID.
  */
 export async function getPlan(projectPath: string, id: string): Promise<Plan | null> {
-  validatePlanId(id);
-  const planPath = join(getPlansDir(projectPath), `${id}.md`);
+  const stored = await getStoredPlan(projectPath, id);
+  return stored?.plan ?? null;
+}
 
-  try {
-    const content = await readFile(planPath, 'utf-8');
-    return parsePlanFile(content);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return null;
-    }
-    throw error;
-  }
+export async function getBrief(projectPath: string, id: string): Promise<Plan | null> {
+  return getPlan(projectPath, id);
 }
 
 /**
  * List all plans in a workspace (sorted by updated date, newest first)
  */
 export async function listPlans(projectPath: string): Promise<Plan[]> {
-  const plansDir = getPlansDir(projectPath);
-
-  let files: string[];
-  try {
-    files = await readdir(plansDir);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return [];
-    }
-    throw error;
-  }
-
-  const planFiles = files.filter(file => {
-    if (!file.endsWith('.md')) return false;
-    if (file.startsWith('.')) return false;  // Skip .active-plan
-    return true;
-  });
+  const ids = new Set([
+    ...await listPlanIds(getBriefsDir(projectPath)),
+    ...await listPlanIds(getPlansDir(projectPath))
+  ]);
 
   const plans = await Promise.all(
-    planFiles.map(async (file) => {
-      const id = file.replace('.md', '');
-      return getPlan(projectPath, id);
-    })
+    [...ids].map(async (id) => getPlan(projectPath, id))
   );
 
-  // Sort by updated date (newest first)
   return plans
     .filter((plan): plan is Plan => plan !== null)
     .sort((a, b) =>
@@ -214,33 +292,37 @@ export async function listPlans(projectPath: string): Promise<Plan[]> {
     );
 }
 
-/**
- * Get the currently active plan for a workspace
- */
-export async function getActivePlan(projectPath: string): Promise<Plan | null> {
-  const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
-
-  try {
-    const planId = (await readFile(activePlanPath, 'utf-8')).trim();
-    const plan = await getPlan(projectPath, planId);
-    if (plan && plan.status !== 'active') {
-      return null;
-    }
-    return plan;
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return null;
-    }
-    throw error;
-  }
+export async function listBriefs(projectPath: string): Promise<Plan[]> {
+  return listPlans(projectPath);
 }
 
 /**
- * Set the active plan for a workspace
+ * Get the currently active plan for a workspace.
+ */
+export async function getActivePlan(projectPath: string): Promise<Plan | null> {
+  const planId = await resolveActivePlanId(projectPath);
+  if (!planId) {
+    return null;
+  }
+
+  const plan = await getPlan(projectPath, planId);
+  if (plan && plan.status !== 'active') {
+    return null;
+  }
+
+  return plan;
+}
+
+export async function getActiveBrief(projectPath: string): Promise<Plan | null> {
+  return getActivePlan(projectPath);
+}
+
+/**
+ * Set the active plan for a workspace.
  */
 export async function setActivePlan(projectPath: string, planId: string): Promise<void> {
   validatePlanId(planId);
-  // Verify plan exists
+
   const plan = await getPlan(projectPath, planId);
   if (!plan) {
     throw new Error(`Plan '${planId}' does not exist`);
@@ -249,15 +331,18 @@ export async function setActivePlan(projectPath: string, planId: string): Promis
     throw new Error(`Cannot activate plan '${planId}' with status '${plan.status}'`);
   }
 
-  const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
-
+  const activePlanPath = getActiveBriefPath(projectPath);
   await withLock(activePlanPath, async () => {
     await atomicWriteFile(activePlanPath, planId);
   });
 }
 
+export async function setActiveBrief(projectPath: string, planId: string): Promise<void> {
+  await setActivePlan(projectPath, planId);
+}
+
 /**
- * Update an existing plan
+ * Update an existing plan.
  */
 export async function updatePlan(
   projectPath: string,
@@ -265,62 +350,75 @@ export async function updatePlan(
   updates: PlanUpdate
 ): Promise<void> {
   validatePlanId(id);
-  const planPath = join(getPlansDir(projectPath), `${id}.md`);
 
-  // Use file lock to prevent race conditions on concurrent updates
-  await withLock(planPath, async () => {
-    const plan = await getPlan(projectPath, id);
-    if (!plan) {
+  const stored = await getStoredPlan(projectPath, id);
+  if (!stored) {
+    throw new Error(`Plan '${id}' does not exist`);
+  }
+
+  await withLock(stored.path, async () => {
+    const current = await getStoredPlan(projectPath, id);
+    if (!current) {
       throw new Error(`Plan '${id}' does not exist`);
     }
     if (updates.status !== undefined) {
       assertValidPlanStatus(updates.status);
     }
 
-    // Apply updates
     const updatedPlan: Plan = {
-      ...plan,
+      ...current.plan,
       ...updates,
       updated: new Date().toISOString()
     };
 
-    // Auto-check all unchecked boxes when completing a plan
-    if (updatedPlan.status === 'completed' && plan.status !== 'completed') {
+    if (updatedPlan.status === 'completed' && current.plan.status !== 'completed') {
       updatedPlan.content = updatedPlan.content.replace(/- \[ \]/g, '- [x]');
     }
 
-    // Write updated plan (atomic)
     const content = formatPlanFile(updatedPlan);
-    await atomicWriteFile(planPath, content);
+    await atomicWriteFile(current.path, content);
   });
 }
 
+export async function updateBrief(
+  projectPath: string,
+  id: string,
+  updates: PlanUpdate
+): Promise<void> {
+  await updatePlan(projectPath, id, updates);
+}
+
 /**
- * Delete a plan
+ * Delete a plan.
  */
 export async function deletePlan(projectPath: string, id: string): Promise<void> {
   validatePlanId(id);
-  const planPath = join(getPlansDir(projectPath), `${id}.md`);
-  const activePlanPath = join(getMemoriesDir(projectPath), '.active-plan');
 
-  await withLock(planPath, async () => {
-    const plan = await getPlan(projectPath, id);
-    if (!plan) {
+  const stored = await getStoredPlan(projectPath, id);
+  if (!stored) {
+    throw new Error(`Plan '${id}' does not exist`);
+  }
+
+  await withLock(stored.path, async () => {
+    const current = await getStoredPlan(projectPath, id);
+    if (!current) {
       throw new Error(`Plan '${id}' does not exist`);
     }
 
-    await unlink(planPath);
+    await unlink(current.path);
 
-    // Lock .active-plan to avoid racing with setActivePlan
-    await withLock(activePlanPath, async () => {
-      try {
-        const activePlanId = (await readFile(activePlanPath, 'utf-8')).trim();
-        if (activePlanId === id) {
-          await unlink(activePlanPath);
-        }
-      } catch {
-        // No active plan file — nothing to clear
-      }
+    const activeBriefPath = getActiveBriefPath(projectPath);
+    await withLock(activeBriefPath, async () => {
+      await clearActiveMarkerIfMatch(activeBriefPath, id);
+    });
+
+    const legacyActivePlanPath = getLegacyActivePlanPath(projectPath);
+    await withLock(legacyActivePlanPath, async () => {
+      await clearActiveMarkerIfMatch(legacyActivePlanPath, id);
     });
   });
+}
+
+export async function deleteBrief(projectPath: string, id: string): Promise<void> {
+  await deletePlan(projectPath, id);
 }
