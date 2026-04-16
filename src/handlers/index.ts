@@ -6,4 +6,3 @@ export { handleCheckpoint } from './checkpoint.js';
 export { handleRecall } from './recall.js';
 export { handleBrief } from './brief.js';
 export { handlePlan } from './plan.js';
-export { handleConsolidate } from './consolidate.js';

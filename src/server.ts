@@ -2,11 +2,11 @@
 /**
  * Goldfish MCP Server
  *
- * Provides 4 core tools for AI agents:
+ * Provides core tools for AI agents:
  * - checkpoint: Save work progress
  * - recall: Restore context
  * - brief: Manage durable strategic context
- * - consolidate: Prepare memory consolidation
+ * - plan: Compatibility alias for brief (slated for removal in Phase 3)
  */
 
 import { rm } from 'fs/promises';
@@ -22,17 +22,17 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
-import { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } from './handlers/index.js';
-import type { CheckpointArgs, RecallArgs, BriefArgs, PlanArgs, ConsolidateArgs } from './types.js';
+import { handleCheckpoint, handleRecall, handleBrief, handlePlan } from './handlers/index.js';
+import type { CheckpointArgs, RecallArgs, BriefArgs, PlanArgs } from './types.js';
 import { getLogger } from './logger.js';
 import { getGoldfishHomeDir, resolveWorkspace } from './workspace.js';
 
 export const SERVER_VERSION = '6.7.0';
-const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief', 'plan', 'consolidate']);
+const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief', 'plan']);
 const DEFAULT_SESSION_KEY = 'default';
 
 // Re-export for backward compatibility with tests
-export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate };
+export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief, handlePlan };
 
 function getSessionKey(sessionId?: string): string {
   return sessionId ?? DEFAULT_SESSION_KEY;
@@ -179,9 +179,6 @@ export function createServer() {
         case 'plan':
           result = await handlePlan(hydratedArgs as unknown as PlanArgs);
           break;
-        case 'consolidate':
-          result = await handleConsolidate(hydratedArgs as ConsolidateArgs);
-          break;
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -221,7 +218,7 @@ export async function startServer() {
   log.cleanup(); // Fire-and-forget old log cleanup
 
   console.error('Goldfish MCP Server started');
-  console.error('Tools: checkpoint, recall, brief, consolidate (plan supported as compatibility alias)');
+  console.error('Tools: checkpoint, recall, brief (plan supported as compatibility alias)');
 }
 
 // Run server if executed directly

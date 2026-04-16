@@ -1,7 +1,8 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the 4 core tools: checkpoint, recall, brief, and consolidate.
+ * Contains the core tools: checkpoint, recall, brief, and the plan
+ * compatibility alias (slated for removal in Phase 3).
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -353,38 +354,6 @@ Returns: The same results as the brief tool.`,
           }
         },
         required: ['action']
-      }
-    },
-    {
-      name: 'consolidate',
-      description: `Prepare memory consolidation. Returns file paths and metadata for a consolidation subagent. No checkpoint content is returned through this tool.
-
-When to use:
-- When recall flags consolidation.needed: true
-- Before ending a long session with significant new work
-- On a scheduled cadence (e.g., daily wrap-up)
-
-Workflow:
-1. Call consolidate() - returns file paths, counts, and subagent prompt
-2. If status is "ready": dispatch a BACKGROUND subagent with the prompt field. The subagent reads checkpoint files from disk.
-3. If status is "current": nothing to do, memory is up to date
-4. If remainingCount > 0: more checkpoints need processing. Run consolidate again or tell the user.
-
-The subagent reads checkpoint files directly from disk and writes two files: .memories/memory.yaml (version-controlled) and a machine-local consolidation state file.
-
-Returns: JSON with status, checkpointCount, remainingCount, memoryPath, lastConsolidatedPath, and subagent prompt.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          workspace: {
-            type: 'string',
-            description: 'Workspace path (defaults to current directory)'
-          },
-          all: {
-            type: 'boolean',
-            description: 'Raise batch cap from 50 to 100 checkpoints. Use for initial consolidation or catching up.'
-          }
-        }
       }
     }
   ];

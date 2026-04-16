@@ -217,8 +217,3 @@ export interface PlanArgs {
 }
 
 export type BriefArgs = PlanArgs;
-
-export interface ConsolidateArgs {
-  all?: boolean;
-  workspace?: string;
-}
