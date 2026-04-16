@@ -2,10 +2,10 @@
 /**
  * Goldfish MCP Server
  *
- * Provides 4 tools for AI agents:
+ * Provides 4 core tools for AI agents:
  * - checkpoint: Save work progress
  * - recall: Restore context
- * - plan: Manage long-running plans
+ * - brief: Manage durable strategic context
  * - consolidate: Prepare memory consolidation
  */
 
@@ -17,15 +17,15 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
-import { handleCheckpoint, handleRecall, handlePlan, handleConsolidate } from './handlers/index.js';
-import type { CheckpointArgs, RecallArgs, PlanArgs, ConsolidateArgs } from './types.js';
+import { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } from './handlers/index.js';
+import type { CheckpointArgs, RecallArgs, BriefArgs, PlanArgs, ConsolidateArgs } from './types.js';
 import { pruneOrphanedSemanticCaches } from './semantic-cache.js';
 import { getLogger } from './logger.js';
 
 export const SERVER_VERSION = '6.5.3';
 
 // Re-export for backward compatibility with tests
-export { getTools, getInstructions, handleCheckpoint, handleRecall, handlePlan, handleConsolidate };
+export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate };
 
 /**
  * Start MCP server (when run directly)
@@ -68,6 +68,9 @@ export async function startServer() {
         case 'recall':
           result = await handleRecall(args as RecallArgs);
           break;
+        case 'brief':
+          result = await handleBrief(args as unknown as BriefArgs);
+          break;
         case 'plan':
           result = await handlePlan(args as unknown as PlanArgs);
           break;
@@ -104,7 +107,7 @@ export async function startServer() {
   log.cleanup(); // Fire-and-forget old log cleanup
 
   console.error('Goldfish MCP Server started');
-  console.error('Tools: checkpoint, recall, plan, consolidate');
+  console.error('Tools: checkpoint, recall, brief, consolidate (plan supported as compatibility alias)');
 }
 
 // Run server if executed directly

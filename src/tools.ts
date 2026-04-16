@@ -200,36 +200,100 @@ Returns: Active plan + chronological checkpoints + optional workspace summaries.
       }
     },
     {
-      name: 'plan',
-      description: `Plans represent HOURS of planning work. Losing them is unacceptable.
+      name: 'brief',
+      description: `Briefs capture durable strategic context for the current workspace.
 
-CRITICAL PATTERN - Memorize this:
-When you call ExitPlanMode - save plan within 1 exchange using plan({ action: "save", ... })
+Use a brief when project direction changes, architectural decisions need to survive, or future sessions need a compact "what matters now" document.
 
-DO NOT ask "should I save this plan?" - YES, ALWAYS. Save it immediately or the planning work is lost.
+Briefs are NOT execution plans. Do not copy every harness plan into Goldfish.
 
-I WILL BE SERIOUSLY DISAPPOINTED if a plan is lost because you forgot to save it. Plans take 2 seconds to save but represent HOURS of strategic thinking.
-
-Plans are NOT checkpoints. They are strategic documents that:
+Briefs:
 - Survive context compaction and crashes
 - Appear automatically at the top of recall()
-- Guide your work across multiple sessions
-- Track progress over time
+- Guide work across multiple sessions
+- Stay small enough to remain legible
 - Get saved as markdown files with YAML frontmatter
 
-NEVER ask permission to save or update a plan. Just do it.
+Actions:
+- save: Create a new brief. Active-status saves become active unless you pass activate: false.
+- get: Retrieve a specific brief. Falls back to the active brief if no id provided.
+- list: See all briefs (filterable by status)
+- activate: Set as active brief (shows in recall). Only ONE brief can be active per workspace.
+- update: Update brief content or status. Pass fields in an updates object, or directly as top-level parameters (title, content, status, tags). Falls back to the active brief if no id provided.
+- complete: Mark a brief as done (sets status to 'completed'). Falls back to the active brief if no id provided.
 
-Actions (use without asking permission):
-- save: Create new plan (MANDATORY after ExitPlanMode). Active-status saves become active unless you pass activate: false.
-- get: Retrieve specific plan. Falls back to active plan if no id provided.
-- list: See all plans (filterable by status)
-- activate: Set as active plan (shows in recall). Only ONE plan can be active per workspace.
-- update: Update plan content or status. Pass fields in an updates object, or directly as top-level parameters (title, content, status, tags). Falls back to active plan if no id provided.
-- complete: Mark plan as done (sets status to 'completed'). Falls back to active plan if no id provided.
+IMPORTANT: Only ONE brief can be active per workspace. Saving an active brief makes it active by default, and activate: false preserves the opt-out. Completed or archived saves do not replace the current active brief. Briefs are saved to {project}/.memories/briefs/ as markdown files with YAML frontmatter.
 
-IMPORTANT: Only ONE plan can be active per workspace. Saving an active plan makes it active by default, and activate: false preserves the opt-out. Completed or archived saves do not replace the current active plan. Plans are saved to {project}/.memories/plans/ as markdown files with YAML frontmatter.
+Returns: Brief details, status updates, or list of briefs.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['save', 'get', 'list', 'activate', 'update', 'complete'],
+            description: 'Action to perform'
+          },
+          id: {
+            type: 'string',
+            description: 'Brief ID (auto-generated from title if not provided). Aliases: briefId, planId'
+          },
+          briefId: {
+            type: 'string',
+            description: 'Alias for id. Prefer briefId for new callers.'
+          },
+          planId: {
+            type: 'string',
+            description: 'Legacy alias for id. Supported for compatibility.'
+          },
+          title: {
+            type: 'string',
+            description: 'Brief title (required for save)'
+          },
+          content: {
+            type: 'string',
+            description: 'Brief content in markdown (required for save)'
+          },
+          workspace: {
+            type: 'string',
+            description: 'Workspace path (defaults to current directory)'
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional tags for categorization (e.g., ["milestone", "auth"]). Used with save action.'
+          },
+          activate: {
+            type: 'boolean',
+            description: 'Activate brief after saving. Defaults to true for active-status saves; pass false to keep the current active brief unchanged.'
+          },
+          status: {
+            type: 'string',
+            enum: ['active', 'completed', 'archived'],
+            description: 'Brief status (for filtering)'
+          },
+          updates: {
+            type: 'object',
+            description: 'Updates to apply (for update action). Accepts: title (string), content (string), status ("active" | "completed" | "archived"), tags (string[])',
+            properties: {
+              title: { type: 'string' },
+              content: { type: 'string' },
+              status: { type: 'string', enum: ['active', 'completed', 'archived'] },
+              tags: { type: 'array', items: { type: 'string' } }
+            }
+          }
+        },
+        required: ['action']
+      }
+    },
+    {
+      name: 'plan',
+      description: `Compatibility alias for the brief tool.
 
-Returns: Plan details, status updates, or list of plans.`,
+Use \`brief\` for new work. \`plan\` remains available for older callers during migration.
+
+Saving an active plan makes it active by default, and activate: false preserves the opt-out.
+
+Returns: The same results as the brief tool.`,
       inputSchema: {
         type: 'object',
         properties: {

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { handleCheckpoint } from '../src/handlers/checkpoint';
 import { handleRecall } from '../src/handlers/recall';
+import { handleBrief } from '../src/handlers/brief';
 import { handlePlan } from '../src/handlers/plan';
 import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
@@ -578,6 +579,34 @@ describe('Readable markdown responses', () => {
   });
 
   describe('plan handler', () => {
+    describe('brief surface', () => {
+      it('exposes a canonical brief handler with brief wording', async () => {
+        const result = await handleBrief({
+          action: 'save',
+          title: 'Test Brief',
+          content: 'Brief content',
+          workspace: TEST_DIR,
+          activate: true
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
+        expect(text).toContain('(active)');
+      });
+
+      it('keeps plan handler working as a compatibility alias', async () => {
+        const result = await handlePlan({
+          action: 'save',
+          title: 'Alias Brief',
+          content: 'Brief content',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
+      });
+    });
+
     describe('save action', () => {
       it('returns one-liner confirmation', async () => {
         const result = await handlePlan({
@@ -591,7 +620,7 @@ describe('Readable markdown responses', () => {
         const text = result.content[0]!.text;
 
         expect(text).not.toStartWith('{');
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
         expect(text).toContain('(active)');
       });
 
@@ -604,7 +633,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
         expect(text).toContain('(active)');
 
         const recallResult = await handleRecall({ workspace: TEST_DIR });
@@ -623,7 +652,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
 
         // Verify it's not THE active plan for the workspace
         const recallResult = await handleRecall({ workspace: TEST_DIR });
@@ -650,7 +679,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
         expect(text).not.toContain('(active)');
 
         const recallResult = await handleRecall({ workspace: TEST_DIR });
@@ -682,7 +711,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
         // Plan id should be derived from title
         expect(text).toContain('tagged-plan');
       });
@@ -750,7 +779,7 @@ describe('Readable markdown responses', () => {
         expect(handlePlan({
           action: 'get',
           workspace: TEST_DIR
-        })).rejects.toThrow('No active plan found');
+        })).rejects.toThrow('No active brief found');
       });
     });
 
@@ -795,7 +824,7 @@ describe('Readable markdown responses', () => {
         const text = result.content[0]!.text;
 
         expect(text).not.toStartWith('{');
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 2 plans/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 2 briefs/);
         expect(text).toContain('plan-1');
         expect(text).toContain('Plan 1');
         expect(text).toContain('plan-2');
@@ -831,7 +860,7 @@ describe('Readable markdown responses', () => {
 
           const text = result.content[0]!.text;
 
-          expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 1 plan/);
+          expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Found 1 brief/);
           expect(text).toContain('completed-plan');
           expect(text).toContain('Completed');
           expect(text).not.toContain('active-plan');
@@ -847,7 +876,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] No plans found/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] No briefs found/);
       });
     });
 
@@ -874,7 +903,7 @@ describe('Readable markdown responses', () => {
           planId: 'alias-test',
           workspace: TEST_DIR
         });
-        expect(activateResult.content[0]!.text).toContain('Plan activated: alias-test');
+        expect(activateResult.content[0]!.text).toContain('Brief activated: alias-test');
 
         // update with planId
         const updateResult = await handlePlan({
@@ -883,7 +912,7 @@ describe('Readable markdown responses', () => {
           updates: { title: 'Updated' },
           workspace: TEST_DIR
         });
-        expect(updateResult.content[0]!.text).toContain('Plan updated: alias-test');
+        expect(updateResult.content[0]!.text).toContain('Brief updated: alias-test');
 
         // complete with planId
         const completeResult = await handlePlan({
@@ -891,7 +920,7 @@ describe('Readable markdown responses', () => {
           planId: 'alias-test',
           workspace: TEST_DIR
         });
-        expect(completeResult.content[0]!.text).toContain('Plan completed: alias-test');
+        expect(completeResult.content[0]!.text).toContain('Brief completed: alias-test');
       });
     });
 
@@ -902,7 +931,7 @@ describe('Readable markdown responses', () => {
             action: 'activate',
             workspace: TEST_DIR
           })
-        ).rejects.toThrow('Plan ID is required');
+        ).rejects.toThrow('Brief ID is required');
       });
 
       it('returns one-liner confirmation', async () => {
@@ -920,7 +949,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan activated: test-plan/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief activated: test-plan/);
       });
 
       it('rejects activating a completed plan', async () => {
@@ -959,7 +988,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan updated: test-plan/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief updated: test-plan/);
       });
 
       it('constructs updates from top-level properties when updates object is missing', async () => {
@@ -978,7 +1007,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toContain('Plan updated: toplevel-test');
+        expect(text).toContain('Brief updated: toplevel-test');
 
         // Verify the content was actually updated
         const getResult = await handlePlan({
@@ -1005,7 +1034,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toContain('Plan updated: active-update-test');
+        expect(text).toContain('Brief updated: active-update-test');
       });
 
       it('rejects invalid status in updates', async () => {
@@ -1043,7 +1072,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan completed: test-plan/);
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief completed: test-plan/);
       });
 
       it('falls back to active plan when no id provided', async () => {
@@ -1061,7 +1090,7 @@ describe('Readable markdown responses', () => {
         });
 
         const text = result.content[0]!.text;
-        expect(text).toContain('Plan completed: active-complete-test');
+        expect(text).toContain('Brief completed: active-complete-test');
       });
     });
   });

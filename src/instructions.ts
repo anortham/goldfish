@@ -24,12 +24,12 @@ Checkpoint your work so future sessions have context. **When in doubt, checkpoin
 
 Space out checkpoints so each one captures a distinct piece of progress — one per logical milestone is the right cadence. See the checkpoint tool description for formatting guidance.
 
-## Planning
+## Briefs
 
-When ExitPlanMode is called, save the plan within 1 exchange:
-plan({ action: "save", title: "...", content: "..." })
+Save a brief when the project's strategic direction changes or when durable context should survive future sessions:
+brief({ action: "save", title: "...", content: "..." })
 
-Save immediately, don't ask permission. Saved plans with status: active become active by default. Use activate: false to keep the current active plan unchanged, or activate: true when you want to be explicit. Completed or archived saves do not replace the current active plan.
+Use briefs for compact forward-looking context, not copied execution plans. Saved briefs with status: active become active by default. Use activate: false to keep the current active brief unchanged, or activate: true when you want to be explicit. Completed or archived briefs do not replace the current active brief.
 
 ## Recall
 

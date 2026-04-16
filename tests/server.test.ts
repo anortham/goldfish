@@ -186,7 +186,7 @@ describe('Tool handlers', () => {
 
       const text = result.content[0]!.text;
       expect(text).not.toStartWith('{');
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan saved:/);
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
     });
 
     it('gets plan by ID', async () => {
@@ -256,7 +256,7 @@ describe('Tool handlers', () => {
       });
 
       const text = result.content[0]!.text;
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan activated: test-plan/);
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief activated: test-plan/);
     });
 
     it('updates plan', async () => {
@@ -277,7 +277,7 @@ describe('Tool handlers', () => {
       });
 
       const text = result.content[0]!.text;
-      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Plan updated: test-plan/);
+      expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief updated: test-plan/);
     });
 
     it('handles invalid action gracefully', async () => {
@@ -299,8 +299,8 @@ describe('Tool descriptions', () => {
 
     const tools = getTools();
 
-    expect(tools).toHaveLength(4);
-    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'recall', 'plan', 'consolidate']);
+    expect(tools).toHaveLength(5);
+    expect(tools.map(t => t.name)).toEqual(['checkpoint', 'recall', 'brief', 'plan', 'consolidate']);
 
     // Each tool should have description and inputSchema
     for (const tool of tools) {
@@ -326,9 +326,11 @@ describe('Tool descriptions', () => {
     expect(recallTool!.description).toContain('prior context');
     expect(recallTool!.description).toContain('user invokes /recall');
 
+    const briefTool = tools.find(t => t.name === 'brief');
     const planTool = tools.find(t => t.name === 'plan');
-    expect(planTool!.description).toContain('HOURS of planning');
-    expect(planTool!.description).toContain('NEVER ask permission');
+    expect(briefTool!.description).toContain('strategic context');
+    expect(planTool!.description).toContain('Compatibility alias');
+    expect(planTool!.description).toContain('Use `brief` for new work');
   });
 
   it('uses consistent workspace parameter description across tools', async () => {
@@ -389,6 +391,16 @@ describe('Tool descriptions', () => {
     expect(props.updates.properties.content).toBeDefined();
     expect(props.updates.properties.status).toBeDefined();
     expect(props.updates.properties.tags).toBeDefined();
+  });
+
+  it('publishes brief as the canonical forward-looking tool', async () => {
+    const { getTools } = await import('../src/server');
+
+    const tools = getTools();
+    const briefTool = tools.find(t => t.name === 'brief');
+
+    expect(briefTool).toBeDefined();
+    expect(briefTool!.description).toContain('brief');
   });
 
   it('plan tool includes activate guidance in description', async () => {
@@ -481,10 +493,11 @@ describe('Server exports', () => {
   });
 
   it('exports all handler functions', async () => {
-    const { handleCheckpoint, handleRecall, handlePlan, handleConsolidate } = await import('../src/server');
+    const { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } = await import('../src/server');
 
     expect(typeof handleCheckpoint).toBe('function');
     expect(typeof handleRecall).toBe('function');
+    expect(typeof handleBrief).toBe('function');
     expect(typeof handlePlan).toBe('function');
     expect(typeof handleConsolidate).toBe('function');
   });
