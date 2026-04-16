@@ -33,8 +33,7 @@ applyTo: "**"
   - Why now
   - Constraints
   - Success criteria
-  - References to `docs/plans/` or other execution docs
-- Briefs are NOT substitutes for checkpoints or `docs/plans/`. Checkpoints preserve delivery evidence, and `docs/plans/` holds implementation detail.
+- Briefs are NOT substitutes for checkpoints. Briefs capture direction, checkpoints capture delivery evidence.
 
 ## Recall (`mcp_goldfish_recall`)
 
@@ -82,7 +81,12 @@ Use julie tools to gather context before implementing changes. This accelerates 
 ### Integration with Briefs
 
 - Use julie tools during the exploration phase to gather impact scope and dependency information.
-- Document key findings (call chains, impact radius, affected symbols) in your checkpoints and execution docs.
+- Document key findings (call chains, impact radius, affected symbols) in your checkpoints and brief references.
 - After gathering context, save a brief (`mcp_goldfish_brief` with `action: "save"`) that captures goal, constraints, success criteria, and references.
-- During implementation, use the brief for direction and `docs/plans/` for execution detail.
+- During implementation, use the brief for direction and checkpoints for delivery evidence.
 - After completion, checkpoint with references to the symbols and files touched.
+
+## VS Code MCP Setup
+
+- `GOLDFISH_WORKSPACE` is optional in VS Code now that Goldfish can resolve the active workspace from MCP roots.
+- Keep `GOLDFISH_WORKSPACE` as an override when you want Goldfish pinned to a different path than the active workspace folder.

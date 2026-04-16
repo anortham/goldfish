@@ -1,6 +1,6 @@
 ---
 name: standup
-description: Use when the user asks for a standup, daily update, progress summary, or cross-project report built from Goldfish memory and current execution docs
+description: Use when the user asks for a standup, daily update, progress summary, or cross-project report built from Goldfish briefs and checkpoints
 allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief
 ---
 
@@ -9,8 +9,8 @@ allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief
 ## Core Split
 
 - Goldfish brief explains the direction
-- `docs/plans/` explains execution detail
 - Checkpoints show what happened
+- Standup ties the two together across projects
 
 ## Workflow
 
@@ -21,7 +21,7 @@ mcp__goldfish__recall({ workspace: "all", days: 1 })
 ```
 
 2. For active projects, use `recall({ limit: 0 })` or the brief tool to understand current direction.
-3. Read `docs/plans/` for implementation progress where it matters.
+3. Group checkpoint clusters into the few accomplishments that mattered.
 4. Synthesize a short report with done, next, and blocked.
 
 ## Reporting Rules
@@ -30,7 +30,7 @@ mcp__goldfish__recall({ workspace: "all", days: 1 })
 - Group noisy checkpoint clusters into one accomplishment.
 - Call out blockers plainly.
 - Mention drift when work does not line up with the brief.
-- If no brief exists, say so and rely on checkpoints plus `docs/plans/`.
+- If no brief exists, say so and rely on checkpoints.
 
 ## Format
 

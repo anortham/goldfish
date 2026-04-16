@@ -1,6 +1,6 @@
 {
   "name": "goldfish",
-  "description": "Developer memory system — checkpoints, recall, briefs, and standups for AI-assisted development",
+  "description": "Cross-client MCP memory with checkpoints, recall, briefs, and standups for AI-assisted development",
   "version": "6.6.0",
   "author": {
     "name": "Alan Northam"

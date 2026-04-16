@@ -1,8 +1,10 @@
 # Goldfish 🐠
 
-Persistent developer memory for Claude Code. Checkpoints, recall, briefs, standup reports, and built-in semantic recall -- stored as human-readable markdown right in your project.
+Persistent developer memory for MCP-compatible coding clients. Checkpoints, recall, briefs, standup reports, and built-in semantic recall, stored as human-readable markdown right in your project.
 
-Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth (and is git-committable), while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
+Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation, slash-command skills, and lifecycle hooks. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
+
+Goldfish gives AI coding sessions memory that survives context compaction, crashes, and session restarts. Markdown in `.memories/` stays the source of truth, while Goldfish keeps a lightweight cross-project registry at `~/.goldfish/registry.json` plus derived semantic cache data under `~/.goldfish/cache/semantic/` and model files under `~/.goldfish/models/transformers/`.
 
 **Version 6.6.0** -- Fifth iteration, built on hard lessons from four previous attempts.
 
@@ -17,49 +19,46 @@ AI coding sessions have a memory problem:
 - Switching projects loses context
 - No way to answer "what was I working on yesterday?"
 
-Goldfish solves this with four MCP tools (checkpoint, recall, brief, consolidate), 8 skills including compatibility aliases, and two hooks that make memory automatic and transparent.
+Goldfish solves this with four MCP tools (checkpoint, recall, brief, consolidate), 8 skills including compatibility aliases, repo-local skill discovery for compatible clients, and client hooks where the harness supports them.
 
 ---
 
-## Quick Start
+## Client Setup
 
 **Prerequisites:** [Bun](https://bun.sh) runtime (v1.0+)
 
-### Option 1: Install from GitHub (Recommended)
+Start by cloning the repository and installing dependencies:
 
-This gives you the full experience: MCP tools + skills (`/checkpoint`, `/recall`, `/consolidate`, `/brief`, `/brief-status`, `/standup`, plus compatibility aliases `/plan` and `/plan-status`) + hooks (auto-recall on session start, auto-checkpoint before compaction).
+```bash
+git clone https://github.com/anortham/goldfish.git
+cd goldfish
+bun install
+```
+
+### Claude Code
+
+Claude Code is the fullest adapter today. You get MCP tools, slash-command skills (`/checkpoint`, `/recall`, `/consolidate`, `/brief`, `/brief-status`, `/standup`, plus compatibility aliases `/plan` and `/plan-status`), and the SessionStart/PreCompact hooks.
+
+Install from the marketplace:
 
 ```bash
 # Add the Goldfish repository as a plugin marketplace
 /plugin marketplace add anortham/goldfish
 
-# Install the plugin (user scope, available across all projects)
+# Install the plugin for your user
 /plugin install goldfish@goldfish
-```
 
-You can also scope the installation to a specific project:
-
-```bash
-# Project scope (shared with team via version control)
+# Or scope it to the current project
 /plugin install goldfish@goldfish --scope project
 ```
 
-### Option 2: Install from a Local Clone
-
-If you prefer to clone the repo yourself (useful for development or contributing):
+Install from a local clone:
 
 ```bash
-# Clone the repository
-git clone https://github.com/anortham/goldfish.git
-
-# Install dependencies
-cd goldfish && bun install
-
-# Install as a Claude Code plugin
 claude plugin install /path/to/goldfish
 ```
 
-**For development (loads plugin from local directory each time):**
+For development, load the plugin from the local directory each time:
 
 ```bash
 claude --plugin-dir /path/to/goldfish
@@ -67,29 +66,62 @@ claude --plugin-dir /path/to/goldfish
 
 Once the plugin is loaded, Goldfish works automatically:
 
-1. **Session starts** -- the `SessionStart` hook fires, calling `recall()` to restore recent context
-2. **You work** -- checkpoint manually with `/checkpoint`, or let the `PreCompact` hook auto-checkpoint before context compaction
+1. **Session starts** -- the `SessionStart` hook fires and calls `recall()`
+2. **You work** -- checkpoint manually with `/checkpoint`, or let the `PreCompact` hook auto-checkpoint before compaction
 3. **Direction persists** -- save a brief with `/brief` when goals, constraints, or success criteria should survive the session
 4. **Next session** -- recall restores recent checkpoints and the active brief automatically
 
-No configuration needed beyond plugin installation.
+### Codex Desktop
 
-### Option 3: Use as a Standalone MCP Server (Any MCP Client)
+Codex shares MCP configuration between the CLI and the IDE extension through `~/.codex/config.toml`, and it also discovers repo-local skills from `.agents/skills`.
 
-Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server. It works with any MCP-compatible client -- not just Claude Code.
+Add Goldfish to `~/.codex/config.toml` or a trusted project-scoped `.codex/config.toml`:
 
-```bash
-# Clone and install
-git clone https://github.com/anortham/goldfish.git
-cd goldfish && bun install
+```toml
+[mcp_servers.goldfish]
+command = "bun"
+args = ["run", "/absolute/path/to/goldfish/src/server.ts"]
+cwd = "/absolute/path/to/your/project"
 ```
 
-**Add to your MCP client's configuration** (the exact format depends on your client):
+Goldfish skills in `.agents/skills` are discovered automatically when you launch Codex inside the repository.
+
+### OpenCode
+
+OpenCode loads local MCP servers from `opencode.json` and can also discover repo-local skills from `.agents/skills`.
+
+Add Goldfish to your `opencode.json`:
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "goldfish": {
+      "type": "local",
+      "command": ["bun", "run", "/absolute/path/to/goldfish/src/server.ts"],
+      "enabled": true
+    }
+  }
+}
+```
+
+OpenCode walks up the repository and loads matching `.agents/skills/*/SKILL.md`, so the checked-in Goldfish skills are available without extra copying.
+
+### VS Code with GitHub Copilot
+
+VS Code supports project-level MCP config in `.vscode/mcp.json`, supports MCP roots, and can pair Goldfish with repo instructions for better memory habits.
+
+```bash
+mkdir -p .vscode
+```
+
+Create `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "Goldfish": {
+      "type": "stdio",
       "command": "bun",
       "args": ["run", "/absolute/path/to/goldfish/src/server.ts"]
     }
@@ -97,17 +129,7 @@ cd goldfish && bun install
 }
 ```
 
-**What you get with standalone MCP:** The 4 core tools (`checkpoint`, `recall`, `brief`, `consolidate`) and the server instructions that guide agent behavior. **What you don't get:** Skills (`/checkpoint`, `/recall`, `/consolidate`, `/brief`, `/brief-status`, `/standup`, plus compatibility aliases `/plan` and `/plan-status`) and hooks (auto-recall, auto-checkpoint) -- those are Claude Code plugin features.
-
-For standalone MCP usage, you'll want to instruct your agent to:
-- Call `recall()` at session start
-- Call `checkpoint()` after completing work
-- Call `brief()` to save and manage durable strategic briefs
-- Call `consolidate()` periodically to distill checkpoints into memory.yaml
-
-### VS Code with GitHub Copilot
-
-Create a `.vscode/mcp.json` file in your project root:
+`GOLDFISH_WORKSPACE` is optional in VS Code now that Goldfish can resolve the active workspace from MCP roots. Keep it as an override if you want to pin Goldfish to a different root or you run in a client that does not provide roots:
 
 ```json
 {
@@ -124,11 +146,17 @@ Create a `.vscode/mcp.json` file in your project root:
 }
 ```
 
-The `GOLDFISH_WORKSPACE` environment variable tells Goldfish where your project root is. VS Code automatically substitutes `${workspaceFolder}` with the actual path.
-
-Without this, Goldfish may create its `.memories/` directory in the wrong location since VS Code's MCP integration doesn't pass `cwd` the way Claude Code does.
-
 If you want Copilot to consistently checkpoint and recall with Goldfish, copy `docs/goldfish-checkpoint.instructions-vs-code.md` into your repo's `.github/instructions/` folder (or adapt it to your preferred instructions layout). That file gives VS Code users a ready-made Goldfish + Julie instruction set instead of starting from a blank page.
+
+### Any MCP Client
+
+Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server, so any client that can launch a local stdio server can use the four core tools (`checkpoint`, `recall`, `brief`, `consolidate`) and the server instructions.
+
+What varies by client:
+
+- **Skills** depend on whether the harness reads repo-local skill files such as `.agents/skills`
+- **Hooks** depend on whether the harness exposes lifecycle automation
+- **Workspace binding** depends on roots support, explicit cwd, or `GOLDFISH_WORKSPACE`
 
 ---
 
@@ -199,7 +227,7 @@ Timeout bugs and session drift keep burning time across sessions.
 ## Success Criteria
 
 - Recall and checkpoint evidence line up with the new auth direction
-- `docs/plans/` contains the execution breakdown
+- Standup reports stay consistent with the brief and recent checkpoints
 
 ## References
 
@@ -212,7 +240,7 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Skills are invocable via `/skill-name` in Claude Code. They provide guided workflows on top of the MCP tools.
+Goldfish ships 8 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
@@ -225,13 +253,13 @@ Skills are invocable via `/skill-name` in Claude Code. They provide guided workf
 | `/recall` | Restore context from recent checkpoints and the active brief |
 | `/standup` | Generate a cross-project standup report |
 
-Skills live in the `skills/` directory, each with a `SKILL.md` file containing behavioral instructions.
+`skills/` is the canonical source. `.agents/skills/` is a checked-in mirror for clients that scan repo-local skills.
 
 ---
 
 ## Hooks
 
-Hooks fire automatically at key moments. No manual trigger needed.
+Claude Code currently gets the Goldfish hook adapter. Other clients still get the same MCP tools and memory model, but hook automation depends on what the harness exposes.
 
 | Hook | Trigger | Action |
 |------|---------|--------|
@@ -320,16 +348,18 @@ These files are derived from checkpoint markdown and can be rebuilt. They live o
 
 ### Standup Reports
 
+Standup reports are built from briefs and checkpoints, not `docs/plans/`.
+
 The `/standup` skill aggregates work across all registered projects:
 
 ```
 ## Standup -- February 14, 2026
 
 ### goldfish
-- Rewrote README for v5.0.0, added skill and hook documentation
-- Added 4 skills and 3 hooks for Claude Code plugin
+- Brief says the current push is cross-client portability for Goldfish
+- Checkpoints show roots support landed and repo-local skill mirroring landed
 
-> **Next:** Test plugin installation flow end-to-end
+> **Next:** Finish client docs and keep standup scoped to memory evidence
 
 ### api-gateway
 - Fixed rate limiter race condition in Redis cluster mode
@@ -366,23 +396,25 @@ Key decisions for v5.0.0:
 
 ---
 
-## Plugin Structure
+## Repository Structure
 
 ```
 goldfish/
+  .agents/
+    skills/               # Repo-local skill mirror for Codex/OpenCode
   .claude-plugin/
-    plugin.json           # Claude Code plugin manifest (auto-discovery)
+    plugin.json           # Claude Code plugin manifest
   hooks/
-    hooks.json            # Hook definitions (PreCompact, SessionStart)
+    hooks.json            # Claude Code hook definitions
   skills/
-    brief/SKILL.md        # /brief skill
-    brief-status/SKILL.md # /brief-status skill
-    checkpoint/SKILL.md   # /checkpoint skill
-    consolidate/SKILL.md  # /consolidate skill
-    recall/SKILL.md       # /recall skill
-    standup/SKILL.md      # /standup skill
-    plan/SKILL.md         # /plan compatibility alias
-    plan-status/SKILL.md  # /plan-status compatibility alias
+    brief/SKILL.md        # Canonical brief skill
+    brief-status/SKILL.md # Canonical brief-status skill
+    checkpoint/SKILL.md   # Canonical checkpoint skill
+    consolidate/SKILL.md  # Canonical consolidate skill
+    recall/SKILL.md       # Canonical recall skill
+    standup/SKILL.md      # Canonical standup skill
+    plan/SKILL.md         # Canonical plan compatibility alias
+    plan-status/SKILL.md  # Canonical plan-status alias
   src/
     server.ts             # MCP server entry point
     tools.ts              # Tool definitions (checkpoint, recall, brief, consolidate)

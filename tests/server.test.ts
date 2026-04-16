@@ -25,6 +25,27 @@ const TEST_DEFAULT_RUNTIME = {
   embedTexts: async () => [[1, 0]]
 };
 
+function getFirstTextContent(result: unknown): string {
+  if (!result || typeof result !== 'object' || !('content' in result)) {
+    return '';
+  }
+
+  const content = (result as { content?: unknown }).content;
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  const first = content[0];
+  if (first && typeof first === 'object' && 'type' in first && 'text' in first) {
+    const typed = first as { type?: unknown; text?: unknown };
+    if (typed.type === 'text' && typeof typed.text === 'string') {
+      return typed.text;
+    }
+  }
+
+  return '';
+}
+
 beforeAll(() => {
   setDefaultSemanticRuntime(TEST_DEFAULT_RUNTIME);
 });
@@ -594,6 +615,52 @@ describe('Server exports', () => {
       expect(mirroredContent).toBe(canonicalContent);
     }
   });
+
+  it('documents Goldfish as a cross-client memory system with first-class client setup guides', async () => {
+    const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
+
+    expect(readme).toContain('Persistent developer memory for MCP-compatible coding clients.');
+    expect(readme).toContain('### Claude Code');
+    expect(readme).toContain('### Codex Desktop');
+    expect(readme).toContain('### OpenCode');
+    expect(readme).toContain('### VS Code with GitHub Copilot');
+  });
+
+  it('keeps package and plugin metadata client-neutral', async () => {
+    const packageJson = JSON.parse(
+      await Bun.file(new URL('../package.json', import.meta.url)).text()
+    ) as { description: string };
+    const pluginJson = JSON.parse(
+      await Bun.file(new URL('../.claude-plugin/plugin.json', import.meta.url)).text()
+    ) as { description: string };
+    const marketplaceJson = JSON.parse(
+      await Bun.file(new URL('../.claude-plugin/marketplace.json', import.meta.url)).text()
+    ) as { metadata: { description: string }, plugins: Array<{ description: string }> };
+
+    expect(packageJson.description).toContain('MCP');
+    expect(packageJson.description).not.toContain('Claude Code plugin');
+    expect(pluginJson.description).not.toContain('Claude Code plugin');
+    expect(marketplaceJson.metadata.description).not.toContain('Claude Code plugin');
+    expect(marketplaceJson.plugins[0]!.description).not.toContain('Claude Code plugin');
+  });
+
+  it('documents VS Code roots support as an optional workspace override', async () => {
+    const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
+    const vscodeInstructions = await Bun.file(new URL('../docs/goldfish-checkpoint.instructions-vs-code.md', import.meta.url)).text();
+
+    expect(readme).toContain('`GOLDFISH_WORKSPACE` is optional');
+    expect(vscodeInstructions).toContain('`GOLDFISH_WORKSPACE` is optional');
+  });
+
+  it('keeps standup focused on briefs and checkpoints', async () => {
+    const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
+    const standupSkill = await Bun.file(new URL('../skills/standup/SKILL.md', import.meta.url)).text();
+
+    expect(readme).toContain('Standup reports are built from briefs and checkpoints, not `docs/plans/`.');
+    expect(standupSkill).toContain('brief');
+    expect(standupSkill).toContain('checkpoint');
+    expect(standupSkill).not.toContain('docs/plans/');
+  });
 });
 
 describe('Request-time workspace hydration', () => {
@@ -673,7 +740,7 @@ describe('Request-time workspace hydration', () => {
         arguments: { workspace: rootDir, full: true }
       });
 
-      const text = recall.content?.[0]?.type === 'text' ? recall.content[0].text : '';
+      const text = getFirstTextContent(recall);
       expect(text).toContain('checkpoint without workspace');
       expect(text).toContain('checkpoint with current workspace');
     } finally {
@@ -718,8 +785,8 @@ describe('Request-time workspace hydration', () => {
         arguments: { workspace: rootDirB, full: true }
       });
 
-      const textA = recallA.content?.[0]?.type === 'text' ? recallA.content[0].text : '';
-      const textB = recallB.content?.[0]?.type === 'text' ? recallB.content[0].text : '';
+      const textA = getFirstTextContent(recallA);
+      const textB = getFirstTextContent(recallB);
 
       expect(textA).toContain('checkpoint on root A');
       expect(textA).not.toContain('checkpoint on root B');
@@ -760,7 +827,7 @@ describe('Request-time workspace hydration', () => {
         arguments: { workspace: cwdFallback, full: true }
       });
 
-      const text = recall.content?.[0]?.type === 'text' ? recall.content[0].text : '';
+      const text = getFirstTextContent(recall);
       expect(text).toContain('checkpoint through cwd fallback');
       expect((await stat(join(cwdFallback, '.memories'))).isDirectory()).toBe(true);
     } finally {

@@ -25,12 +25,12 @@ This is **iteration #5** of a developer memory system, now at **v6.6.0**. We've 
 2. **Tusk (Bun + SQLite)**: Fixed bugs, added features, became too complex, hook spam disaster
 3. **.NET rewrite**: Over-engineered, never finished
 4. **Goldfish 4.0**: Radical simplicity, markdown storage
-5. **Goldfish 5.x-6.x**: Claude Code plugin, project-local .memories/, semantic recall, memory consolidation
+5. **Goldfish 5.x-6.x**: cross-client MCP memory, Claude Code adapter, project-local .memories/, semantic recall, memory consolidation
 
 ### What We're Building Now
 **Radical simplicity**: Markdown storage, fuse.js search, quality-focused behavioral guidance. No database.
 
-**Goldfish is a Claude Code plugin** with skills, hooks, and an MCP server.
+**Goldfish is a cross-client MCP memory system.** Claude Code currently has the fullest adapter, with plugin packaging, skills, and hooks on top of the shared MCP server.
 
 **We only add complexity when we have EVIDENCE we need it.**
 
@@ -44,7 +44,7 @@ This is **iteration #5** of a developer memory system, now at **v6.6.0**. We've 
 - Trust the agent's intelligence
 - Use atomic file operations
 - Keep timestamps in UTC
-- Validate with real Claude Code sessions
+- Validate with real client adapters when behavior changes, especially Claude Code plus at least one repo-local skill client
 - Read `docs/IMPLEMENTATION.md` for detailed specs
 
 ### DON'T
