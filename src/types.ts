@@ -157,7 +157,7 @@ export interface RecallArgs {
   _registryDir?: string;
 }
 
-export interface PlanArgs {
+export interface BriefArgs {
   action: string;
   id?: string;
   briefId?: string;
@@ -170,7 +170,5 @@ export interface PlanArgs {
   tags?: string[];
   activate?: boolean;
   status?: string;
-  updates?: PlanUpdate;
+  updates?: BriefUpdate;
 }
-
-export type BriefArgs = PlanArgs;

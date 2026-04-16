@@ -1,8 +1,7 @@
 /**
  * Tool definitions for Goldfish MCP Server
  *
- * Contains the core tools: checkpoint, recall, brief, and the plan
- * compatibility alias (slated for removal in Phase 3).
+ * Contains the core tools: checkpoint, recall, and brief.
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -264,71 +263,6 @@ Returns: Brief details, status updates, or list of briefs.`,
             type: 'string',
             enum: ['active', 'completed', 'archived'],
             description: 'Brief status (for filtering)'
-          },
-          updates: {
-            type: 'object',
-            description: 'Updates to apply (for update action). Accepts: title (string), content (string), status ("active" | "completed" | "archived"), tags (string[])',
-            properties: {
-              title: { type: 'string' },
-              content: { type: 'string' },
-              status: { type: 'string', enum: ['active', 'completed', 'archived'] },
-              tags: { type: 'array', items: { type: 'string' } }
-            }
-          }
-        },
-        required: ['action']
-      }
-    },
-    {
-      name: 'plan',
-      description: `Compatibility alias for the brief tool.
-
-Use \`brief\` for new work. \`plan\` remains available for older callers during migration.
-
-Saving an active plan makes it active by default, and activate: false preserves the opt-out.
-
-Returns: The same results as the brief tool.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          action: {
-            type: 'string',
-            enum: ['save', 'get', 'list', 'activate', 'update', 'complete'],
-            description: 'Action to perform'
-          },
-          id: {
-            type: 'string',
-            description: 'Plan ID (auto-generated from title if not provided). Alias: planId'
-          },
-          planId: {
-            type: 'string',
-            description: 'Alias for id. Either id or planId can be used.'
-          },
-          title: {
-            type: 'string',
-            description: 'Plan title (required for save)'
-          },
-          content: {
-            type: 'string',
-            description: 'Plan content in markdown (required for save)'
-          },
-          workspace: {
-            type: 'string',
-            description: 'Workspace path (defaults to current directory)'
-          },
-          tags: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Optional tags for categorization (e.g., ["milestone", "auth"]). Used with save action.'
-          },
-          activate: {
-            type: 'boolean',
-            description: 'Activate plan after saving. Defaults to true for active-status saves; pass false to keep the current active plan unchanged.'
-          },
-          status: {
-            type: 'string',
-            enum: ['active', 'completed', 'archived'],
-            description: 'Plan status (for filtering)'
           },
           updates: {
             type: 'object',

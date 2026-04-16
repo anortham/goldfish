@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { handleCheckpoint } from '../src/handlers/checkpoint';
 import { handleRecall } from '../src/handlers/recall';
 import { handleBrief } from '../src/handlers/brief';
-import { handlePlan } from '../src/handlers/plan';
 import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
 import { ensureMemoriesDir } from '../src/workspace';
@@ -569,7 +568,7 @@ describe('Readable markdown responses', () => {
     });
   });
 
-  describe('plan handler', () => {
+  describe('brief handler', () => {
     describe('brief surface', () => {
       it('exposes a canonical brief handler with brief wording', async () => {
         const result = await handleBrief({
@@ -585,22 +584,11 @@ describe('Readable markdown responses', () => {
         expect(text).toContain('(active)');
       });
 
-      it('keeps plan handler working as a compatibility alias', async () => {
-        const result = await handlePlan({
-          action: 'save',
-          title: 'Alias Brief',
-          content: 'Brief content',
-          workspace: TEST_DIR
-        });
-
-        const text = result.content[0]!.text;
-        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
-      });
     });
 
     describe('save action', () => {
       it('returns one-liner confirmation', async () => {
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'save',
           title: 'Test Plan',
           content: 'Plan content',
@@ -616,7 +604,7 @@ describe('Readable markdown responses', () => {
       });
 
       it('saves plan as active when activate is omitted', async () => {
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'save',
           title: 'Implicitly Active Plan',
           content: 'Content',
@@ -634,7 +622,7 @@ describe('Readable markdown responses', () => {
       });
 
       it('saves plan without activating when activate: false', async () => {
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'save',
           title: 'Not Activated Plan',
           content: 'Content',
@@ -654,14 +642,14 @@ describe('Readable markdown responses', () => {
       });
 
       it('does not wipe out the active brief when saving a completed plan without activate', async () => {
-        await handlePlan({
+        await handleBrief({
           action: 'save',
           title: 'Current Active Plan',
           content: 'Content',
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'save',
           title: 'Completed Plan',
           content: 'Content',
@@ -682,7 +670,7 @@ describe('Readable markdown responses', () => {
 
       it('rejects invalid status when saving through the handler', async () => {
         await expect(
-          handlePlan({
+          handleBrief({
             action: 'save',
             title: 'Bad Status Plan',
             content: 'Content',
@@ -693,7 +681,7 @@ describe('Readable markdown responses', () => {
       });
     
       it('forwards tags to savePlan', async () => {
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'save',
           title: 'Tagged Plan',
           content: 'Content with tags',
@@ -708,7 +696,7 @@ describe('Readable markdown responses', () => {
       });
 
       it('forwards custom id to savePlan', async () => {
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'save',
           title: 'Custom ID Plan',
           content: 'Content',
@@ -730,7 +718,7 @@ describe('Readable markdown responses', () => {
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'get',
           id: 'test-plan',
           workspace: TEST_DIR
@@ -756,7 +744,7 @@ describe('Readable markdown responses', () => {
           activate: true
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'get',
           workspace: TEST_DIR
         });
@@ -767,7 +755,7 @@ describe('Readable markdown responses', () => {
       });
 
       it('throws helpful error when no id and no active plan', async () => {
-        expect(handlePlan({
+        expect(handleBrief({
           action: 'get',
           workspace: TEST_DIR
         })).rejects.toThrow('No active brief found');
@@ -783,7 +771,7 @@ describe('Readable markdown responses', () => {
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'list',
           workspace: TEST_DIR
         });
@@ -807,7 +795,7 @@ describe('Readable markdown responses', () => {
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'list',
           workspace: TEST_DIR
         });
@@ -843,7 +831,7 @@ describe('Readable markdown responses', () => {
             status: 'completed'
           });
 
-          const result = await handlePlan({
+          const result = await handleBrief({
             action: 'list',
             status: 'completed',
             workspace: filterDir
@@ -861,7 +849,7 @@ describe('Readable markdown responses', () => {
       });
 
       it('returns message when no plans found', async () => {
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'list',
           workspace: TEST_DIR
         });
@@ -881,7 +869,7 @@ describe('Readable markdown responses', () => {
         });
 
         // get with planId
-        const getResult = await handlePlan({
+        const getResult = await handleBrief({
           action: 'get',
           planId: 'alias-test',
           workspace: TEST_DIR
@@ -889,7 +877,7 @@ describe('Readable markdown responses', () => {
         expect(getResult.content[0]!.text).toContain('# Alias Test');
 
         // activate with planId
-        const activateResult = await handlePlan({
+        const activateResult = await handleBrief({
           action: 'activate',
           planId: 'alias-test',
           workspace: TEST_DIR
@@ -897,7 +885,7 @@ describe('Readable markdown responses', () => {
         expect(activateResult.content[0]!.text).toContain('Brief activated: alias-test');
 
         // update with planId
-        const updateResult = await handlePlan({
+        const updateResult = await handleBrief({
           action: 'update',
           planId: 'alias-test',
           updates: { title: 'Updated' },
@@ -906,7 +894,7 @@ describe('Readable markdown responses', () => {
         expect(updateResult.content[0]!.text).toContain('Brief updated: alias-test');
 
         // complete with planId
-        const completeResult = await handlePlan({
+        const completeResult = await handleBrief({
           action: 'complete',
           planId: 'alias-test',
           workspace: TEST_DIR
@@ -918,7 +906,7 @@ describe('Readable markdown responses', () => {
     describe('activate action', () => {
       it('throws when no ID provided and no active plan', async () => {
         await expect(
-          handlePlan({
+          handleBrief({
             action: 'activate',
             workspace: TEST_DIR
           })
@@ -933,7 +921,7 @@ describe('Readable markdown responses', () => {
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'activate',
           id: 'test-plan',
           workspace: TEST_DIR
@@ -953,7 +941,7 @@ describe('Readable markdown responses', () => {
         });
 
         await expect(
-          handlePlan({
+          handleBrief({
             action: 'activate',
             id: 'completed-plan',
             workspace: TEST_DIR
@@ -971,7 +959,7 @@ describe('Readable markdown responses', () => {
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'update',
           id: 'test-plan',
           updates: { title: 'Updated' },
@@ -990,7 +978,7 @@ describe('Readable markdown responses', () => {
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'update',
           planId: 'toplevel-test',
           content: 'Updated content from top level',
@@ -1001,7 +989,7 @@ describe('Readable markdown responses', () => {
         expect(text).toContain('Brief updated: toplevel-test');
 
         // Verify the content was actually updated
-        const getResult = await handlePlan({
+        const getResult = await handleBrief({
           action: 'get',
           id: 'toplevel-test',
           workspace: TEST_DIR
@@ -1018,7 +1006,7 @@ describe('Readable markdown responses', () => {
           activate: true
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'update',
           updates: { content: 'Updated via active' },
           workspace: TEST_DIR
@@ -1037,7 +1025,7 @@ describe('Readable markdown responses', () => {
         });
 
         await expect(
-          handlePlan({
+          handleBrief({
             action: 'update',
             id: 'test-plan',
             updates: { status: 'banana' as any },
@@ -1056,7 +1044,7 @@ describe('Readable markdown responses', () => {
           workspace: TEST_DIR
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'complete',
           id: 'test-plan',
           workspace: TEST_DIR
@@ -1075,7 +1063,7 @@ describe('Readable markdown responses', () => {
           activate: true
         });
 
-        const result = await handlePlan({
+        const result = await handleBrief({
           action: 'complete',
           workspace: TEST_DIR
         });
@@ -1170,6 +1158,28 @@ describe('Phase 2 consolidation removal', () => {
     let imported: unknown = null;
     try {
       imported = await import('../src/handlers/consolidate');
+    } catch {
+      imported = null;
+    }
+    expect(imported).toBeNull();
+  });
+});
+
+describe('Phase 3 plan removal', () => {
+  it('does not export handlePlan from handlers/index', async () => {
+    const handlersIndex = await import('../src/handlers/index');
+
+    // Phase 3.2 deletes the plan handler. The barrel re-export must also
+    // drop the symbol so callers can't accidentally re-add it.
+    expect((handlersIndex as Record<string, unknown>).handlePlan).toBeUndefined();
+  });
+
+  it('does not ship a handlers/plan module', async () => {
+    // Phase 3.2 deletes src/handlers/plan.ts entirely. Importing the path
+    // should fail; if it succeeds we still consider this a regression.
+    let imported: unknown = null;
+    try {
+      imported = await import('../src/handlers/plan');
     } catch {
       imported = null;
     }
