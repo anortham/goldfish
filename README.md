@@ -109,7 +109,7 @@ OpenCode walks up the repository and loads matching `.agents/skills/*/SKILL.md`,
 
 ### VS Code with GitHub Copilot
 
-VS Code supports project-level MCP config in `.vscode/mcp.json`, supports MCP roots, and can pair Goldfish with repo instructions for better memory habits.
+VS Code supports project-level MCP config in `.vscode/mcp.json`, supports the full MCP feature set, and can pair Goldfish with repo instructions for better memory habits.
 
 ```bash
 mkdir -p .vscode
@@ -147,6 +147,15 @@ Create `.vscode/mcp.json`:
 ```
 
 If you want Copilot to consistently checkpoint and recall with Goldfish, copy `docs/goldfish-checkpoint.instructions-vs-code.md` into your repo's `.github/instructions/` folder (or adapt it to your preferred instructions layout). That file gives VS Code users a ready-made Goldfish + Julie instruction set instead of starting from a blank page.
+
+If you want the closer Claude-style experience, VS Code's agent plugins preview can also load Claude-format plugins. Goldfish already ships `.claude-plugin/plugin.json` and `hooks/hooks.json`, which VS Code can detect for plugin skills and hooks.
+
+Two ways to wire that up:
+
+- Register a local Goldfish clone with the `chat.pluginLocations` setting in `settings.json`
+- Add a marketplace with `chat.plugins.marketplaces` if you want shared discovery instead of a direct local path
+
+Use `.vscode/mcp.json` when you only want the MCP tools. Use the plugin path when you want skills and hook automation in VS Code as well.
 
 ### Any MCP Client
 

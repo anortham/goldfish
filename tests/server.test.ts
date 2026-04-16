@@ -649,6 +649,7 @@ describe('Server exports', () => {
     const vscodeInstructions = await Bun.file(new URL('../docs/goldfish-checkpoint.instructions-vs-code.md', import.meta.url)).text();
 
     expect(readme).toContain('`GOLDFISH_WORKSPACE` is optional');
+    expect(readme).toContain('agent plugins preview can also load Claude-format plugins');
     expect(vscodeInstructions).toContain('`GOLDFISH_WORKSPACE` is optional');
   });
 
