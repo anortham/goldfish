@@ -138,14 +138,6 @@ Key parameters (all optional):
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - briefId: Filter checkpoints to those created under a specific brief
 - planId: Legacy alias for briefId during migration
-- includeMemory: Include full memory.yaml in response. Defaults to true without search and false with search. Override explicitly with true/false.
-
-Recall now returns three layers:
-1. Consolidated memory (memory.yaml) - project understanding, included by default
-2. Delta checkpoints - events since last consolidation, included when stale
-3. Consolidation flag - metadata indicating if consolidation is needed
-
-If consolidation.needed is true: dispatch a BACKGROUND consolidation subagent (call consolidate() first to get the payload).
 
 Examples:
 - recall() - last 5 checkpoints regardless of age
@@ -197,10 +189,6 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
           planId: {
             type: 'string',
             description: 'Legacy alias for briefId during migration.'
-          },
-          includeMemory: {
-            type: 'boolean',
-            description: 'Include full memory.yaml in response. Default: true when no search param (bootstrap mode), false when search param provided (search mode). Memory sections are always searchable regardless of this setting.'
           }
         }
       }

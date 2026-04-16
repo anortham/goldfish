@@ -5,27 +5,13 @@
  * search delegated to ranking.ts.
  */
 
-import { stat } from 'fs/promises';
-import { join } from 'path';
-import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
-import { getCheckpointsForDateRange, getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS, hasValidCalendarDate } from './checkpoints';
+import type { Checkpoint, Plan, RecallOptions, RecallResult, WorkspaceSummary } from './types';
+import { getCheckpointsForDateRange, getAllCheckpoints, hasValidCalendarDate } from './checkpoints';
 import { buildCompactSearchDescription } from './digests';
 import { getActiveBrief } from './plans';
 import { listRegisteredProjects } from './registry';
 import { searchCheckpoints } from './ranking';
 import { resolveWorkspace } from './workspace';
-
-// REMOVED IN 2.6: src/memory.ts is gone. The helpers below are local stubs that
-// keep recall.ts compiling until Phase 2.6 strips the consolidation/memory code
-// paths from this file (search-time memory section synthesis, includeMemory,
-// consolidation block, cross-workspace memorySummary). Do not add new callers.
-type ConsolidationStateStub = { timestamp: string; checkpointsConsolidated: number };
-async function readMemory(_workspace: string): Promise<string | null> { return null; }
-async function readConsolidationState(_workspace: string): Promise<ConsolidationStateStub | null> { return null; }
-function getMemorySummary(_content: string | null): string | null { return null; }
-function parseMemorySections(_content: string): MemorySection[] { return []; }
-
-export const MEMORY_SECTION_PREFIX = 'memory_section_';
 
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -221,45 +207,15 @@ async function recallFromWorkspace(
   checkpoints: Checkpoint[];
   activeBrief: Plan | null;
   activePlan: Plan | null;
-  memory?: string;
-  matchedMemorySections?: MemorySection[];
-  consolidation?: { needed: boolean; staleCheckpoints: number; lastConsolidated: string | null };
 }> {
-  // Short-circuit: limit=0 means brief/consolidation only, skip all checkpoint I/O
+  // Short-circuit: limit=0 means brief only, skip checkpoint I/O
   const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
   if (limit === 0) {
     const activeBrief = await getActiveBrief(workspace);
-
-    const shouldIncludeMemory = options.includeMemory !== undefined
-      ? options.includeMemory
-      : !options.search;
-    const memoryContent = shouldIncludeMemory ? await readMemory(workspace) : null;
-    const consolidationState = await readConsolidationState(workspace);
-
-    let memoryExists = memoryContent !== null;
-    if (!memoryExists) {
-      // Check for memory files even when we didn't read content (shouldIncludeMemory may be false)
-      for (const filename of ['memory.yaml', 'MEMORY.md']) {
-        try {
-          await stat(join(workspace, '.memories', filename));
-          memoryExists = true;
-          break;
-        } catch { /* doesn't exist */ }
-      }
-    }
-
-    const consolidation = (consolidationState || memoryExists) ? {
-      needed: false,
-      staleCheckpoints: 0,
-      lastConsolidated: consolidationState?.timestamp ?? null
-    } : undefined;
-
     return {
       checkpoints: [],
       activeBrief,
-      activePlan: activeBrief,
-      ...(memoryContent !== null && shouldIncludeMemory ? { memory: memoryContent } : {}),
-      ...(consolidation ? { consolidation } : {})
+      activePlan: activeBrief
     };
   }
 
@@ -277,44 +233,8 @@ async function recallFromWorkspace(
     checkpoints = checkpoints.filter(cp => getCheckpointBriefId(cp) === options.briefId);
   }
 
-  let matchedMemorySections: MemorySection[] | undefined;
-  let cachedConsolidationState: Awaited<ReturnType<typeof readConsolidationState>> | undefined;
-
   if (options.search) {
-    // Load and parse memory sections into synthetic checkpoints for search
-    const searchMemoryContent = await readMemory(workspace);
-    const memorySections = searchMemoryContent ? parseMemorySections(searchMemoryContent) : [];
-    cachedConsolidationState = await readConsolidationState(workspace);
-
-    const syntheticSectionCheckpoints: Checkpoint[] = memorySections.map(section => ({
-      id: `${MEMORY_SECTION_PREFIX}${section.slug}`,
-      timestamp: cachedConsolidationState?.timestamp
-        ?? (checkpoints.length > 0
-          ? checkpoints.reduce((oldest, cp) => cp.timestamp < oldest ? cp.timestamp : oldest, checkpoints[0]!.timestamp)
-          : new Date().toISOString()),
-      description: section.content,
-      tags: ['memory'],
-      type: 'checkpoint' as const,
-      summary: `Memory: ${section.header}`
-    }));
-
-    const allCandidates = [...checkpoints, ...syntheticSectionCheckpoints];
-    const rankedResults = searchCheckpoints(options.search, allCandidates);
-
-    // Separate memory section matches from real checkpoints
-    const sectionMatches = rankedResults
-      .filter(cp => cp.id.startsWith(MEMORY_SECTION_PREFIX))
-      .map(cp => {
-        const slug = cp.id.slice(MEMORY_SECTION_PREFIX.length);
-        const section = memorySections.find(s => s.slug === slug);
-        return section ?? { slug, header: slug, content: cp.description };
-      });
-
-    if (sectionMatches.length > 0) {
-      matchedMemorySections = sectionMatches;
-    }
-
-    checkpoints = rankedResults.filter(cp => !cp.id.startsWith(MEMORY_SECTION_PREFIX));
+    checkpoints = searchCheckpoints(options.search, checkpoints);
   } else {
     checkpoints = checkpoints.sort((a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -324,66 +244,12 @@ async function recallFromWorkspace(
   checkpoints = checkpoints.slice(0, limit);
   checkpoints = checkpoints.map(checkpoint => presentCheckpoint(checkpoint, options));
 
-  // Get active brief
   const activeBrief = await getActiveBrief(workspace);
-
-  // Memory and consolidation
-  const shouldIncludeMemory = options.includeMemory !== undefined
-    ? options.includeMemory
-    : !options.search;
-
-  const memoryContent = shouldIncludeMemory ? await readMemory(workspace) : null;
-  const consolidationState = cachedConsolidationState !== undefined
-    ? cachedConsolidationState
-    : await readConsolidationState(workspace);
-
-  // Check if a memory file exists (cheap stat, independent of whether we read its content)
-  let memoryExists = memoryContent !== null;
-  if (!memoryExists) {
-    for (const filename of ['memory.yaml', 'MEMORY.md']) {
-      try {
-        await stat(join(workspace, '.memories', filename));
-        memoryExists = true;
-        break;
-      } catch { /* doesn't exist */ }
-    }
-  }
-
-  // Count stale checkpoints (checkpoints newer than last consolidation AND
-  // within the 30-day age window). This matches what the consolidate handler
-  // actually processes, preventing inflated counts from old checkpoints.
-  const ageLimit = Date.now() - CONSOLIDATION_AGE_LIMIT_DAYS * 24 * 60 * 60 * 1000;
-  let staleCheckpoints = 0;
-  if (consolidationState) {
-    const allForCount = await getAllCheckpoints(workspace);
-    const lastTimestamp = new Date(consolidationState.timestamp).getTime();
-    staleCheckpoints = allForCount.filter(
-      cp => {
-        const cpTime = new Date(cp.timestamp).getTime();
-        return cpTime > lastTimestamp && cpTime >= ageLimit;
-      }
-    ).length;
-  } else if (consolidationState === null && memoryExists) {
-    // No consolidation state but MEMORY.md exists: treat recent checkpoints as stale.
-    const allForCount = await getAllCheckpoints(workspace);
-    staleCheckpoints = allForCount.filter(
-      cp => new Date(cp.timestamp).getTime() >= ageLimit
-    ).length;
-  }
-
-  const consolidation = (consolidationState || memoryExists) ? {
-    needed: staleCheckpoints > 0,
-    staleCheckpoints,
-    lastConsolidated: consolidationState?.timestamp ?? null
-  } : undefined;
 
   return {
     checkpoints,
     activeBrief,
-    activePlan: activeBrief,
-    ...(memoryContent !== null && shouldIncludeMemory ? { memory: memoryContent } : {}),
-    ...(matchedMemorySections ? { matchedMemorySections } : {}),
-    ...(consolidation ? { consolidation } : {})
+    activePlan: activeBrief
   };
 }
 
@@ -400,15 +266,12 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   if (workspace !== 'all') {
     const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
-    const { checkpoints, activeBrief, activePlan, memory, matchedMemorySections, consolidation } = await recallFromWorkspace(projectPath, normalizedOptions);
+    const { checkpoints, activeBrief, activePlan } = await recallFromWorkspace(projectPath, normalizedOptions);
 
     return {
       checkpoints,
       activeBrief,
-      activePlan,
-      ...(memory !== undefined ? { memory } : {}),
-      ...(matchedMemorySections ? { matchedMemorySections } : {}),
-      ...(consolidation ? { consolidation } : {})
+      activePlan
     };
   }
 
@@ -427,13 +290,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     const projectResults = await Promise.all(
       projects.map(async (project) => {
         const checkpoints = await loadWorkspaceCheckpoints(project.path, normalizedOptions);
-        const projectMemory = await readMemory(project.path);
-
-        return {
-          project,
-          checkpoints,
-          projectMemory
-        };
+        return { project, checkpoints };
       })
     );
 
@@ -441,7 +298,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     const syntheticToCheckpoint = new Map<string, { checkpoint: Checkpoint; workspace: string }>();
     const rankedCandidates: Checkpoint[] = [];
 
-    for (const { project, checkpoints, projectMemory } of projectResults) {
+    for (const { project, checkpoints } of projectResults) {
       if (checkpoints.length === 0) {
         continue;
       }
@@ -456,8 +313,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
         name: project.name,
         path: project.path,
         checkpointCount: checkpoints.length,
-        ...(lastActivity ? { lastActivity } : {}),
-        memorySummary: getMemorySummary(projectMemory)
+        ...(lastActivity ? { lastActivity } : {})
       });
 
       for (const checkpoint of checkpoints) {
@@ -494,7 +350,6 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   }
 
   // Fetch from all registered projects in parallel.
-  // Lightweight path: only load checkpoints and memory, skip brief/consolidation per project.
   // Load without limit so checkpointCount in summaries reflects total matches.
   const projectResults = await Promise.all(
     projects.map(async (project) => {
@@ -503,8 +358,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
       const presented = allCheckpoints
         .slice(0, globalLimit)
         .map(checkpoint => presentCheckpoint(checkpoint, normalizedOptions));
-      const projectMemory = await readMemory(project.path);
-      return { project, checkpoints: presented, totalCount: allCheckpoints.length, projectMemory };
+      return { project, checkpoints: presented, totalCount: allCheckpoints.length };
     })
   );
 
@@ -512,7 +366,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   const allCheckpoints: Checkpoint[] = [];
   const workspaceSummaries: WorkspaceSummary[] = [];
 
-  for (const { project, checkpoints, totalCount, projectMemory } of projectResults) {
+  for (const { project, checkpoints, totalCount } of projectResults) {
     if (totalCount > 0) {
       // Tag each checkpoint with its project name
       const tagged = checkpoints.map(c => ({ ...c, workspace: project.name }));
@@ -521,8 +375,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
       const summary: WorkspaceSummary = {
         name: project.name,
         path: project.path,
-        checkpointCount: totalCount,
-        memorySummary: getMemorySummary(projectMemory)
+        checkpointCount: totalCount
       };
       // Get last activity from the most recent checkpoint
       const lastActivity = checkpoints

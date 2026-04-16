@@ -85,7 +85,6 @@ export interface RecallOptions {
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief
   planId?: string;        // Legacy alias for briefId during migration
-  includeMemory?: boolean;  // Include memory.yaml in response. Defaults: true (no search), false (with search). Override explicitly.
   _registryDir?: string;  // Internal: override registry dir for test isolation
 }
 
@@ -94,13 +93,6 @@ export interface RecallResult {
   activeBrief?: Brief | null;
   activePlan?: Plan | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
-  memory?: string;                     // memory.yaml content (when includeMemory is true)
-  matchedMemorySections?: MemorySection[];  // Memory sections that matched search query
-  consolidation?: {
-    needed: boolean;
-    staleCheckpoints: number;
-    lastConsolidated: string | null;    // ISO 8601 UTC or null if never consolidated
-  };
 }
 
 export interface WorkspaceSummary {
@@ -108,7 +100,6 @@ export interface WorkspaceSummary {
   path: string;
   checkpointCount: number;
   lastActivity?: string;  // ISO 8601 UTC
-  memorySummary?: string | null;  // First lines of memory.yaml (up to 300 chars)
 }
 
 export interface GitContext {
@@ -127,32 +118,9 @@ export interface Registry {
   projects: RegisteredProject[];
 }
 
-// REMOVED IN 2.6: MemorySection is still referenced by RecallResult.matchedMemorySections
-// and the search-time code in recall.ts. Phase 2.6 strips both, after which this
-// type can be deleted.
-export interface MemorySection {
-  slug: string;      // e.g., "decisions" (the YAML key)
-  header: string;    // e.g., "Decisions" (display name)
-  content: string;   // Joined entries as text for search
-}
-
 export interface ScoredCheckpoint {
   checkpoint: Checkpoint
   score: number
-}
-
-export interface ConsolidationPayload {
-  status: 'ready' | 'current';
-  message?: string;                    // Only when status === 'current'
-  memoryPath?: string;                 // Absolute path to .memories/memory.yaml
-  lastConsolidatedPath?: string;       // Absolute path to ~/.goldfish/consolidation-state/{workspace}.json
-  activeBriefPath?: string;            // Absolute path to active brief file, if one exists
-  activePlanPath?: string;             // Legacy alias for activeBriefPath during migration
-  checkpointCount?: number;            // Number of checkpoints in this batch
-  remainingCount?: number;             // Unconsolidated checkpoints beyond this batch
-  previousTotal?: number;              // Running total for incrementing checkpointsConsolidated
-  skippedOldCount?: number;            // Checkpoints older than age limit that were excluded
-  prompt?: string;                     // Subagent instructions (checkpoint file paths embedded)
 }
 
 /** MCP tool argument types for compile-time safety */
@@ -186,8 +154,6 @@ export interface RecallArgs {
   brief_id?: string;
   planId?: string;
   plan_id?: string;
-  includeMemory?: boolean;
-  include_memory?: boolean;
   _registryDir?: string;
 }
 

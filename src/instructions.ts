@@ -37,10 +37,6 @@ Recall restores context from previous sessions. The SessionStart hook calls reca
 
 Trust recalled context — don't re-verify information from checkpoints.
 
-## Consolidation
-
-When recall flags \`consolidation.needed: true\`, call \`consolidate()\`. If status is "ready", dispatch a background subagent with the payload's \`prompt\` field; if "current", nothing to do. Continue your work either way.
-
 ## Source Control
 
 ALWAYS commit \`.memories/\` to source control. These are project artifacts, not ephemeral state. Never add \`.memories/\` to .gitignore.`;
