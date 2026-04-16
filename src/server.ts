@@ -9,6 +9,8 @@
  * - consolidate: Prepare memory consolidation
  */
 
+import { rm } from 'fs/promises';
+import { join } from 'path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -23,7 +25,7 @@ import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handleBrief, handlePlan, handleConsolidate } from './handlers/index.js';
 import type { CheckpointArgs, RecallArgs, BriefArgs, PlanArgs, ConsolidateArgs } from './types.js';
 import { getLogger } from './logger.js';
-import { resolveWorkspace } from './workspace.js';
+import { getGoldfishHomeDir, resolveWorkspace } from './workspace.js';
 
 export const SERVER_VERSION = '6.7.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief', 'plan', 'consolidate']);
@@ -96,7 +98,38 @@ async function hydrateWorkspaceArguments(
   };
 }
 
+/**
+ * v7.0-only migration cleanup. REMOVE IN v7.1.0.
+ *
+ * v6 wrote a derived semantic cache and downloaded MiniLM model weights
+ * under ~/.goldfish/. v7 dropped the entire semantic stack in favor of
+ * Orama BM25, leaving those directories as dead bytes on every upgrade.
+ *
+ * This helper deletes both directories on first server startup. After one
+ * v7 startup per machine the dirs are gone and this becomes permanent dead
+ * code, so it must be removed in v7.1.0.
+ */
+export async function cleanupV7LegacyDirectories(): Promise<void> {
+  try {
+    const home = getGoldfishHomeDir();
+    await Promise.all([
+      rm(join(home, 'cache', 'semantic'), { recursive: true, force: true }),
+      rm(join(home, 'models', 'transformers'), { recursive: true, force: true })
+    ]);
+  } catch {
+    // Best-effort: never propagate errors from migration cleanup.
+  }
+}
+
+let v7CleanupRan = false;
+
 export function createServer() {
+  // v7.0-only migration cleanup. REMOVE IN v7.1.0 (see cleanupV7LegacyDirectories).
+  if (!v7CleanupRan) {
+    v7CleanupRan = true;
+    void cleanupV7LegacyDirectories();
+  }
+
   const server = new Server(
     {
       name: 'goldfish',

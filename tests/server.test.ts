@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { savePlan } from '../src/plans';
 import { ensureMemoriesDir } from '../src/workspace';
-import { rm, mkdtemp, stat } from 'fs/promises';
+import { rm, mkdtemp, mkdir, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -842,5 +842,80 @@ describe('Error handling', () => {
     const text = result.content[0]!.text;
     // Should be readable markdown with "No checkpoints found"
     expect(text).toMatch(/No checkpoints found/);
+  });
+});
+
+describe('v7.0 legacy directory cleanup', () => {
+  let tempGoldfishHome: string;
+  const originalGoldfishHome = process.env.GOLDFISH_HOME;
+
+  beforeEach(async () => {
+    tempGoldfishHome = await mkdtemp(join(tmpdir(), 'goldfish-v7-cleanup-'));
+    process.env.GOLDFISH_HOME = tempGoldfishHome;
+  });
+
+  afterEach(async () => {
+    if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
+    else process.env.GOLDFISH_HOME = originalGoldfishHome;
+    await rm(tempGoldfishHome, { recursive: true, force: true });
+  });
+
+  it('removes ~/.goldfish/cache/semantic and ~/.goldfish/models/transformers when present', async () => {
+    const { cleanupV7LegacyDirectories } = await import('../src/server');
+
+    const semanticDir = join(tempGoldfishHome, 'cache', 'semantic');
+    const modelsDir = join(tempGoldfishHome, 'models', 'transformers');
+
+    await mkdir(join(semanticDir, 'workspace-hash-1'), { recursive: true });
+    await writeFile(join(semanticDir, 'workspace-hash-1', 'records.jsonl'), '{"id":"x"}\n');
+    await writeFile(join(semanticDir, 'workspace-hash-1', 'manifest.json'), '{}');
+    await mkdir(join(modelsDir, 'Xenova', 'all-MiniLM-L6-v2'), { recursive: true });
+    await writeFile(join(modelsDir, 'Xenova', 'all-MiniLM-L6-v2', 'model.bin'), 'fake-weights');
+
+    await cleanupV7LegacyDirectories();
+
+    await expect(stat(semanticDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(modelsDir)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('is a no-op when neither directory exists', async () => {
+    const { cleanupV7LegacyDirectories } = await import('../src/server');
+
+    // Directories intentionally absent — temp goldfish home is empty.
+    await expect(cleanupV7LegacyDirectories()).resolves.toBeUndefined();
+
+    await expect(stat(join(tempGoldfishHome, 'cache', 'semantic'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(join(tempGoldfishHome, 'models', 'transformers'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('swallows deletion errors silently', async () => {
+    const { cleanupV7LegacyDirectories } = await import('../src/server');
+
+    // Point GOLDFISH_HOME at a path that resolves to a file, not a directory.
+    // rm({ recursive: true, force: true }) on a missing nested path is a no-op,
+    // but on a path whose parent is a regular file we get ENOTDIR. The helper
+    // must swallow that and resolve.
+    const filePath = join(tempGoldfishHome, 'home-as-file');
+    await writeFile(filePath, 'not a directory');
+    process.env.GOLDFISH_HOME = filePath;
+
+    await expect(cleanupV7LegacyDirectories()).resolves.toBeUndefined();
+  });
+
+  it('is invoked from createServer() without throwing', async () => {
+    const { createServer, cleanupV7LegacyDirectories } = await import('../src/server');
+
+    const semanticDir = join(tempGoldfishHome, 'cache', 'semantic');
+    const modelsDir = join(tempGoldfishHome, 'models', 'transformers');
+    await mkdir(semanticDir, { recursive: true });
+    await mkdir(modelsDir, { recursive: true });
+
+    // Trigger fire-and-forget cleanup via createServer(), then await directly
+    // to deterministically observe the result without racing the background work.
+    expect(() => createServer()).not.toThrow();
+    await cleanupV7LegacyDirectories();
+
+    await expect(stat(semanticDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(modelsDir)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
