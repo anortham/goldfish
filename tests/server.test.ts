@@ -851,25 +851,29 @@ describe('v7.0 legacy directory cleanup', () => {
     await rm(tempGoldfishHome, { recursive: true, force: true });
   });
 
-  it('removes ~/.goldfish/cache/semantic and ~/.goldfish/models/transformers when present', async () => {
+  it('removes ~/.goldfish/cache/semantic, ~/.goldfish/models/transformers, and ~/.goldfish/consolidation-state when present', async () => {
     const { cleanupV7LegacyDirectories } = await import('../src/server');
 
     const semanticDir = join(tempGoldfishHome, 'cache', 'semantic');
     const modelsDir = join(tempGoldfishHome, 'models', 'transformers');
+    const consolidationStateDir = join(tempGoldfishHome, 'consolidation-state');
 
     await mkdir(join(semanticDir, 'workspace-hash-1'), { recursive: true });
     await writeFile(join(semanticDir, 'workspace-hash-1', 'records.jsonl'), '{"id":"x"}\n');
     await writeFile(join(semanticDir, 'workspace-hash-1', 'manifest.json'), '{}');
     await mkdir(join(modelsDir, 'Xenova', 'all-MiniLM-L6-v2'), { recursive: true });
     await writeFile(join(modelsDir, 'Xenova', 'all-MiniLM-L6-v2', 'model.bin'), 'fake-weights');
+    await mkdir(consolidationStateDir, { recursive: true });
+    await writeFile(join(consolidationStateDir, 'goldfish.json'), '{"cursor":"2026-01-01"}');
 
     await cleanupV7LegacyDirectories();
 
     await expect(stat(semanticDir)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(stat(modelsDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(consolidationStateDir)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('is a no-op when neither directory exists', async () => {
+  it('is a no-op when none of the legacy directories exist', async () => {
     const { cleanupV7LegacyDirectories } = await import('../src/server');
 
     // Directories intentionally absent — temp goldfish home is empty.
@@ -877,6 +881,7 @@ describe('v7.0 legacy directory cleanup', () => {
 
     await expect(stat(join(tempGoldfishHome, 'cache', 'semantic'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(stat(join(tempGoldfishHome, 'models', 'transformers'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(join(tempGoldfishHome, 'consolidation-state'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('swallows deletion errors silently', async () => {
@@ -898,8 +903,10 @@ describe('v7.0 legacy directory cleanup', () => {
 
     const semanticDir = join(tempGoldfishHome, 'cache', 'semantic');
     const modelsDir = join(tempGoldfishHome, 'models', 'transformers');
+    const consolidationStateDir = join(tempGoldfishHome, 'consolidation-state');
     await mkdir(semanticDir, { recursive: true });
     await mkdir(modelsDir, { recursive: true });
+    await mkdir(consolidationStateDir, { recursive: true });
 
     // Trigger fire-and-forget cleanup via createServer(), then await directly
     // to deterministically observe the result without racing the background work.
@@ -908,5 +915,6 @@ describe('v7.0 legacy directory cleanup', () => {
 
     await expect(stat(semanticDir)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(stat(modelsDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(consolidationStateDir)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

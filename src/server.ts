@@ -102,19 +102,22 @@ async function hydrateWorkspaceArguments(
  * v7.0-only migration cleanup. REMOVE IN v7.1.0.
  *
  * v6 wrote a derived semantic cache and downloaded MiniLM model weights
- * under ~/.goldfish/. v7 dropped the entire semantic stack in favor of
- * Orama BM25, leaving those directories as dead bytes on every upgrade.
+ * under ~/.goldfish/, plus per-workspace consolidation cursors under
+ * ~/.goldfish/consolidation-state/. v7 dropped the entire semantic stack
+ * in favor of Orama BM25 and removed the consolidation pipeline, leaving
+ * those three directories as dead bytes on every upgrade.
  *
- * This helper deletes both directories on first server startup. After one
- * v7 startup per machine the dirs are gone and this becomes permanent dead
- * code, so it must be removed in v7.1.0.
+ * This helper deletes all three directories on first server startup. After
+ * one v7 startup per machine the dirs are gone and this becomes permanent
+ * dead code, so it must be removed in v7.1.0.
  */
 export async function cleanupV7LegacyDirectories(): Promise<void> {
   try {
     const home = getGoldfishHomeDir();
     await Promise.all([
       rm(join(home, 'cache', 'semantic'), { recursive: true, force: true }),
-      rm(join(home, 'models', 'transformers'), { recursive: true, force: true })
+      rm(join(home, 'models', 'transformers'), { recursive: true, force: true }),
+      rm(join(home, 'consolidation-state'), { recursive: true, force: true })
     ]);
   } catch {
     // Best-effort: never propagate errors from migration cleanup.

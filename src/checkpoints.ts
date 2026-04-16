@@ -17,9 +17,6 @@ import { registerProject } from './registry';
 import { getActiveBrief } from './plans';
 import { getLogger } from './logger';
 
-/** Checkpoints older than this are excluded from consolidation. Shared by recall, consolidate handler, and hooks. */
-export const CONSOLIDATION_AGE_LIMIT_DAYS = 30;
-
 interface CheckpointDependencies {
   getGitContext: (cwd?: string) => import('./types').GitContext;
 }
