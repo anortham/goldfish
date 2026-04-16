@@ -94,8 +94,9 @@ export async function handleCheckpoint(args: CheckpointArgs) {
     lines.push(`Tags: ${tags.join(', ')}`);
   }
 
-  if (checkpoint.planId) {
-    lines.push(`Plan: ${checkpoint.planId}`);
+  const briefId = checkpoint.briefId ?? checkpoint.planId;
+  if (briefId) {
+    lines.push(`Brief: ${briefId}`);
   }
 
   // Quality nudges based on checkpoint type

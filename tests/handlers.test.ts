@@ -125,7 +125,7 @@ describe('Readable markdown responses', () => {
       }
     });
 
-    it('shows planId in checkpoint response when active plan exists', async () => {
+    it('shows briefId in checkpoint response when an active brief exists', async () => {
       await savePlan({
         title: 'Checkpoint Handler Plan',
         content: 'Content',
@@ -139,7 +139,7 @@ describe('Readable markdown responses', () => {
       });
 
       const text = result.content[0]!.text;
-      expect(text).toContain('Plan: checkpoint-handler-plan');
+      expect(text).toContain('Brief: checkpoint-handler-plan');
     });
 
     it('warns when decision checkpoint missing decision field', async () => {
@@ -339,7 +339,7 @@ describe('Readable markdown responses', () => {
       expect(text).toContain('Second checkpoint');
     });
 
-    it('includes active plan in markdown format', async () => {
+    it('includes active brief in markdown format', async () => {
       await savePlan({
         id: 'test-plan',
         title: 'Test Plan',
@@ -354,11 +354,11 @@ describe('Readable markdown responses', () => {
 
       const text = result.content[0]!.text;
 
-      // Should mention active plan in header
-      expect(text).toContain('+ active plan');
+      // Should mention active brief in header
+      expect(text).toContain('+ active brief');
 
-      // Should render plan as H2 section
-      expect(text).toContain('## Active Plan: Test Plan (active)');
+      // Should render brief as H2 section
+      expect(text).toContain('## Active Brief: Test Plan (active)');
       expect(text).toMatch(/Updated: \d{4}-\d{2}-\d{2}T/);
       expect(text).toContain('Plan content here');
 
@@ -413,7 +413,7 @@ describe('Readable markdown responses', () => {
       }
     });
 
-    it('shows planId in checkpoint output when present', async () => {
+    it('shows briefId in checkpoint output when present', async () => {
       await savePlan({
         title: 'Handler Test Plan',
         content: 'Content',
@@ -433,7 +433,7 @@ describe('Readable markdown responses', () => {
       });
 
       const text = result.content[0]!.text;
-      expect(text).toContain('Plan: handler-test-plan');
+      expect(text).toContain('Brief: handler-test-plan');
     });
 
     it('shows tags on checkpoint entries', async () => {
@@ -639,7 +639,7 @@ describe('Readable markdown responses', () => {
         const recallResult = await handleRecall({ workspace: TEST_DIR });
         const recallText = recallResult.content[0]!.text;
 
-        expect(recallText).toContain('## Active Plan: Implicitly Active Plan (active)');
+        expect(recallText).toContain('## Active Brief: Implicitly Active Plan (active)');
       });
 
       it('saves plan without activating when activate: false', async () => {
@@ -654,15 +654,15 @@ describe('Readable markdown responses', () => {
         const text = result.content[0]!.text;
         expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
 
-        // Verify it's not THE active plan for the workspace
+        // Verify it's not the active brief for the workspace
         const recallResult = await handleRecall({ workspace: TEST_DIR });
         const recallText = recallResult.content[0]!.text;
 
-        // Should have no active plan section
-        expect(recallText).not.toContain('## Active Plan:');
+        // Should have no active brief section
+        expect(recallText).not.toContain('## Active Brief:');
       });
 
-      it('does not wipe out the active plan when saving a completed plan without activate', async () => {
+      it('does not wipe out the active brief when saving a completed plan without activate', async () => {
         await handlePlan({
           action: 'save',
           title: 'Current Active Plan',
@@ -685,8 +685,8 @@ describe('Readable markdown responses', () => {
         const recallResult = await handleRecall({ workspace: TEST_DIR });
         const recallText = recallResult.content[0]!.text;
 
-        expect(recallText).toContain('## Active Plan: Current Active Plan (active)');
-        expect(recallText).not.toContain('## Active Plan: Completed Plan (completed)');
+        expect(recallText).toContain('## Active Brief: Current Active Plan (active)');
+        expect(recallText).not.toContain('## Active Brief: Completed Plan (completed)');
       });
 
       it('rejects invalid status when saving through the handler', async () => {

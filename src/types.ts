@@ -20,6 +20,7 @@ export interface Checkpoint {
   tags?: string[];
   git?: GitContext;        // Git context at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
+  briefId?: string;       // ID of active brief when checkpoint was created
   planId?: string;        // ID of active plan when checkpoint was created
   filePath?: string;        // Absolute path to checkpoint file on disk
 }

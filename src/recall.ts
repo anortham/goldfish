@@ -12,7 +12,7 @@ import type { Checkpoint, MemorySection, Plan, RecallOptions, RecallResult, Work
 import { getCheckpointsForDateRange, getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS, hasValidCalendarDate } from './checkpoints';
 import { buildCompactSearchDescription, buildRetrievalDigest, DIGEST_VERSION } from './digests';
 import { readMemory, readConsolidationState, getMemorySummary, parseMemorySections } from './memory';
-import { getActivePlan } from './plans';
+import { getActiveBrief } from './plans';
 import { listRegisteredProjects } from './registry';
 import { invalidateSemanticRecordsForModelVersion, listPendingSemanticRecords, loadSemanticState, markSemanticRecordReady, upsertPendingSemanticRecord } from './semantic-cache';
 import { rankSearchCheckpoints } from './ranking';
@@ -55,10 +55,15 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return trimmed ? trimmed : undefined;
 }
 
+function getCheckpointBriefId(checkpoint: Checkpoint): string | undefined {
+  return checkpoint.briefId ?? checkpoint.planId;
+}
+
 function normalizeRecallOptions(options: RecallOptions): RecallOptions {
   const days = typeof options.days === 'number' && Number.isFinite(options.days) && options.days > 0
     ? options.days
     : undefined;
+  const briefId = normalizeOptionalString(options.briefId) ?? normalizeOptionalString(options.planId);
 
   return {
     ...options,
@@ -68,7 +73,8 @@ function normalizeRecallOptions(options: RecallOptions): RecallOptions {
     from: normalizeOptionalString(options.from),
     to: normalizeOptionalString(options.to),
     search: normalizeOptionalString(options.search),
-    planId: normalizeOptionalString(options.planId)
+    briefId,
+    planId: briefId
   };
 }
 
@@ -234,8 +240,8 @@ async function loadWorkspaceCheckpoints(workspace: string, options: RecallOption
     checkpoints = await getAllCheckpoints(workspace, earlyLimit);
   }
 
-  if (options.planId) {
-    checkpoints = checkpoints.filter(cp => cp.planId === options.planId);
+  if (options.briefId) {
+    checkpoints = checkpoints.filter(cp => getCheckpointBriefId(cp) === options.briefId);
   }
 
   return checkpoints;
@@ -399,6 +405,7 @@ async function recallFromWorkspace(
   options: RecallOptions
 ): Promise<{
   checkpoints: Checkpoint[];
+  activeBrief: Plan | null;
   activePlan: Plan | null;
   memory?: string;
   matchedMemorySections?: MemorySection[];
@@ -407,7 +414,7 @@ async function recallFromWorkspace(
   // Short-circuit: limit=0 means plan/consolidation only, skip all checkpoint I/O
   const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
   if (limit === 0) {
-    const activePlan = await getActivePlan(workspace);
+    const activeBrief = await getActiveBrief(workspace);
 
     const shouldIncludeMemory = options.includeMemory !== undefined
       ? options.includeMemory
@@ -435,7 +442,8 @@ async function recallFromWorkspace(
 
     return {
       checkpoints: [],
-      activePlan,
+      activeBrief,
+      activePlan: activeBrief,
       ...(memoryContent !== null && shouldIncludeMemory ? { memory: memoryContent } : {}),
       ...(consolidation ? { consolidation } : {})
     };
@@ -451,8 +459,8 @@ async function recallFromWorkspace(
     checkpoints = await getAllCheckpoints(workspace, earlyLimit);
   }
 
-  if (options.planId) {
-    checkpoints = checkpoints.filter(cp => cp.planId === options.planId);
+  if (options.briefId) {
+    checkpoints = checkpoints.filter(cp => getCheckpointBriefId(cp) === options.briefId);
   }
 
   let matchedMemorySections: MemorySection[] | undefined;
@@ -529,8 +537,8 @@ async function recallFromWorkspace(
   checkpoints = checkpoints.slice(0, limit);
   checkpoints = checkpoints.map(checkpoint => presentCheckpoint(checkpoint, options));
 
-  // Get active plan
-  const activePlan = await getActivePlan(workspace);
+  // Get active brief
+  const activeBrief = await getActiveBrief(workspace);
 
   // Memory and consolidation
   const shouldIncludeMemory = options.includeMemory !== undefined
@@ -584,7 +592,8 @@ async function recallFromWorkspace(
 
   return {
     checkpoints,
-    activePlan,
+    activeBrief,
+    activePlan: activeBrief,
     ...(memoryContent !== null && shouldIncludeMemory ? { memory: memoryContent } : {}),
     ...(matchedMemorySections ? { matchedMemorySections } : {}),
     ...(consolidation ? { consolidation } : {})
@@ -604,10 +613,11 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   if (workspace !== 'all') {
     const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
-    const { checkpoints, activePlan, memory, matchedMemorySections, consolidation } = await recallFromWorkspace(projectPath, normalizedOptions);
+    const { checkpoints, activeBrief, activePlan, memory, matchedMemorySections, consolidation } = await recallFromWorkspace(projectPath, normalizedOptions);
 
     return {
       checkpoints,
+      activeBrief,
       activePlan,
       ...(memory !== undefined ? { memory } : {}),
       ...(matchedMemorySections ? { matchedMemorySections } : {}),

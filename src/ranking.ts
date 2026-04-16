@@ -106,8 +106,9 @@ function metadataBoost(query: string, checkpoint: Checkpoint): number {
     return 0
   }
 
+  const briefId = checkpoint.briefId ?? checkpoint.planId
   const metadataFields: Array<string | undefined> = [
-    checkpoint.planId,
+    briefId,
     checkpoint.tags?.join(' '),
     checkpoint.symbols?.join(' '),
     checkpoint.git?.branch

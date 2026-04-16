@@ -28,7 +28,7 @@ describe('digests', () => {
       impact: 'Improves keyword recall without inflating checkpoint bodies',
       tags: ['semantic-recall', 'retrieval', 'retrieval'],
       symbols: ['buildRetrievalDigest', 'buildCompactSearchDescription'],
-      planId: 'semantic-recall-phase-1',
+      briefId: 'semantic-recall-phase-1',
       git: {
         branch: 'feature/semantic-recall'
       }
@@ -84,7 +84,7 @@ describe('digests', () => {
         'Ensured descriptive text still appears when metadata is limited to tags and branch info.'
       ].join('\n'),
       tags: ['semantic-recall'],
-      planId: 'semantic-recall-phase-1',
+      briefId: 'semantic-recall-phase-1',
       git: {
         branch: 'feature/semantic-recall'
       }

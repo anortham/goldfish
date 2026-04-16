@@ -173,19 +173,20 @@ describe('formatCheckpoint', () => {
     expect(formatted).toContain('  - css');
   });
 
-  it('includes planId in frontmatter when present', () => {
+  it('includes briefId in frontmatter when present', () => {
     const checkpoint: Checkpoint = {
       id: 'checkpoint_abc123',
       timestamp: '2026-01-15T10:30:00.000Z',
       description: 'Checkpoint with plan affinity',
-      planId: 'my-feature-plan'
+      briefId: 'my-feature-brief'
     };
 
     const formatted = formatCheckpoint(checkpoint);
-    expect(formatted).toContain('planId: my-feature-plan');
+    expect(formatted).toContain('briefId: my-feature-brief');
+    expect(formatted).not.toContain('planId:');
   });
 
-  it('omits planId from frontmatter when not present', () => {
+  it('omits briefId from frontmatter when not present', () => {
     const checkpoint: Checkpoint = {
       id: 'checkpoint_abc123',
       timestamp: '2026-01-15T10:30:00.000Z',
@@ -193,7 +194,7 @@ describe('formatCheckpoint', () => {
     };
 
     const formatted = formatCheckpoint(checkpoint);
-    expect(formatted).not.toContain('planId');
+    expect(formatted).not.toContain('briefId');
   });
 
   it('includes summary in frontmatter when present', () => {
@@ -515,20 +516,34 @@ Checkpoint with BOM.`;
     expect(checkpoint.description).toBe('Checkpoint with BOM.');
   });
 
-  it('parses planId from frontmatter', () => {
+  it('parses briefId from frontmatter', () => {
     const content = `---
 id: checkpoint_abc123
 timestamp: "2026-01-15T10:30:00.000Z"
-planId: my-feature-plan
+briefId: my-feature-brief
 ---
 
 Checkpoint with plan affinity`;
 
     const checkpoint = parseCheckpointFile(content);
-    expect(checkpoint.planId).toBe('my-feature-plan');
+    expect(checkpoint.briefId).toBe('my-feature-brief');
   });
 
-  it('omits planId when not in frontmatter', () => {
+  it('maps legacy planId frontmatter to briefId for compatibility', () => {
+    const content = `---
+id: checkpoint_abc123
+timestamp: "2026-01-15T10:30:00.000Z"
+planId: legacy-plan-id
+---
+
+Checkpoint with legacy plan affinity`;
+
+    const checkpoint = parseCheckpointFile(content);
+    expect(checkpoint.briefId).toBe('legacy-plan-id');
+    expect(checkpoint.planId).toBe('legacy-plan-id');
+  });
+
+  it('omits briefId when not in frontmatter', () => {
     const content = `---
 id: checkpoint_abc123
 timestamp: "2026-01-15T10:30:00.000Z"
@@ -537,20 +552,21 @@ timestamp: "2026-01-15T10:30:00.000Z"
 Checkpoint without plan`;
 
     const checkpoint = parseCheckpointFile(content);
-    expect(checkpoint.planId).toBeUndefined();
+    expect(checkpoint.briefId).toBeUndefined();
   });
 
-  it('roundtrips planId through format/parse', () => {
+  it('roundtrips briefId through format/parse', () => {
     const original: Checkpoint = {
       id: 'checkpoint_abc123',
       timestamp: '2026-01-15T10:30:00.000Z',
       description: 'Roundtrip test',
-      planId: 'my-plan-id'
+      briefId: 'my-brief-id'
     };
 
     const formatted = formatCheckpoint(original);
     const parsed = parseCheckpointFile(formatted);
-    expect(parsed.planId).toBe('my-plan-id');
+    expect(parsed.briefId).toBe('my-brief-id');
+    expect(formatted).not.toContain('planId:');
   });
 
   it('throws when timestamp is null in current-format frontmatter', () => {
@@ -1143,7 +1159,7 @@ describe('saveCheckpoint', () => {
     expect(newFile).toMatch(/^100000_[0-9a-f]{4}_\d+\.md$/);
   });
 
-  it('attaches planId when active plan exists', async () => {
+  it('attaches briefId when an active brief exists', async () => {
     // Set up an active plan
     const { savePlan } = await import('../src/plans');
     await savePlan({
@@ -1158,16 +1174,16 @@ describe('saveCheckpoint', () => {
       workspace: tempDir
     });
 
-    expect(checkpoint.planId).toBe('test-plan');
+    expect(checkpoint.briefId).toBe('test-plan');
   });
 
-  it('omits planId when no active plan exists', async () => {
+  it('omits briefId when no active brief exists', async () => {
     const checkpoint = await saveCheckpoint({
       description: 'Checkpoint with no plan',
       workspace: tempDir
     });
 
-    expect(checkpoint.planId).toBeUndefined();
+    expect(checkpoint.briefId).toBeUndefined();
   });
 
   it('persists structured fields when provided to saveCheckpoint', async () => {

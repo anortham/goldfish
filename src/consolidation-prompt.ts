@@ -9,7 +9,7 @@
  * @param memoryPath - Absolute path to memory.yaml (may not exist yet)
  * @param lastConsolidatedPath - Absolute path to consolidation state JSON
  * @param checkpointFiles - Absolute paths to checkpoint files, oldest-first
- * @param activePlanPath - Absolute path to active plan, or undefined
+ * @param activeBriefPath - Absolute path to active brief, or undefined
  * @param checkpointCount - Number of checkpoint files in this batch
  * @param previousTotal - Running total of checkpoints consolidated before this batch
  * @param lastBatchTimestamp - ISO 8601 timestamp of the last checkpoint in this batch (used as consolidation cursor)
@@ -18,7 +18,7 @@ export function buildConsolidationPrompt(
   memoryPath: string,
   lastConsolidatedPath: string,
   checkpointFiles: string[],
-  activePlanPath: string | undefined,
+  activeBriefPath: string | undefined,
   checkpointCount: number,
   previousTotal: number,
   lastBatchTimestamp: string
@@ -29,9 +29,9 @@ export function buildConsolidationPrompt(
     .map((f, i) => `   ${i + 1}. \`${f}\``)
     .join('\n');
 
-  const planSection = activePlanPath
-    ? `\`${activePlanPath}\`\n   - Use it to understand project direction. Do not modify it.`
-    : 'No active plan.';
+  const briefSection = activeBriefPath
+    ? `\`${activeBriefPath}\`\n   - Use it to understand project direction. Do not modify it.`
+    : 'No active brief.';
 
   return `You are a memory consolidation subagent. Your job is to distill developer checkpoints into a lean memory.yaml that captures only what cannot be derived from the codebase, git log, or tools.
 
@@ -49,7 +49,7 @@ ${fileList}
    - Each file has YAML frontmatter (between \`---\` markers) with metadata fields, followed by a markdown body (the checkpoint description).
    - Extract durable facts from the markdown body. The frontmatter contains timestamp, tags, type, and optional structured fields (decision, context, impact, symbols, next).
 
-3. **Active plan** (optional context): ${planSection}
+3. **Active brief** (optional context): ${briefSection}
 
 ## Output Format: YAML
 
@@ -134,7 +134,7 @@ Content must be exactly:
 ## Constraints
 
 - Do NOT modify or delete any checkpoint files.
-- Do NOT touch plan files.
+- Do NOT touch brief files.
 - Do NOT create any files other than the two listed above.
 - If you are uncertain about a fact from the checkpoints, omit it rather than guess.`;
 }

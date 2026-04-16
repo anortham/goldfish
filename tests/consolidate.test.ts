@@ -247,7 +247,7 @@ describe('handleConsolidate', () => {
     }
   });
 
-  it('returns activePlanPath when an active plan exists', async () => {
+  it('returns activeBriefPath when an active brief exists', async () => {
     await saveCheckpoint({ description: 'work done', workspace: TEST_DIR });
     await savePlan({
       title: 'Test Plan',
@@ -259,12 +259,12 @@ describe('handleConsolidate', () => {
     const result = await handleConsolidate({ workspace: TEST_DIR });
     const parsed = JSON.parse(result.content[0].text);
 
-    expect(parsed.activePlanPath).toBeDefined();
-    expect(parsed.activePlanPath).toContain(`${sep}.memories${sep}plans${sep}`);
-    expect(parsed.activePlanPath).toEndWith('.md');
+    expect(parsed.activeBriefPath).toBeDefined();
+    expect(parsed.activeBriefPath).toContain(`${sep}.memories${sep}briefs${sep}`);
+    expect(parsed.activeBriefPath).toEndWith('.md');
   });
 
-  it('omits activePlanPath when plan is completed', async () => {
+  it('omits activeBriefPath when brief is completed', async () => {
     await saveCheckpoint({ description: 'work done', workspace: TEST_DIR });
     const plan = await savePlan({
       title: 'Done Plan',
@@ -277,7 +277,7 @@ describe('handleConsolidate', () => {
     const result = await handleConsolidate({ workspace: TEST_DIR });
     const parsed = JSON.parse(result.content[0].text);
 
-    expect(parsed.activePlanPath).toBeUndefined();
+    expect(parsed.activeBriefPath).toBeUndefined();
   });
 
   it('excludes checkpoints older than 30 days', async () => {

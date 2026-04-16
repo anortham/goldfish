@@ -96,13 +96,14 @@ export function buildRetrievalDigest(checkpoint: Checkpoint): string {
   const hasNarrativeStructuredContent = Boolean(
     checkpoint.context || checkpoint.decision || checkpoint.impact
   )
+  const briefId = checkpoint.briefId ?? checkpoint.planId
   const structuredParts = uniqueParts([
     checkpoint.context,
     checkpoint.decision,
     checkpoint.impact,
     uniqueList(checkpoint.tags)?.join(', '),
     uniqueList(checkpoint.symbols)?.join(', '),
-    checkpoint.planId,
+    briefId,
     checkpoint.git?.branch
   ])
 

@@ -63,7 +63,7 @@ describe('buildHybridRanking', () => {
       id: 'boosted',
       timestamp: '2026-03-12T10:00:00.000Z',
       description: 'Implemented semantic search ranking',
-      planId: 'semantic-recall-phase-1',
+      briefId: 'semantic-recall-phase-1',
       tags: ['semantic', 'ranking'],
       symbols: ['buildHybridRanking'],
       git: {

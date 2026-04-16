@@ -7,15 +7,35 @@
 
 import { readConsolidationState } from '../memory.js';
 import { getAllCheckpoints, CONSOLIDATION_AGE_LIMIT_DAYS } from '../checkpoints.js';
-import { getActivePlan } from '../plans.js';
+import { getActiveBrief } from '../plans.js';
 import { buildConsolidationPrompt } from '../consolidation-prompt.js';
-import { getMemoriesDir, getPlansDir, getConsolidationStatePath, getConsolidationStateDir, resolveWorkspace } from '../workspace.js';
-import { mkdir } from 'fs/promises';
+import { getMemoriesDir, getBriefsDir, getPlansDir, getConsolidationStatePath, getConsolidationStateDir, resolveWorkspace } from '../workspace.js';
+import { mkdir, stat } from 'fs/promises';
 import { join } from 'path';
 import type { ConsolidateArgs, ConsolidationPayload } from '../types.js';
 
 const CONSOLIDATION_BATCH_CAP = 50;
 const CONSOLIDATION_ALL_CAP = 100;
+
+async function resolveActiveBriefPath(workspace: string, briefId: string): Promise<string> {
+  const candidatePaths = [
+    join(getBriefsDir(workspace), `${briefId}.md`),
+    join(getPlansDir(workspace), `${briefId}.md`)
+  ];
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      const candidateStats = await stat(candidatePath);
+      if (candidateStats.isFile()) {
+        return candidatePath;
+      }
+    } catch {
+      // Try the next compatibility path.
+    }
+  }
+
+  return candidatePaths[0]!;
+}
 
 /**
  * Handle the consolidate tool call.
@@ -25,9 +45,9 @@ const CONSOLIDATION_ALL_CAP = 100;
 export async function handleConsolidate(args: ConsolidateArgs) {
   const workspace = resolveWorkspace(args?.workspace);
 
-  const [consolidationState, activePlan, allCheckpoints] = await Promise.all([
+  const [consolidationState, activeBrief, allCheckpoints] = await Promise.all([
     readConsolidationState(workspace),
-    getActivePlan(workspace),
+    getActiveBrief(workspace),
     getAllCheckpoints(workspace)
   ]);
 
@@ -88,9 +108,9 @@ export async function handleConsolidate(args: ConsolidateArgs) {
   const memoryPath = join(memoriesDir, 'memory.yaml');
   const lastConsolidatedPath = getConsolidationStatePath(workspace);
 
-  // Active plan path (if valid active plan exists)
-  const activePlanPath = activePlan
-    ? join(getPlansDir(workspace), `${activePlan.id}.md`)
+  // Active brief path (if valid active brief exists)
+  const activeBriefPath = activeBrief
+    ? await resolveActiveBriefPath(workspace, activeBrief.id)
     : undefined;
 
   const previousTotal = consolidationState?.checkpointsConsolidated ?? 0;
@@ -101,7 +121,7 @@ export async function handleConsolidate(args: ConsolidateArgs) {
     memoryPath,
     lastConsolidatedPath,
     checkpointFiles,
-    activePlanPath,
+    activeBriefPath,
     checkpointCount,
     previousTotal,
     lastBatchTimestamp
@@ -111,7 +131,8 @@ export async function handleConsolidate(args: ConsolidateArgs) {
     status: 'ready',
     memoryPath,
     lastConsolidatedPath,
-    activePlanPath,
+    activeBriefPath,
+    activePlanPath: activeBriefPath,
     checkpointCount,
     remainingCount,
     previousTotal,

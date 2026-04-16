@@ -345,7 +345,7 @@ describe('Search functionality', () => {
     ]);
   });
 
-  it('applies planId filtering before search ranking', async () => {
+  it('applies briefId filtering before search ranking', async () => {
     const exactOtherPlan = await saveCheckpoint({
       description: 'Semantic recall ranking overhaul for authentication timeout search',
       tags: ['search'],
@@ -372,7 +372,7 @@ describe('Search functionality', () => {
     const result = await recall({
       workspace: TEST_DIR_A,
       search: 'login timeout issue',
-      planId: 'semantic-plan',
+      briefId: 'semantic-plan',
       limit: 5,
       _semanticRuntime: {
         isReady: () => true,
@@ -1187,7 +1187,7 @@ describe('Cross-workspace functionality', () => {
   });
 });
 
-describe('Active plan integration', () => {
+describe('Active brief integration', () => {
   beforeEach(async () => {
     await saveCheckpoint({
       description: 'Working on auth',
@@ -1195,7 +1195,7 @@ describe('Active plan integration', () => {
     });
   });
 
-  it('includes active plan in recall results', async () => {
+  it('includes active brief in recall results', async () => {
     await savePlan({
       id: 'auth-plan',
       title: 'Authentication System',
@@ -1206,18 +1206,18 @@ describe('Active plan integration', () => {
 
     const result = await recall({ workspace: TEST_DIR_A });
 
-    expect(result.activePlan).toBeDefined();
-    expect(result.activePlan!.id).toBe('auth-plan');
-    expect(result.activePlan!.title).toBe('Authentication System');
+    expect(result.activeBrief).toBeDefined();
+    expect(result.activeBrief!.id).toBe('auth-plan');
+    expect(result.activeBrief!.title).toBe('Authentication System');
   });
 
-  it('returns null activePlan when no plan is active', async () => {
+  it('returns null activeBrief when no brief is active', async () => {
     const result = await recall({ workspace: TEST_DIR_A });
 
-    expect(result.activePlan).toBeNull();
+    expect(result.activeBrief).toBeNull();
   });
 
-  it('includes active plan even with search filter', async () => {
+  it('includes active brief even with search filter', async () => {
     await savePlan({
       id: 'test-plan',
       title: 'Test Plan',
@@ -1231,9 +1231,9 @@ describe('Active plan integration', () => {
       search: 'auth'  // Search term doesn't match plan
     });
 
-    // Active plan should still be included
-    expect(result.activePlan).toBeDefined();
-    expect(result.activePlan!.id).toBe('test-plan');
+    // Active brief should still be included
+    expect(result.activeBrief).toBeDefined();
+    expect(result.activeBrief!.id).toBe('test-plan');
   });
 });
 
@@ -1589,7 +1589,7 @@ describe('recall with limit parameter', () => {
     expect(result.checkpoints.length).toBeLessThanOrEqual(3);
   });
 
-  it('allows limit: 0 to return no checkpoints (plan only)', async () => {
+  it('allows limit: 0 to return no checkpoints (brief only)', async () => {
     await savePlan({
       id: 'test-plan',
       title: 'Test Plan',
@@ -1604,10 +1604,10 @@ describe('recall with limit parameter', () => {
     });
 
     expect(result.checkpoints).toHaveLength(0);
-    expect(result.activePlan).toBeDefined();
+    expect(result.activeBrief).toBeDefined();
   });
 
-  it('limit: 0 single-workspace returns plan and consolidation but skips checkpoints', async () => {
+  it('limit: 0 single-workspace returns brief and consolidation but skips checkpoints', async () => {
     await savePlan({
       id: 'plan-shortcircuit',
       title: 'Short Circuit Plan',
@@ -1628,8 +1628,8 @@ describe('recall with limit parameter', () => {
     });
 
     expect(result.checkpoints).toHaveLength(0);
-    expect(result.activePlan).toBeDefined();
-    expect(result.activePlan!.id).toBe('plan-shortcircuit');
+    expect(result.activeBrief).toBeDefined();
+    expect(result.activeBrief!.id).toBe('plan-shortcircuit');
     // Consolidation state should still be returned
     expect(result.consolidation).toBeDefined();
   });
@@ -1916,7 +1916,7 @@ describe('Default recall uses last-N mode (no date window)', () => {
   });
 });
 
-describe('planId filtering', () => {
+describe('briefId filtering', () => {
   const PLAN_DIR = join(tmpdir(), `goldfish-test-plan-filter-${Date.now()}`);
 
   beforeAll(async () => {
@@ -1929,7 +1929,7 @@ describe('planId filtering', () => {
     await rm(PLAN_DIR, { recursive: true, force: true });
   });
 
-  test('filters checkpoints by planId', async () => {
+  test('filters checkpoints by briefId', async () => {
     const memoriesDir = join(PLAN_DIR, '.memories');
     const dateDir = join(memoriesDir, '2026-01-15');
     await mkdir(dateDir, { recursive: true });
@@ -1937,7 +1937,7 @@ describe('planId filtering', () => {
     const cp1 = `---
 id: checkpoint_aaa
 timestamp: "2026-01-15T10:00:00.000Z"
-planId: plan-a
+briefId: brief-a
 ---
 
 Work on plan A`;
@@ -1945,7 +1945,7 @@ Work on plan A`;
     const cp2 = `---
 id: checkpoint_bbb
 timestamp: "2026-01-15T11:00:00.000Z"
-planId: plan-b
+planId: legacy-brief-b
 ---
 
 Work on plan B`;
@@ -1963,7 +1963,7 @@ Work without a plan`;
 
     const result = await recall({
       workspace: PLAN_DIR,
-      planId: 'plan-a',
+      briefId: 'brief-a',
       limit: 10,
       days: 365
     });
@@ -1972,7 +1972,31 @@ Work without a plan`;
     expect(result.checkpoints[0]!.id).toBe('checkpoint_aaa');
   });
 
-  test('returns all checkpoints when planId not specified', async () => {
+  test('matches legacy planId checkpoints through the briefId filter', async () => {
+    const result = await recall({
+      workspace: PLAN_DIR,
+      briefId: 'legacy-brief-b',
+      limit: 10,
+      days: 365
+    });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.id).toBe('checkpoint_bbb');
+  });
+
+  test('accepts planId as a compatibility alias for briefId filtering', async () => {
+    const result = await recall({
+      workspace: PLAN_DIR,
+      planId: 'legacy-brief-b',
+      limit: 10,
+      days: 365
+    });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.id).toBe('checkpoint_bbb');
+  });
+
+  test('returns all checkpoints when briefId is not specified', async () => {
     const result = await recall({
       workspace: PLAN_DIR,
       limit: 10,

@@ -6,7 +6,7 @@ import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
-import type { Checkpoint, Plan, RecallArgs } from '../types.js';
+import type { Brief, Checkpoint, RecallArgs } from '../types.js';
 
 /**
  * Safely convert a value to an array for display.
@@ -49,8 +49,9 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
     lines.push(`Tags: ${tags.join(', ')}`);
   }
 
-  if (checkpoint.planId) {
-    lines.push(`Plan: ${checkpoint.planId}`);
+  const briefId = checkpoint.briefId ?? checkpoint.planId;
+  if (briefId) {
+    lines.push(`Brief: ${briefId}`);
   }
 
   if (checkpoint.type) {
@@ -118,18 +119,18 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
 }
 
 /**
- * Format active plan as a markdown section
+ * Format active brief as a markdown section
  */
-function formatActivePlan(plan: Plan): string {
+function formatActiveBrief(brief: Brief): string {
   const lines: string[] = [];
-  lines.push(`## Active Plan: ${plan.title} (${plan.status})`);
-  lines.push(`Updated: ${plan.updated}`);
-  const planTags = safeArray(plan.tags);
-  if (planTags && planTags.length > 0) {
-    lines.push(`Tags: ${planTags.join(', ')}`);
+  lines.push(`## Active Brief: ${brief.title} (${brief.status})`);
+  lines.push(`Updated: ${brief.updated}`);
+  const briefTags = safeArray(brief.tags);
+  if (briefTags && briefTags.length > 0) {
+    lines.push(`Tags: ${briefTags.join(', ')}`);
   }
   lines.push('');
-  lines.push(plan.content);
+  lines.push(brief.content);
   return lines.join('\n');
 }
 
@@ -154,16 +155,17 @@ export async function handleRecall(args: RecallArgs) {
 
   // Build readable markdown response
   const count = result.checkpoints.length;
-  const planText = result.activePlan ? ' + active plan' : '';
+  const activeBrief = result.activeBrief ?? result.activePlan;
+  const briefText = activeBrief ? ' + active brief' : '';
   const fish = getFishEmoji();
 
   const lines: string[] = [];
 
   // Header line
   if (count === 0) {
-    lines.push(`${fish} No checkpoints found${planText}`);
+    lines.push(`${fish} No checkpoints found${briefText}`);
   } else {
-    lines.push(`${fish} Recalled ${count} checkpoint${count === 1 ? '' : 's'}${planText}`);
+    lines.push(`${fish} Recalled ${count} checkpoint${count === 1 ? '' : 's'}${briefText}`);
   }
 
   // Diagnostics
@@ -172,12 +174,12 @@ export async function handleRecall(args: RecallArgs) {
     lines.push(`Memories: ${memoriesDir} (${memoriesExists ? 'found' : 'not found'})`);
   }
 
-  // Active plan section
-  if (result.activePlan) {
+  // Active brief section
+  if (activeBrief) {
     lines.push('');
     lines.push('---');
     lines.push('');
-    lines.push(formatActivePlan(result.activePlan));
+    lines.push(formatActiveBrief(activeBrief));
   }
 
   // Consolidated memory section

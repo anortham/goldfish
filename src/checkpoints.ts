@@ -15,7 +15,7 @@ import { getGitContext } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
-import { getActivePlan } from './plans';
+import { getActiveBrief } from './plans';
 import { buildRetrievalDigest, DIGEST_VERSION } from './digests';
 import { upsertPendingSemanticRecord } from './semantic-cache';
 import { getLogger } from './logger';
@@ -135,8 +135,9 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
     frontmatter.summary = checkpoint.summary;
   }
 
-  if (checkpoint.planId) {
-    frontmatter.planId = checkpoint.planId;
+  const briefId = checkpoint.briefId ?? checkpoint.planId;
+  if (briefId) {
+    frontmatter.briefId = briefId;
   }
 
   if (checkpoint.type) {
@@ -315,7 +316,15 @@ export function parseCheckpointFile(content: string): Checkpoint {
   if (tags) checkpoint.tags = tags;
   if (git) checkpoint.git = git;
   if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
-  if (frontmatter.planId) checkpoint.planId = String(frontmatter.planId);
+  const affinityId = typeof frontmatter.briefId === 'string'
+    ? frontmatter.briefId
+    : typeof frontmatter.planId === 'string'
+      ? frontmatter.planId
+      : undefined;
+  if (affinityId) {
+    checkpoint.briefId = String(affinityId);
+    checkpoint.planId = String(affinityId);
+  }
   if (isCheckpointType(frontmatter.type)) checkpoint.type = frontmatter.type;
   if (frontmatter.context) checkpoint.context = String(frontmatter.context);
   if (frontmatter.decision) checkpoint.decision = String(frontmatter.decision);
@@ -349,6 +358,16 @@ export function parseJsonCheckpoint(content: string): Checkpoint {
     timestamp,
     description: String(raw.description ?? '')
   };
+
+  const affinityId = typeof raw.briefId === 'string'
+    ? raw.briefId
+    : typeof raw.planId === 'string'
+      ? raw.planId
+      : undefined;
+  if (affinityId) {
+    checkpoint.briefId = affinityId;
+    checkpoint.planId = affinityId;
+  }
 
   const tags = raw.tags as string[] | undefined;
   if (tags && tags.length > 0) checkpoint.tags = tags;
@@ -406,14 +425,15 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
     checkpoint.summary = summary;
   }
 
-  // Attach active plan ID if one exists
+  // Attach active brief ID if one exists
   try {
-    const activePlan = await getActivePlan(projectPath);
-    if (activePlan) {
-      checkpoint.planId = activePlan.id;
+    const activeBrief = await getActiveBrief(projectPath);
+    if (activeBrief) {
+      checkpoint.briefId = activeBrief.id;
+      checkpoint.planId = activeBrief.id;
     }
   } catch {
-    // Silently ignore — plan affinity is best-effort
+    // Silently ignore — brief affinity is best-effort
   }
 
   // Determine file path
