@@ -29,7 +29,6 @@ Recall can surface:
 
 - Active brief, which is the current strategic direction
 - Checkpoints, which are the evidence trail
-- Consolidated memory, which stores durable facts
 - Workspace summaries for cross-project recall
 
 Treat the active brief as direction, not as an execution checklist. If you need implementation detail, read `docs/plans/`.
@@ -38,4 +37,3 @@ Treat the active brief as direction, not as an execution checklist. If you need 
 
 - Summarize the active brief or recent checkpoint thread when it exists.
 - Continue from the recalled context instead of re-deriving it.
-- If `consolidation.needed` is true, use `/consolidate`.

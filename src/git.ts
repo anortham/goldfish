@@ -12,6 +12,15 @@ export const MAX_GIT_FILES = 30;
 
 /** Paths to exclude from git file lists */
 const EXCLUDED_PREFIXES = ['.memories/'];
+type SpawnOptions = NonNullable<Parameters<typeof spawnSync>[1]>;
+
+function getSpawnOptions(cwd?: string): SpawnOptions {
+  const stdio: ['ignore', 'pipe', 'ignore'] = ['ignore', 'pipe', 'ignore'];
+
+  return cwd
+    ? { stdio, cwd }
+    : { stdio };
+}
 
 /**
  * Get current git context (branch, commit, changed files)
@@ -20,19 +29,19 @@ const EXCLUDED_PREFIXES = ['.memories/'];
  * @param cwd - Optional working directory for git commands (defaults to process.cwd())
  */
 export function getGitContext(cwd?: string): GitContext {
-  const spawnOpts = { stdio: ['ignore', 'pipe', 'ignore'] as const, cwd };
+  const spawnOpts = getSpawnOptions(cwd);
 
   try {
     // Get current branch
     const branchResult = spawnSync(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], spawnOpts);
     const branch = branchResult.success
-      ? branchResult.stdout.toString().trim()
+      ? (branchResult.stdout?.toString().trim() || undefined)
       : undefined;
 
     // Get current commit (short hash)
     const commitResult = spawnSync(['git', 'rev-parse', '--short', 'HEAD'], spawnOpts);
     const commit = commitResult.success
-      ? commitResult.stdout.toString().trim()
+      ? (commitResult.stdout?.toString().trim() || undefined)
       : undefined;
 
     const filesSet = new Set<string>();
@@ -46,7 +55,7 @@ export function getGitContext(cwd?: string): GitContext {
         continue;
       }
 
-      for (const file of result.stdout.toString().trim().split('\n')) {
+      for (const file of (result.stdout?.toString().trim() || '').split('\n')) {
         if (file) {
           filesSet.add(file);
         }
@@ -59,7 +68,7 @@ export function getGitContext(cwd?: string): GitContext {
       spawnOpts
     );
     if (untrackedResult.success) {
-      for (const file of untrackedResult.stdout.toString().trim().split('\n')) {
+      for (const file of (untrackedResult.stdout?.toString().trim() || '').split('\n')) {
         if (file) {
           filesSet.add(file);
         }

@@ -5,8 +5,7 @@ import { handleBrief } from '../src/handlers/brief';
 import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { saveBrief } from '../src/briefs';
 import { ensureMemoriesDir } from '../src/workspace';
-import { rm } from 'fs/promises';
-import { mkdtemp } from 'fs/promises';
+import { rm, mkdtemp, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -1109,15 +1108,10 @@ describe('Phase 2 consolidation removal', () => {
   });
 
   it('does not ship a handlers/consolidate module', async () => {
-    // Phase 2.4 deletes src/handlers/consolidate.ts entirely. Importing the
-    // path should fail; if it succeeds we still consider this a regression.
-    let imported: unknown = null;
-    try {
-      imported = await import('../src/handlers/consolidate');
-    } catch {
-      imported = null;
-    }
-    expect(imported).toBeNull();
+    // Phase 2.4 deletes src/handlers/consolidate.ts entirely.
+    await expect(
+      stat(new URL('../src/handlers/consolidate.ts', import.meta.url))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 
@@ -1131,14 +1125,9 @@ describe('Phase 3 plan removal', () => {
   });
 
   it('does not ship a handlers/plan module', async () => {
-    // Phase 3.2 deletes src/handlers/plan.ts entirely. Importing the path
-    // should fail; if it succeeds we still consider this a regression.
-    let imported: unknown = null;
-    try {
-      imported = await import('../src/handlers/plan');
-    } catch {
-      imported = null;
-    }
-    expect(imported).toBeNull();
+    // Phase 3.2 deletes src/handlers/plan.ts entirely.
+    await expect(
+      stat(new URL('../src/handlers/plan.ts', import.meta.url))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

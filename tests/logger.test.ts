@@ -42,7 +42,8 @@ describe('logger', () => {
       await log.flush();
 
       const files = await readdir(TEST_LOG_DIR);
-      const content = await readFile(join(TEST_LOG_DIR, files[0]), 'utf-8');
+      expect(files.length).toBeGreaterThan(0);
+      const content = await readFile(join(TEST_LOG_DIR, files[0]!), 'utf-8');
       expect(content).toContain('[INFO]');
       expect(content).toContain('server started');
     });
@@ -55,7 +56,8 @@ describe('logger', () => {
       await log.flush();
 
       const files = await readdir(TEST_LOG_DIR);
-      const content = await readFile(join(TEST_LOG_DIR, files[0]), 'utf-8');
+      expect(files.length).toBeGreaterThan(0);
+      const content = await readFile(join(TEST_LOG_DIR, files[0]!), 'utf-8');
       expect(content).toContain('[WARN]');
       expect(content).toContain('stale lock detected');
     });
@@ -69,7 +71,8 @@ describe('logger', () => {
       await log.flush();
 
       const files = await readdir(TEST_LOG_DIR);
-      const content = await readFile(join(TEST_LOG_DIR, files[0]), 'utf-8');
+      expect(files.length).toBeGreaterThan(0);
+      const content = await readFile(join(TEST_LOG_DIR, files[0]!), 'utf-8');
       expect(content).toContain('[ERROR]');
       expect(content).toContain('plan save failed');
       expect(content).toContain('something broke');
@@ -85,7 +88,7 @@ describe('logger', () => {
 
       const files1 = await readdir(TEST_LOG_DIR);
       if (files1.length > 0) {
-        const content = await readFile(join(TEST_LOG_DIR, files1[0]), 'utf-8');
+        const content = await readFile(join(TEST_LOG_DIR, files1[0]!), 'utf-8');
         expect(content).not.toContain('hidden message');
       }
 
@@ -98,7 +101,8 @@ describe('logger', () => {
       await log2.flush();
 
       const files2 = await readdir(TEST_LOG_DIR);
-      const content2 = await readFile(join(TEST_LOG_DIR, files2[files2.length - 1]), 'utf-8');
+      expect(files2.length).toBeGreaterThan(0);
+      const content2 = await readFile(join(TEST_LOG_DIR, files2[files2.length - 1]!), 'utf-8');
       expect(content2).toContain('[DEBUG]');
       expect(content2).toContain('visible message');
     });
@@ -113,7 +117,8 @@ describe('logger', () => {
       await log.flush();
 
       const files = await readdir(TEST_LOG_DIR);
-      const content = await readFile(join(TEST_LOG_DIR, files[0]), 'utf-8');
+      expect(files.length).toBeGreaterThan(0);
+      const content = await readFile(join(TEST_LOG_DIR, files[0]!), 'utf-8');
       // ISO 8601 timestamp pattern
       expect(content).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     });
@@ -127,11 +132,12 @@ describe('logger', () => {
       await log.flush();
 
       const files = await readdir(TEST_LOG_DIR);
-      const content = await readFile(join(TEST_LOG_DIR, files[0]), 'utf-8');
+      expect(files.length).toBeGreaterThan(0);
+      const content = await readFile(join(TEST_LOG_DIR, files[0]!), 'utf-8');
       const lines = content.trim().split('\n');
       expect(lines.length).toBe(2);
-      expect(lines[0]).toContain('first');
-      expect(lines[1]).toContain('second');
+      expect(lines[0]!).toContain('first');
+      expect(lines[1]!).toContain('second');
     });
   });
 

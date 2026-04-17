@@ -4,6 +4,28 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.1] - 2026-04-17
+
+Patch release to clean up the v7 surface after the subtract sprint landed.
+
+### Fixed
+
+- Restored `bun run typecheck` to green under `exactOptionalPropertyTypes`.
+  Workspace-root hydration, recall option normalization, git spawn options,
+  and related tests now satisfy the stricter typing contract instead of
+  passing only under Bun's runtime test path.
+- Removed stale post-v7 guidance that still mentioned fuzzy search,
+  consolidation, and `/consolidate` after those concepts were deleted.
+  Tool descriptions, recall skills, and regression tests now describe the
+  shipped v7 behavior.
+
+### Documentation
+
+- Documented the Codex Desktop caveat that it does not send MCP roots today.
+  The README now recommends a project-local `.codex/config.toml` with
+  `GOLDFISH_WORKSPACE` set per repo so Goldfish binds to the correct
+  workspace.
+
 ## [7.0.0] - 2026-04-16
 
 The "subtract sprint" release. Goldfish shrinks its surface to three MCP tools

@@ -78,7 +78,7 @@ export interface RecallOptions {
   days?: number;          // Look back N days (no default — only used when explicitly set)
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
-  search?: string;        // Fuzzy search query
+  search?: string;        // Search query over checkpoint fields
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief

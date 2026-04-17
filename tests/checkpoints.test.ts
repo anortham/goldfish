@@ -1299,7 +1299,7 @@ describe('getCheckpointsForDay', () => {
 
   it('populates filePath on each checkpoint', async () => {
     await saveCheckpoint({ description: 'test checkpoint', workspace: tempDir });
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0]!;
     const checkpoints = await getCheckpointsForDay(tempDir, today);
     expect(checkpoints.length).toBeGreaterThan(0);
     for (const cp of checkpoints) {

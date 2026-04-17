@@ -12,7 +12,8 @@ import { fileURLToPath } from 'url';
 
 export interface WorkspaceRoot {
   uri: string;
-  name?: string;
+  name?: string | undefined;
+  _meta?: Record<string, unknown> | undefined;
 }
 
 export interface ResolveWorkspaceOptions {
@@ -44,8 +45,10 @@ export function normalizeWorkspace(pathOrName: string): string {
 
     // Detect scoped package paths like /home/dev/@org/my-project → org-my-project
     const scopedMatch = name.match(/[/\\](@[^/\\]+)[/\\]([^/\\]+)$/);
-    if (scopedMatch) {
-      name = scopedMatch[1].replace(/^@/, '') + '-' + scopedMatch[2];
+    const scope = scopedMatch?.[1];
+    const packageName = scopedMatch?.[2];
+    if (scope && packageName) {
+      name = scope.replace(/^@/, '') + '-' + packageName;
     } else {
       // Get last path component
       name = name.replace(/^.*[/\\]/, '');

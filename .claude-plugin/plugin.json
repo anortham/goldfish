@@ -1,7 +1,7 @@
 {
   "name": "goldfish",
   "description": "Cross-client MCP memory with checkpoints, recall, briefs, and standups for AI-assisted development",
-  "version": "7.0.0",
+  "version": "7.0.1",
   "author": {
     "name": "Alan Northam"
   },

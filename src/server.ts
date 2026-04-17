@@ -26,7 +26,7 @@ import type { CheckpointArgs, RecallArgs, BriefArgs } from './types.js';
 import { getLogger } from './logger.js';
 import { getGoldfishHomeDir, resolveWorkspace } from './workspace.js';
 
-export const SERVER_VERSION = '7.0.0';
+export const SERVER_VERSION = '7.0.1';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 
@@ -91,9 +91,13 @@ async function hydrateWorkspaceArguments(
     ? undefined
     : await getCachedRoots(cache, sessionId, sendRequest);
 
+  const workspacePath = roots
+    ? resolveWorkspace(workspace, { roots })
+    : resolveWorkspace(workspace);
+
   return {
     ...args,
-    workspace: resolveWorkspace(workspace, { roots })
+    workspace: workspacePath
   };
 }
 

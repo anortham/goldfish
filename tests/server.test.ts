@@ -225,6 +225,8 @@ describe('Tool descriptions', () => {
     const recallTool = tools.find(t => t.name === 'recall');
     expect(recallTool!.description).toContain('prior context');
     expect(recallTool!.description).toContain('user invokes /recall');
+    expect(recallTool!.description).not.toContain('Fuzzy search');
+    expect(recallTool!.description).not.toContain('fuzzy search');
 
     const briefTool = tools.find(t => t.name === 'brief');
     expect(briefTool!.description).toContain('strategic context');
@@ -300,7 +302,9 @@ describe('Server instructions', () => {
 
     expect(instructions).toContain('checkpoint');
     expect(instructions).toContain('recall');
-    expect(instructions).toContain('plan');
+    expect(instructions).toContain('brief');
+    expect(instructions).not.toContain('plan({');
+    expect(instructions).not.toContain('Active Plan');
   });
 
   it('defers checkpoint formatting guidance to tool description', async () => {
@@ -317,7 +321,7 @@ describe('Server instructions', () => {
     expect(checkpointTool.description).toContain('IMPACT');
   });
 
-  it('includes plan activate guidance', async () => {
+  it('includes brief activate guidance', async () => {
     const { getInstructions } = await import('../src/server');
 
     const instructions = getInstructions();
@@ -429,6 +433,14 @@ describe('Server exports', () => {
     expect(readmeSkillTable).toEqual(skillDirs);
   });
 
+  it('documents the current release in the changelog', async () => {
+    const { SERVER_VERSION } = await import('../src/server');
+
+    const changelog = await Bun.file(new URL('../CHANGELOG.md', import.meta.url)).text();
+
+    expect(changelog).toContain(`## [${SERVER_VERSION}]`);
+  });
+
   it('includes a script to sync repo-local agent skills', async () => {
     const packageJson = JSON.parse(
       await Bun.file(new URL('../package.json', import.meta.url)).text()
@@ -469,6 +481,9 @@ describe('Server exports', () => {
     expect(readme).toContain('cross-client MCP memory system');
     expect(readme).toContain('### Claude Code');
     expect(readme).toContain('### Codex Desktop');
+    expect(readme).toContain('Codex Desktop does not send MCP roots');
+    expect(readme).toContain('project-local `.codex/config.toml`');
+    expect(readme).toContain('env = { GOLDFISH_WORKSPACE = "/absolute/path/to/your/project" }');
     expect(readme).toContain('### OpenCode');
     expect(readme).toContain('### VS Code with GitHub Copilot');
   });
@@ -508,6 +523,17 @@ describe('Server exports', () => {
     expect(standupSkill).toContain('brief');
     expect(standupSkill).toContain('checkpoint');
     expect(standupSkill).not.toContain('docs/plans/');
+  });
+
+  it('keeps recall guidance free of deleted consolidation concepts', async () => {
+    const recallSkill = await Bun.file(new URL('../skills/recall/SKILL.md', import.meta.url)).text();
+
+    expect(recallSkill).toContain('Active brief');
+    expect(recallSkill).toContain('Checkpoints');
+    expect(recallSkill).toContain('Workspace summaries');
+    expect(recallSkill).not.toContain('Consolidated memory');
+    expect(recallSkill).not.toContain('consolidation.needed');
+    expect(recallSkill).not.toContain('/consolidate');
   });
 });
 

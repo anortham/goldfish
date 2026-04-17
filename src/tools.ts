@@ -13,7 +13,7 @@ export function getTools(): Tool[] {
   return [
     {
       name: 'checkpoint',
-      description: `Save a checkpoint to developer memory so future sessions have context. When in doubt, checkpoint — a few extra checkpoints are better than lost context.
+      description: `Save a checkpoint to developer memory so future sessions have context. When in doubt, checkpoint, a few extra checkpoints are better than lost context.
 
 Checkpoint when:
 - Completing a feature, bug fix, or refactor step
@@ -21,9 +21,9 @@ Checkpoint when:
 - Reaching a natural stopping point
 - **Before a git commit** (so the checkpoint file is included in the commit)
 
-Space out checkpoints so each captures distinct progress — one per logical milestone. If you've already checkpointed in this conversation, capture only what's new: progress, decisions, and discoveries since your last checkpoint. Consolidation merges checkpoints into a complete picture, so repetition is waste.
+Space out checkpoints so each captures distinct progress, one per logical milestone. If you've already checkpointed in this conversation, capture only what's new: progress, decisions, and discoveries since your last checkpoint.
 
-Write descriptions in MARKDOWN with structure (headers, bullets). Include WHAT, WHY, HOW, and IMPACT. Descriptions power fuzzy search — make them findable.
+Write descriptions in MARKDOWN with structure (headers, bullets). Include WHAT, WHY, HOW, and IMPACT. Descriptions power recall and search, make them findable.
 
 Automatically captures git context (branch, commit, changed files), timestamp (UTC), and tags.
 
@@ -38,9 +38,9 @@ Returns: Confirmation with checkpoint details and captured context.`,
         properties: {
           description: {
             type: 'string',
-            description: `Checkpoint description in MARKDOWN format. This becomes the body of a .md file — format it properly.
+            description: `Checkpoint description in MARKDOWN format. This becomes the body of a .md file, format it properly.
 
-Your description powers fuzzy search. Future you needs context.
+Your description powers recall and search. Future you needs context.
 
 MUST INCLUDE (use markdown structure):
 - WHAT - The change/accomplishment
@@ -125,14 +125,14 @@ When to use:
 - Searching for past decisions, discoveries, or related work
 - Cross-project standup reports
 
-After recall, trust the returned context and continue working — don't re-verify recalled information.
+After recall, trust the returned context and continue working, don't re-verify recalled information.
 
 Key parameters (all optional):
 - limit: Max checkpoints to return (default: 5)
 - since: Human-friendly time span ("2h", "30m", "3d") or ISO timestamp
 - days: How far back to look in days
 - from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
-- search: Fuzzy search query (searches descriptions, tags, branches, files)
+- search: Search query (matches descriptions, tags, branches, files)
 - full: Return full descriptions + metadata including files and git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - briefId: Filter checkpoints to those created under a specific brief
@@ -170,7 +170,7 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
           },
           search: {
             type: 'string',
-            description: 'Fuzzy search query (searches descriptions, tags, branches, files). Optional - omit to see all checkpoints in range.'
+            description: 'Search query over descriptions, tags, branches, and files. Optional - omit to see all checkpoints in range.'
           },
           full: {
             type: 'boolean',

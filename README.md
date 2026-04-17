@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 7.0.0** -- Subtract sprint: Orama BM25 search, brief-first storage, and the /handoff skill. See CHANGELOG.md for breaking changes.
+**Version 7.0.1** -- Patch release: v7 wording cleanup, typecheck fixes, and Codex Desktop workspace setup guidance. See CHANGELOG.md for details.
 
 ---
 
@@ -68,14 +68,19 @@ Once the plugin is loaded, Goldfish works through manual invocation and agent-dr
 
 Codex shares MCP configuration between the CLI and the IDE extension through `~/.codex/config.toml`, and it also discovers repo-local skills from `.agents/skills`.
 
-Add Goldfish to `~/.codex/config.toml` or a trusted project-scoped `.codex/config.toml`:
+Codex Desktop does not send MCP roots. If you want Goldfish bound to the current repo, the reliable setup is a project-local `.codex/config.toml` in that repo so you can pass `GOLDFISH_WORKSPACE` for that project.
+
+Add Goldfish to a trusted project-local `.codex/config.toml`:
 
 ```toml
 [mcp_servers.goldfish]
 command = "bun"
 args = ["run", "/absolute/path/to/goldfish/src/server.ts"]
 cwd = "/absolute/path/to/your/project"
+env = { GOLDFISH_WORKSPACE = "/absolute/path/to/your/project" }
 ```
+
+You can put Goldfish in `~/.codex/config.toml` too, but that pins `GOLDFISH_WORKSPACE` to one repo. For Codex Desktop across multiple repos, keep the server entry in each project's `.codex/config.toml`.
 
 Goldfish skills in `.agents/skills` are discovered automatically when you launch Codex inside the repository.
 

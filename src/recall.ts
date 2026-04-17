@@ -30,18 +30,39 @@ function normalizeRecallOptions(options: RecallOptions): RecallOptions {
   const days = typeof options.days === 'number' && Number.isFinite(options.days) && options.days > 0
     ? options.days
     : undefined;
+  const workspace = normalizeOptionalString(options.workspace);
+  const since = normalizeOptionalString(options.since);
+  const from = normalizeOptionalString(options.from);
+  const to = normalizeOptionalString(options.to);
+  const search = normalizeOptionalString(options.search);
   const briefId = normalizeOptionalString(options.briefId);
 
-  return {
-    ...options,
-    workspace: normalizeOptionalString(options.workspace),
-    since: normalizeOptionalString(options.since),
-    days,
-    from: normalizeOptionalString(options.from),
-    to: normalizeOptionalString(options.to),
-    search: normalizeOptionalString(options.search),
-    briefId
+  const normalized: RecallOptions = {
+    ...options
   };
+
+  if (workspace !== undefined) normalized.workspace = workspace;
+  else delete normalized.workspace;
+
+  if (since !== undefined) normalized.since = since;
+  else delete normalized.since;
+
+  if (days !== undefined) normalized.days = days;
+  else delete normalized.days;
+
+  if (from !== undefined) normalized.from = from;
+  else delete normalized.from;
+
+  if (to !== undefined) normalized.to = to;
+  else delete normalized.to;
+
+  if (search !== undefined) normalized.search = search;
+  else delete normalized.search;
+
+  if (briefId !== undefined) normalized.briefId = briefId;
+  else delete normalized.briefId;
+
+  return normalized;
 }
 
 /**
@@ -350,9 +371,11 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
 
   // Fetch from all registered projects in parallel.
   // Load without limit so checkpointCount in summaries reflects total matches.
+  const unlimitedOptions: RecallOptions = { ...normalizedOptions };
+  delete unlimitedOptions.limit;
   const projectResults = await Promise.all(
     projects.map(async (project) => {
-      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, { ...normalizedOptions, limit: undefined });
+      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, unlimitedOptions);
       allCheckpoints.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       const presented = allCheckpoints
         .slice(0, globalLimit)
