@@ -4,6 +4,20 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.3] - 2026-04-22
+
+Patch release for the structured checkpoint search fix.
+
+### Fixed
+
+- Search now indexes the raw checkpoint description again, so narrative text on
+  structured checkpoints remains searchable instead of disappearing behind the
+  digest fallback.
+- Restored search hits for `briefId` and legacy `planId` terms by indexing them
+  explicitly, preserving brief-linked recall while keeping the description fix.
+- Awaited Orama `create()`, `insert()`, and `search()` operations and added a
+  deterministic score, timestamp, and ID tie-break for stable result ordering.
+
 ## [7.0.2] - 2026-04-22
 
 Patch release for the reviewed defect sweep.

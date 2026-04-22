@@ -33,8 +33,8 @@ describe('Checkpoint search (Orama BM25)', () => {
     }
   ];
 
-  it('searches across description and tags', () => {
-    const results = searchCheckpoints('auth', checkpoints);
+  it('searches across description and tags', async () => {
+    const results = await searchCheckpoints('auth', checkpoints);
 
     expect(results.length).toBeGreaterThan(0);
     expect(results.some(c =>
@@ -46,30 +46,66 @@ describe('Checkpoint search (Orama BM25)', () => {
     )).toBe(true);
   });
 
-  it('returns checkpoints sorted by relevance score', () => {
-    const results = searchCheckpoints('authentication', checkpoints);
+  it('returns checkpoints sorted by relevance score', async () => {
+    const results = await searchCheckpoints('authentication', checkpoints);
 
     // 'authentication bug' should rank higher than 'OAuth2' for this query
     expect(results[0]!.description).toContain('authentication');
   });
 
-  it('returns empty array for no matches', () => {
-    const results = searchCheckpoints('nonexistent', checkpoints);
+  it('returns empty array for no matches', async () => {
+    const results = await searchCheckpoints('nonexistent', checkpoints);
     expect(results).toEqual([]);
   });
 
-  it('searches partial words via stemming', () => {
-    const results = searchCheckpoints('refactoring', checkpoints);
+  it('searches partial words via stemming', async () => {
+    const results = await searchCheckpoints('refactoring', checkpoints);
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.description).toContain('Refactored');
   });
 
-  it('searches across structured decision fields', () => {
-    const results = searchCheckpoints('cqrs', checkpoints);
+  it('searches across structured decision fields', async () => {
+    const results = await searchCheckpoints('cqrs', checkpoints);
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.decision).toBeDefined();
     expect(results[0]!.decision!.toLowerCase()).toContain('cqrs');
+  });
+
+  it('finds narrative description text on structured checkpoints', async () => {
+    const structured: Checkpoint[] = [
+      {
+        id: 'cp_structured1',
+        timestamp: '2025-10-13T10:00:00.000Z',
+        description: 'Fixed the memory leak in the websocket handler that was causing server crashes',
+        decision: 'Use Redis for session storage',
+        impact: 'Improved scalability'
+      }
+    ]
+
+    const results = await searchCheckpoints('websocket', structured)
+    expect(results.length).toBe(1)
+    expect(results[0]!.id).toBe('cp_structured1')
+  });
+
+  it('breaks ties by timestamp, newest first', async () => {
+    const tied: Checkpoint[] = [
+      {
+        id: 'cp_old',
+        timestamp: '2025-10-13T10:00:00.000Z',
+        description: 'Fixed authentication bug'
+      },
+      {
+        id: 'cp_new',
+        timestamp: '2025-10-13T12:00:00.000Z',
+        description: 'Fixed authentication bug'
+      }
+    ]
+
+    const results = await searchCheckpoints('authentication', tied)
+    expect(results.length).toBe(2)
+    expect(results[0]!.id).toBe('cp_new')
+    expect(results[1]!.id).toBe('cp_old')
   });
 });

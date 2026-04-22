@@ -27,19 +27,19 @@ function checkpoint(id: string, overrides: Partial<Checkpoint> = {}): Checkpoint
 
 describe('searchCheckpoints (BM25 contract)', () => {
   describe('basic lexical matching', () => {
-    it('returns the matching checkpoint for a single-term query', () => {
+    it('returns the matching checkpoint for a single-term query', async () => {
       const corpus = [
         checkpoint('match', { description: 'Implemented OAuth2 login flow' }),
         checkpoint('miss', { description: 'Refactored database connection pooling' })
       ]
 
-      const results = searchCheckpoints('oauth2', corpus)
+      const results = await searchCheckpoints('oauth2', corpus)
 
       expect(results.length).toBeGreaterThan(0)
       expect(results[0]!.id).toBe('match')
     })
 
-    it('returns checkpoints when the search term appears in tags', () => {
+    it('returns checkpoints when the search term appears in tags', async () => {
       const corpus = [
         checkpoint('tagged', {
           description: 'Reworked retry logic for outbound webhooks',
@@ -51,15 +51,51 @@ describe('searchCheckpoints (BM25 contract)', () => {
         })
       ]
 
-      const results = searchCheckpoints('resilience', corpus)
+      const results = await searchCheckpoints('resilience', corpus)
 
       expect(results.length).toBeGreaterThan(0)
       expect(results.some(r => r.id === 'tagged')).toBe(true)
     })
+
+    it('returns checkpoints when the search term appears in briefId', async () => {
+      const corpus = [
+        checkpoint('brief-match', {
+          description: 'Updated ranking heuristics after search bug review',
+          briefId: 'search-phase-1'
+        }),
+        checkpoint('brief-miss', {
+          description: 'Updated ranking heuristics after search bug review',
+          briefId: 'release-phase-1'
+        })
+      ]
+
+      const results = await searchCheckpoints('search-phase-1', corpus)
+
+      expect(results.length).toBeGreaterThan(0)
+      expect(results[0]!.id).toBe('brief-match')
+    })
+
+    it('returns checkpoints when the search term appears in legacy planId', async () => {
+      const corpus = [
+        checkpoint('plan-match', {
+          description: 'Parsed legacy checkpoint metadata during migration',
+          planId: 'legacy-plan-42'
+        }),
+        checkpoint('plan-miss', {
+          description: 'Parsed legacy checkpoint metadata during migration',
+          planId: 'legacy-plan-99'
+        })
+      ]
+
+      const results = await searchCheckpoints('legacy-plan-42', corpus)
+
+      expect(results.length).toBeGreaterThan(0)
+      expect(results[0]!.id).toBe('plan-match')
+    })
   })
 
   describe('stemming', () => {
-    it('matches "tuning" against a checkpoint body containing "tuned"', () => {
+    it('matches "tuning" against a checkpoint body containing "tuned"', async () => {
       const corpus = [
         checkpoint('tuned', {
           description: 'Tuned BM25 ranker boosts after profiling recall'
@@ -69,7 +105,7 @@ describe('searchCheckpoints (BM25 contract)', () => {
         })
       ]
 
-      const results = searchCheckpoints('tuning', corpus)
+      const results = await searchCheckpoints('tuning', corpus)
 
       expect(results.length).toBeGreaterThan(0)
       expect(results[0]!.id).toBe('tuned')
@@ -77,7 +113,7 @@ describe('searchCheckpoints (BM25 contract)', () => {
   })
 
   describe('multi-term scoring', () => {
-    it('prefers checkpoints containing both query terms over checkpoints containing only one', () => {
+    it('prefers checkpoints containing both query terms over checkpoints containing only one', async () => {
       const both = checkpoint('both', {
         description: 'Wrote brief migration guide for the new sprint format'
       })
@@ -88,7 +124,7 @@ describe('searchCheckpoints (BM25 contract)', () => {
         description: 'Ran the database migration on staging without downtime'
       })
 
-      const results = searchCheckpoints('brief migration', [briefOnly, migrationOnly, both])
+      const results = await searchCheckpoints('brief migration', [briefOnly, migrationOnly, both])
 
       expect(results.length).toBeGreaterThan(0)
       expect(results[0]!.id).toBe('both')
@@ -96,7 +132,7 @@ describe('searchCheckpoints (BM25 contract)', () => {
   })
 
   describe('field boosts', () => {
-    it('ranks a description match above the same term appearing only in git.files', () => {
+    it('ranks a description match above the same term appearing only in git.files', async () => {
       const inDescription = checkpoint('in-description', {
         description: 'Reworked the orama wrapper for ranking',
         git: { files: ['src/unrelated.ts'] }
@@ -106,7 +142,7 @@ describe('searchCheckpoints (BM25 contract)', () => {
         git: { files: ['src/orama.ts'] }
       })
 
-      const results = searchCheckpoints('orama', [inFilesOnly, inDescription])
+      const results = await searchCheckpoints('orama', [inFilesOnly, inDescription])
 
       expect(results.length).toBeGreaterThan(0)
       expect(results[0]!.id).toBe('in-description')
@@ -114,32 +150,36 @@ describe('searchCheckpoints (BM25 contract)', () => {
   })
 
   describe('edge cases', () => {
-    it('returns the input array unchanged for an empty query', () => {
+    it('returns the input array unchanged for an empty query', async () => {
       const corpus = [
         checkpoint('a', { description: 'First checkpoint' }),
         checkpoint('b', { description: 'Second checkpoint' })
       ]
 
-      const results = searchCheckpoints('', corpus)
+      const results = await searchCheckpoints('', corpus)
 
       expect(results).toEqual(corpus)
     })
 
-    it('returns an empty array for an empty corpus', () => {
-      const results = searchCheckpoints('anything goes here', [])
+    it('returns an empty array for an empty corpus', async () => {
+      const results = await searchCheckpoints('anything goes here', [])
 
       expect(results).toEqual([])
     })
 
-    it('does not crash when the query contains special characters', () => {
+    it('does not crash when the query contains special characters', async () => {
       const corpus = [
         checkpoint('a', { description: 'Refactored helper function called foo' }),
         checkpoint('b', { description: 'Unrelated note about deployments' })
       ]
 
-      expect(() => searchCheckpoints('foo()', corpus)).not.toThrow()
-      expect(() => searchCheckpoints('what?!', corpus)).not.toThrow()
-      expect(() => searchCheckpoints('a/b\\c', corpus)).not.toThrow()
+      const r1 = await searchCheckpoints('foo()', corpus)
+      const r2 = await searchCheckpoints('what?!', corpus)
+      const r3 = await searchCheckpoints('a/b\\c', corpus)
+
+      expect(r1).toBeDefined()
+      expect(r2).toBeDefined()
+      expect(r3).toBeDefined()
     })
   })
 
@@ -206,8 +246,8 @@ describe('searchCheckpoints (BM25 contract)', () => {
     ]
 
     for (const { query, expectedId } of queries) {
-      it(`returns at least one result for "${query}" and surfaces the relevant checkpoint`, () => {
-        const results = searchCheckpoints(query, corpus)
+      it(`returns at least one result for "${query}" and surfaces the relevant checkpoint`, async () => {
+        const results = await searchCheckpoints(query, corpus)
 
         expect(results.length).toBeGreaterThan(0)
         expect(results.some(r => r.id === expectedId)).toBe(true)

@@ -1,6 +1,6 @@
 import { create, insert, search } from '@orama/orama'
 import type { Checkpoint } from './types'
-import { buildRetrievalDigest } from './digests'
+
 
 /**
  * Search checkpoints using BM25 ranking (Orama).
@@ -18,6 +18,7 @@ import { buildRetrievalDigest } from './digests'
 const SEARCH_SCHEMA = {
   id: 'string',
   description: 'string',
+  brief: 'string',
   decision: 'string',
   impact: 'string',
   context: 'string',
@@ -33,6 +34,7 @@ const SEARCH_SCHEMA = {
 
 const SEARCH_BOOSTS = {
   description: 2.0,
+  brief: 1.0,
   decision: 1.5,
   impact: 1.3,
   context: 1.1,
@@ -57,6 +59,7 @@ function joinList(values?: string[]): string {
 interface SearchDocument {
   id: string
   description: string
+  brief: string
   decision: string
   impact: string
   context: string
@@ -73,7 +76,8 @@ interface SearchDocument {
 function toSearchDocument(checkpoint: Checkpoint): SearchDocument {
   return {
     id: checkpoint.id,
-    description: buildRetrievalDigest(checkpoint),
+    description: checkpoint.description,
+    brief: checkpoint.briefId ?? checkpoint.planId ?? '',
     decision: checkpoint.decision ?? '',
     impact: checkpoint.impact ?? '',
     context: checkpoint.context ?? '',
@@ -88,12 +92,12 @@ function toSearchDocument(checkpoint: Checkpoint): SearchDocument {
   }
 }
 
-export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Checkpoint[] {
+export async function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Promise<Checkpoint[]> {
   if (!query || checkpoints.length === 0) {
     return checkpoints
   }
 
-  const db = create({
+  const db = await create({
     schema: SEARCH_SCHEMA,
     components: {
       tokenizer: { language: 'english', stemming: true }
@@ -103,8 +107,7 @@ export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Che
   const checkpointsById = new Map<string, Checkpoint>()
   for (const checkpoint of checkpoints) {
     checkpointsById.set(checkpoint.id, checkpoint)
-    // No async hooks are configured, so insert returns a string synchronously.
-    insert(db, toSearchDocument(checkpoint))
+    await insert(db, toSearchDocument(checkpoint))
   }
 
   // Two-pass strategy: prefer documents that contain all query terms within
@@ -118,32 +121,50 @@ export function searchCheckpoints(query: string, checkpoints: Checkpoint[]): Che
   // docs. The two-pass fallback keeps multi-term matches sharp without
   // losing partial-match recall on conversational queries where signal is
   // spread across description / decision / impact / tags.
-  const runSearch = (threshold: 0 | 1) =>
-    search(db, {
+  const runSearch = async (threshold: 0 | 1) => {
+    const results = await search(db, {
       term: query,
       properties: '*',
       boost: SEARCH_BOOSTS,
       threshold,
       limit: checkpoints.length
-    }) as { hits: Array<{ document: SearchDocument }> }
+    })
+    return results.hits as Array<{ id: string; score: number; document: SearchDocument }>
+  }
 
-  let results = runSearch(0)
-  if (results.hits.length === 0) {
-    results = runSearch(1)
+  let hits = await runSearch(0)
+  if (hits.length === 0) {
+    hits = await runSearch(1)
   }
 
   const ranked: Checkpoint[] = []
   const seen = new Set<string>()
+  const hitScores = new Map<string, number>()
 
-  for (const hit of results.hits) {
+  for (const hit of hits) {
     const checkpoint = checkpointsById.get(hit.document.id)
     if (!checkpoint || seen.has(checkpoint.id)) {
       continue
     }
 
     seen.add(checkpoint.id)
+    hitScores.set(checkpoint.id, hit.score)
     ranked.push(checkpoint)
   }
+
+  ranked.sort((a, b) => {
+    const scoreA = hitScores.get(a.id) ?? 0
+    const scoreB = hitScores.get(b.id) ?? 0
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA
+    }
+    const timeA = new Date(a.timestamp).getTime()
+    const timeB = new Date(b.timestamp).getTime()
+    if (timeB !== timeA) {
+      return timeB - timeA
+    }
+    return a.id.localeCompare(b.id)
+  })
 
   return ranked
 }

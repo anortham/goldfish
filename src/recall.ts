@@ -256,7 +256,7 @@ async function recallFromWorkspace(
   }
 
   if (options.search) {
-    checkpoints = searchCheckpoints(options.search, checkpoints);
+    checkpoints = await searchCheckpoints(options.search, checkpoints);
   } else {
     checkpoints = checkpoints.sort((a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -340,7 +340,7 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
       }
     }
 
-    const ranked = searchCheckpoints(normalizedOptions.search, rankedCandidates);
+    const ranked = await searchCheckpoints(normalizedOptions.search, rankedCandidates);
     const workspaceSummaryMap = new Map<string, WorkspaceSummary>();
 
     for (const checkpoint of ranked) {
