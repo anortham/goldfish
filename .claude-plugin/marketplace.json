@@ -11,7 +11,7 @@
       "name": "goldfish",
       "source": "./",
       "description": "Cross-client MCP memory with checkpoints, recall, briefs, and standups, stored as human-readable markdown",
-      "version": "7.0.1",
+      "version": "7.0.2",
       "category": "productivity"
     }
   ]

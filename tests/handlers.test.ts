@@ -3,7 +3,7 @@ import { handleCheckpoint } from '../src/handlers/checkpoint';
 import { handleRecall } from '../src/handlers/recall';
 import { handleBrief } from '../src/handlers/brief';
 import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
-import { saveBrief } from '../src/briefs';
+import { getBrief, saveBrief } from '../src/briefs';
 import { ensureMemoriesDir } from '../src/workspace';
 import { rm, mkdtemp, stat } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -219,6 +219,15 @@ describe('Readable markdown responses', () => {
       await expect(
         handleCheckpoint({ workspace: TEST_DIR } as any)
       ).rejects.toThrow('Description is required');
+    });
+
+    it('rejects workspace="all" for checkpoint writes', async () => {
+      await expect(
+        handleCheckpoint({
+          description: 'Nope',
+          workspace: 'all'
+        })
+      ).rejects.toThrow(/workspace.*all.*checkpoint/i);
     });
 
     it('handles tags passed as JSON string', async () => {
@@ -692,6 +701,30 @@ describe('Readable markdown responses', () => {
         expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief saved:/);
         // Plan id should be derived from title
         expect(text).toContain('tagged-plan');
+      });
+
+      it('coerces tags passed as JSON string', async () => {
+        await handleBrief({
+          action: 'save',
+          title: 'JSON Tagged Plan',
+          content: 'Content with tags',
+          workspace: TEST_DIR,
+          tags: '["milestone", "auth"]' as any
+        });
+
+        const brief = await getBrief(TEST_DIR, 'json-tagged-plan');
+        expect(brief?.tags).toEqual(['milestone', 'auth']);
+      });
+
+      it('rejects workspace="all" for brief writes', async () => {
+        await expect(
+          handleBrief({
+            action: 'save',
+            title: 'Bad Workspace',
+            content: 'Nope',
+            workspace: 'all'
+          })
+        ).rejects.toThrow(/workspace.*all.*brief/i);
       });
 
       it('forwards custom id to saveBrief', async () => {

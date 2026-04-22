@@ -11,8 +11,20 @@ import {
   updateBrief
 } from '../briefs.js';
 import { getFishEmoji } from '../emoji.js';
-import { resolveWorkspace } from '../workspace.js';
+import { assertProjectWorkspace, resolveWorkspace } from '../workspace.js';
 import type { Brief, BriefArgs } from '../types.js';
+
+function coerceArray(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  return undefined;
+}
 
 function formatBriefFull(brief: Brief): string {
   const lines: string[] = [];
@@ -53,6 +65,7 @@ async function resolveId(args: BriefArgs, workspace: string): Promise<string | n
 
 export async function handleBrief(args: BriefArgs) {
   const { action, workspace: wsArg } = args;
+  assertProjectWorkspace(wsArg, 'brief writes');
   const workspace = resolveWorkspace(wsArg);
   const fish = getFishEmoji();
 
@@ -60,6 +73,7 @@ export async function handleBrief(args: BriefArgs) {
     case 'save': {
       const { title, content, activate, id, tags, status } = args;
       const briefId = id || args.briefId || args.brief_id;
+      const coercedTags = coerceArray(tags);
       const shouldActivate = activate !== false;
       if (!title || !content) {
         throw new Error('Title and content are required for save action');
@@ -72,7 +86,7 @@ export async function handleBrief(args: BriefArgs) {
         activate: shouldActivate,
         ...(status && { status: status as Brief['status'] }),
         ...(briefId && { id: briefId }),
-        ...(tags && { tags })
+        ...(coercedTags && { tags: coercedTags })
       });
 
       const statusText = shouldActivate && brief.status === 'active' ? ' (active)' : '';
@@ -120,15 +134,21 @@ export async function handleBrief(args: BriefArgs) {
       if (!id) throw new Error('No active brief found. Provide a brief ID or activate a brief first.');
 
       let { updates } = args;
+      const coercedTags = coerceArray(args.tags);
       if (!updates) {
         const topLevel: Record<string, any> = {};
         if (args.title) topLevel.title = args.title;
         if (args.content) topLevel.content = args.content;
         if (args.status) topLevel.status = args.status;
-        if (args.tags) topLevel.tags = args.tags;
+        if (coercedTags) topLevel.tags = coercedTags;
 
         if (Object.keys(topLevel).length > 0) {
           updates = topLevel;
+        }
+      } else if (typeof updates === 'object' && updates !== null) {
+        const updateTags = coerceArray((updates as Record<string, unknown>).tags);
+        if (updateTags) {
+          updates = { ...updates, tags: updateTags };
         }
       }
 

@@ -139,7 +139,7 @@ describe('Project-level .memories/ storage', () => {
   });
 
   describe('ensureMemoriesDir', () => {
-    it('creates .memories/, .memories/briefs/, and .memories/plans/ directories', async () => {
+    it('creates .memories/ and .memories/briefs/ directories without creating legacy plans/', async () => {
       const tmpDir = makeTmpDir();
       // tmpDir itself doesn't exist yet — ensureMemoriesDir should create it recursively
       await ensureMemoriesDir(tmpDir);
@@ -150,8 +150,7 @@ describe('Project-level .memories/ storage', () => {
       const briefsStat = await stat(join(tmpDir, '.memories', 'briefs'));
       expect(briefsStat.isDirectory()).toBe(true);
 
-      const plansStat = await stat(join(tmpDir, '.memories', 'plans'));
-      expect(plansStat.isDirectory()).toBe(true);
+      await expect(stat(join(tmpDir, '.memories', 'plans'))).rejects.toThrow();
     });
 
     it('is idempotent — calling twice does not throw', async () => {
@@ -176,8 +175,7 @@ describe('Project-level .memories/ storage', () => {
       const briefsStat = await stat(join(tmpDir, '.memories', 'briefs'));
       expect(briefsStat.isDirectory()).toBe(true);
 
-      const plansStat = await stat(join(tmpDir, '.memories', 'plans'));
-      expect(plansStat.isDirectory()).toBe(true);
+      await expect(stat(join(tmpDir, '.memories', 'plans'))).rejects.toThrow();
     });
   });
 });

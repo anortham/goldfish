@@ -428,6 +428,36 @@ describe('Cross-workspace functionality', () => {
     expect(result.checkpoints[0]!.id).toBe(strongMatch.id);
   });
 
+  it('search summaries only include workspaces with matching checkpoints', async () => {
+    await saveCheckpoint({
+      description: 'Authentication timeout regression in the login flow',
+      tags: ['auth'],
+      workspace: projectA
+    });
+
+    await saveCheckpoint({
+      description: 'Tweaked README badge layout',
+      tags: ['docs'],
+      workspace: projectB
+    });
+
+    const result = await recall({
+      workspace: 'all',
+      days: 1,
+      search: 'authentication timeout',
+      limit: 5,
+      _registryDir: registryDir
+    });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.workspaces).toEqual([
+      expect.objectContaining({
+        path: projectA,
+        checkpointCount: 1
+      })
+    ]);
+  });
+
   it('checkpointCount reflects total matching checkpoints, not the limited return set', async () => {
     // Add 2 more checkpoints to project A (3 total)
     await saveCheckpoint({ description: 'Second A', workspace: projectA });

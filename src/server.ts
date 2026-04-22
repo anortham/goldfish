@@ -26,7 +26,7 @@ import type { CheckpointArgs, RecallArgs, BriefArgs } from './types.js';
 import { getLogger } from './logger.js';
 import { getGoldfishHomeDir, resolveWorkspace } from './workspace.js';
 
-export const SERVER_VERSION = '7.0.1';
+export const SERVER_VERSION = '7.0.2';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 

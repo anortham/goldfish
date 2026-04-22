@@ -5,7 +5,7 @@
 import { saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
 import type { CheckpointArgs, CheckpointInput } from '../types.js';
-import { resolveWorkspace } from '../workspace.js';
+import { assertProjectWorkspace, resolveWorkspace } from '../workspace.js';
 
 /**
  * Coerce a value that may be a JSON string into an array.
@@ -49,6 +49,7 @@ export async function handleCheckpoint(args: CheckpointArgs) {
     throw new Error('Description is required');
   }
 
+  assertProjectWorkspace(workspace, 'checkpoint writes');
   const ws = resolveWorkspace(workspace);
 
   if (confidence !== undefined) {

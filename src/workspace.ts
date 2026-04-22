@@ -106,6 +106,12 @@ export function getWorkspaceFromRoots(roots?: WorkspaceRoot[] | null): string | 
   return undefined;
 }
 
+export function assertProjectWorkspace(workspace: string | undefined, toolName: string): void {
+  if (workspace === 'all') {
+    throw new Error(`workspace="all" is only valid for recall, not ${toolName}`);
+  }
+}
+
 // ─── Project-level .memories/ storage ────────────────────────────────
 
 /**
@@ -140,15 +146,11 @@ export function getGoldfishHomeDir(): string {
 }
 
 /**
- * Ensure .memories/, .memories/briefs/, and .memories/plans/ directories exist for a project.
+ * Ensure .memories/ and .memories/briefs/ directories exist for a project.
  * Falls back to resolveWorkspace() if no projectPath is provided.
  */
 export async function ensureMemoriesDir(projectPath?: string): Promise<void> {
   const briefsDir = getBriefsDir(projectPath);
-  const plansDir = getPlansDir(projectPath);
 
-  await Promise.all([
-    mkdir(briefsDir, { recursive: true }),
-    mkdir(plansDir, { recursive: true })
-  ]);
+  await mkdir(briefsDir, { recursive: true });
 }

@@ -314,8 +314,11 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
       })
     );
 
-    const workspaceSummaries: WorkspaceSummary[] = [];
-    const syntheticToCheckpoint = new Map<string, { checkpoint: Checkpoint; workspace: string }>();
+    const syntheticToCheckpoint = new Map<string, {
+      checkpoint: Checkpoint;
+      workspace: string;
+      path: string;
+    }>();
     const rankedCandidates: Checkpoint[] = [];
 
     for (const { project, checkpoints } of projectResults) {
@@ -323,24 +326,12 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
         continue;
       }
 
-      const lastActivity = checkpoints
-        .map(c => c.timestamp)
-        .filter(Boolean)
-        .sort()
-        .pop();
-
-      workspaceSummaries.push({
-        name: project.name,
-        path: project.path,
-        checkpointCount: checkpoints.length,
-        ...(lastActivity ? { lastActivity } : {})
-      });
-
       for (const checkpoint of checkpoints) {
         const syntheticId = `${project.path}::${checkpoint.id}`;
         syntheticToCheckpoint.set(syntheticId, {
           checkpoint,
-          workspace: project.name
+          workspace: project.name,
+          path: project.path
         });
         rankedCandidates.push({
           ...checkpoint,
@@ -350,6 +341,33 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
     }
 
     const ranked = searchCheckpoints(normalizedOptions.search, rankedCandidates);
+    const workspaceSummaryMap = new Map<string, WorkspaceSummary>();
+
+    for (const checkpoint of ranked) {
+      const original = syntheticToCheckpoint.get(checkpoint.id);
+      if (!original) {
+        continue;
+      }
+
+      const existing = workspaceSummaryMap.get(original.path);
+      if (existing) {
+        existing.checkpointCount += 1;
+        if (!existing.lastActivity || original.checkpoint.timestamp > existing.lastActivity) {
+          existing.lastActivity = original.checkpoint.timestamp;
+        }
+        continue;
+      }
+
+      workspaceSummaryMap.set(original.path, {
+        name: original.workspace,
+        path: original.path,
+        checkpointCount: 1,
+        lastActivity: original.checkpoint.timestamp
+      });
+    }
+
+    const workspaceSummaries = Array.from(workspaceSummaryMap.values())
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     return {
       checkpoints: ranked

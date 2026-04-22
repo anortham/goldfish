@@ -4,6 +4,36 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.2] - 2026-04-22
+
+Patch release for the reviewed defect sweep.
+
+### Fixed
+
+- Prevented duplicate checkpoint IDs when two saves collide on timestamp and
+  description. Collision handling now suffixes the persisted checkpoint ID as
+  well as the filename, so search recall no longer trips Orama's duplicate-doc
+  guard.
+- Awaited cross-project registration before `saveCheckpoint()` returns, so an
+  immediate `recall({ workspace: "all" })` sees the newly written workspace.
+- Hardened legacy JSON checkpoint reads. Files missing an `id` or carrying an
+  invalid timestamp are now rejected and skipped instead of surfacing garbage
+  checkpoint entries.
+- Fixed cross-workspace search summaries so `workspaces[]` includes only
+  matching workspaces and `checkpointCount` reflects matched hits instead of the
+  pre-search candidate pool.
+- Coerced brief `tags` from MCP JSON-string inputs on save and update, matching
+  the checkpoint handler behavior.
+- Rejected `workspace: "all"` for write-oriented `checkpoint` and `brief`
+  operations, closing the footgun that could create `.memories/` under a literal
+  `./all/` path.
+
+### Changed
+
+- `ensureMemoriesDir()` no longer creates the dead `.memories/plans/`
+  directory during normal setup. Legacy reads from `.memories/plans/` remain
+  intact.
+
 ## [7.0.1] - 2026-04-17
 
 Patch release to clean up the v7 surface after the subtract sprint landed.

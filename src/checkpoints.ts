@@ -69,12 +69,15 @@ export function getCheckpointFilename(checkpoint: Checkpoint): string {
   return `${hhmmss}_${hash4}.md`;
 }
 
-async function getAvailableCheckpointPath(dateDir: string, checkpoint: Checkpoint): Promise<string> {
+async function getAvailableCheckpointPath(
+  dateDir: string,
+  checkpoint: Checkpoint
+): Promise<{ filePath: string; suffix: number }> {
   const baseFilename = getCheckpointFilename(checkpoint);
   const existingFiles = new Set(await readdir(dateDir));
 
   if (!existingFiles.has(baseFilename)) {
-    return join(dateDir, baseFilename);
+    return { filePath: join(dateDir, baseFilename), suffix: 0 };
   }
 
   let suffix = 1;
@@ -85,7 +88,10 @@ async function getAvailableCheckpointPath(dateDir: string, checkpoint: Checkpoin
     candidateFilename = baseFilename.replace(/\.md$/, `_${suffix}.md`);
   }
 
-  return join(dateDir, candidateFilename);
+  return {
+    filePath: join(dateDir, candidateFilename),
+    suffix
+  };
 }
 
 /**
@@ -335,7 +341,11 @@ export function parseCheckpointFile(content: string): Checkpoint {
 export function parseJsonCheckpoint(content: string): Checkpoint {
   const raw = JSON.parse(content) as Record<string, unknown>;
 
-  const timestamp = normalizeTimestamp(raw.timestamp);
+  if (raw.id === undefined || raw.id === null || String(raw.id).trim() === '') {
+    throw new Error('Invalid checkpoint file: missing id');
+  }
+
+  const timestamp = parseRequiredCheckpointTimestamp(raw.timestamp);
 
   const checkpoint: Checkpoint = {
     id: String(raw.id),
@@ -353,8 +363,8 @@ export function parseJsonCheckpoint(content: string): Checkpoint {
     checkpoint.planId = affinityId;
   }
 
-  const tags = raw.tags as string[] | undefined;
-  if (tags && tags.length > 0) checkpoint.tags = tags;
+  const tags = normalizeStringArray(raw.tags);
+  if (tags) checkpoint.tags = tags;
 
   const rawGit = raw.git as Record<string, unknown> | undefined;
   const git = rawGit ? normalizeGit(rawGit) : undefined;
@@ -432,7 +442,10 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
 
   // Use file lock on the date directory to prevent name collisions
   await withLock(dateDir, async () => {
-    const filePath = await getAvailableCheckpointPath(dateDir, checkpoint);
+    const { filePath, suffix } = await getAvailableCheckpointPath(dateDir, checkpoint);
+    if (suffix > 0) {
+      checkpoint.id = `${checkpoint.id}_${suffix}`;
+    }
 
     // Atomic write (write to temp file, then rename)
     const tempPath = `${filePath}.tmp.${Date.now()}`;
@@ -450,10 +463,13 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
     }
   });
 
-  // Auto-register project in cross-project registry (fire-and-forget)
-  registerProject(projectPath).catch(() => {
+  // Auto-register project in cross-project registry before returning so
+  // immediate cross-workspace recall can see the saved checkpoint.
+  try {
+    await registerProject(projectPath);
+  } catch {
     // Silently ignore registration failures — this is best-effort
-  });
+  }
 
   return checkpoint;
 }

@@ -878,6 +878,25 @@ describe('parseJsonCheckpoint', () => {
     expect((checkpoint.git as any)?.dirty).toBeUndefined();
   });
 
+  it('throws when JSON checkpoint is missing id', () => {
+    const content = JSON.stringify({
+      timestamp: 1763700000,
+      description: 'Missing ID'
+    });
+
+    expect(() => parseJsonCheckpoint(content)).toThrow(/missing id/i);
+  });
+
+  it('throws when JSON checkpoint timestamp is invalid', () => {
+    const content = JSON.stringify({
+      id: 'checkpoint_badtime',
+      timestamp: 'not-a-date',
+      description: 'Bad timestamp'
+    });
+
+    expect(() => parseJsonCheckpoint(content)).toThrow(/invalid timestamp/i);
+  });
+
   it('throws on invalid JSON', () => {
     expect(() => parseJsonCheckpoint('not json')).toThrow();
   });
@@ -916,6 +935,31 @@ Current MD checkpoint
     const descriptions = checkpoints.map(c => c.description);
     expect(descriptions).toContain('Old JSON checkpoint');
     expect(descriptions).toContain('Current MD checkpoint');
+  });
+
+  it('skips invalid legacy JSON checkpoint files', async () => {
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dateDir = join(memoriesDir, '2025-11-20');
+    await mkdir(dateDir, { recursive: true });
+
+    await writeFile(join(dateDir, '120000_bad.json'), JSON.stringify({
+      timestamp: 'not-a-date',
+      description: 'Broken legacy checkpoint'
+    }), 'utf-8');
+
+    const mdContent = `---
+id: checkpoint_md000001
+timestamp: "2025-11-20T15:00:00.000Z"
+---
+
+Current MD checkpoint
+`;
+    await writeFile(join(dateDir, '150000_md00.md'), mdContent, 'utf-8');
+
+    const checkpoints = await getCheckpointsForDay(tempDir, '2025-11-20');
+
+    expect(checkpoints).toHaveLength(1);
+    expect(checkpoints[0]!.description).toBe('Current MD checkpoint');
   });
 });
 
@@ -1125,7 +1169,7 @@ describe('saveCheckpoint', () => {
     expect(files.length).toBe(10);
   });
 
-  it('does not overwrite an existing checkpoint file when the base filename collides', async () => {
+  it('assigns a unique checkpoint id when the base filename collides', async () => {
     const frozenTimestamp = '2026-03-12T10:00:00.000Z';
     const description = 'Collision-safe checkpoint save';
     const checkpointId = generateCheckpointId(frozenTimestamp, description);
@@ -1150,7 +1194,8 @@ describe('saveCheckpoint', () => {
     const baseContent = await readFile(join(dateDir, baseFilename), 'utf-8');
     const newFile = files.find(file => file !== baseFilename);
 
-    expect(checkpoint.id).toBe(checkpointId);
+    expect(checkpoint.id).not.toBe(checkpointId);
+    expect(checkpoint.id).toMatch(/^checkpoint_[0-9a-f]{8}_\d+$/);
     expect(files).toHaveLength(2);
     expect(baseContent).toBe('existing checkpoint content');
     expect(newFile).toMatch(/^100000_[0-9a-f]{4}_\d+\.md$/);
@@ -1495,15 +1540,12 @@ describe('getAllCheckpoints', () => {
 // ─── Auto-registration ──────────────────────────────────────────────
 
 describe('Auto-registration', () => {
-  it('registers project in registry after saving checkpoint', async () => {
+  it('registers project in registry before saveCheckpoint returns', async () => {
     // Save a checkpoint to our temp directory
     await saveCheckpoint({
       description: 'Auto-register test',
       workspace: tempDir
     });
-
-    // Give the fire-and-forget registration time to complete
-    await new Promise(resolve => setTimeout(resolve, 50));
 
     // Our test dir should be registered
     const projects = await listRegisteredProjects();
