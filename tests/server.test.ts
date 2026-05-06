@@ -281,6 +281,19 @@ describe('Tool descriptions', () => {
     expect(briefTool!.description).toContain('brief');
   });
 
+  it('documents the brief delete action and id requirement', async () => {
+    const { getTools } = await import('../src/server');
+
+    const tools = getTools();
+    const briefTool = tools.find(t => t.name === 'brief')!;
+    const props = briefTool.inputSchema.properties as Record<string, any>;
+
+    expect(props.action.enum).toContain('delete');
+    expect(props.id.description).toContain('delete');
+    expect(briefTool.description).toContain('- delete:');
+    expect(briefTool.description).toContain('requires an id');
+  });
+
 });
 
 describe('Server instructions', () => {

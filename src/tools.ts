@@ -209,6 +209,7 @@ Actions:
 - activate: Set as active brief (shows in recall). Only ONE brief can be active per workspace.
 - update: Update brief content or status. Pass fields in an updates object, or directly as top-level parameters (title, content, status, tags). Falls back to the active brief if no id provided.
 - complete: Mark a brief as done (sets status to 'completed'). Falls back to the active brief if no id provided.
+- delete: Delete a brief; requires an id and has no active-brief fallback.
 
 IMPORTANT: Only ONE brief can be active per workspace. Saving an active brief makes it active by default, and activate: false preserves the opt-out. Completed or archived saves do not replace the current active brief. Briefs are saved to {project}/.memories/briefs/ as markdown files with YAML frontmatter.
 
@@ -218,12 +219,12 @@ Returns: Brief details, status updates, or list of briefs.`,
         properties: {
           action: {
             type: 'string',
-            enum: ['save', 'get', 'list', 'activate', 'update', 'complete'],
+            enum: ['save', 'get', 'list', 'activate', 'update', 'complete', 'delete'],
             description: 'Action to perform'
           },
           id: {
             type: 'string',
-            description: 'Brief ID (auto-generated from title if not provided). Alias: briefId'
+            description: 'Brief ID (auto-generated from title if not provided). Required for activate/delete. Alias: briefId'
           },
           briefId: {
             type: 'string',

@@ -8,7 +8,8 @@ import {
   getActiveBrief,
   listBriefs,
   setActiveBrief,
-  updateBrief
+  updateBrief,
+  deleteBrief
 } from '../briefs.js';
 import { getFishEmoji } from '../emoji.js';
 import { assertProjectWorkspace, resolveWorkspace } from '../workspace.js';
@@ -164,6 +165,14 @@ export async function handleBrief(args: BriefArgs) {
 
       await updateBrief(workspace, id, { status: 'completed' });
       return textResponse(`${fish} Brief completed: ${id}`);
+    }
+
+    case 'delete': {
+      const id = args.id || args.briefId || args.brief_id;
+      if (!id) throw new Error('Brief ID is required for delete');
+
+      await deleteBrief(workspace, id);
+      return textResponse(`${fish} Brief deleted: ${id}`);
     }
 
     default:

@@ -1060,6 +1060,109 @@ describe('Readable markdown responses', () => {
         expect(text).toContain('Brief completed: active-complete-test');
       });
     });
+
+    describe('delete action', () => {
+      it('returns one-liner confirmation', async () => {
+        await saveBrief({
+          id: 'delete-test',
+          title: 'Delete Test',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        const result = await handleBrief({
+          action: 'delete',
+          id: 'delete-test',
+          workspace: TEST_DIR
+        });
+
+        const text = result.content[0]!.text;
+        expect(text).toMatch(/[🐠🐟🐡🐋🐳🦈] Brief deleted: delete-test/);
+      });
+
+      it('removes the brief from storage', async () => {
+        await saveBrief({
+          id: 'remove-test',
+          title: 'Remove Test',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        await handleBrief({
+          action: 'delete',
+          id: 'remove-test',
+          workspace: TEST_DIR
+        });
+
+        const brief = await getBrief(TEST_DIR, 'remove-test');
+        expect(brief).toBeNull();
+      });
+
+      it('clears active marker when deleting the active brief', async () => {
+        await saveBrief({
+          id: 'active-del',
+          title: 'Active Delete',
+          content: 'Content',
+          workspace: TEST_DIR,
+          activate: true
+        });
+
+        await handleBrief({
+          action: 'delete',
+          id: 'active-del',
+          workspace: TEST_DIR
+        });
+
+        const { getActiveBrief } = await import('../src/briefs');
+        const active = await getActiveBrief(TEST_DIR);
+        expect(active).toBeNull();
+      });
+
+      it('does not affect other briefs when deleting one', async () => {
+        await saveBrief({
+          id: 'keep-me',
+          title: 'Keep Me',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        await saveBrief({
+          id: 'delete-me',
+          title: 'Delete Me',
+          content: 'Content',
+          workspace: TEST_DIR
+        });
+
+        await handleBrief({
+          action: 'delete',
+          id: 'delete-me',
+          workspace: TEST_DIR
+        });
+
+        const kept = await getBrief(TEST_DIR, 'keep-me');
+        expect(kept).toBeDefined();
+        expect(kept!.title).toBe('Keep Me');
+      });
+
+      it('throws when no id provided and no active brief', async () => {
+        await expect(
+          handleBrief({
+            action: 'delete',
+            workspace: TEST_DIR
+          })
+        ).rejects.toThrow('Brief ID is required for delete');
+      });
+
+      it('throws when brief does not exist', async () => {
+        await expect(
+          handleBrief({
+            action: 'delete',
+            id: 'nonexistent-delete',
+            workspace: TEST_DIR
+          })
+        ).rejects.toThrow(/does not exist/i);
+      });
+    });
   });
 });
 

@@ -4,6 +4,15 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.4] - 2026-05-05
+
+Patch release for the brief deletion MCP surface.
+
+### Fixed
+
+- Exposed `delete` as a documented `brief` action in the MCP tool schema, with
+  handler coverage and guidance that deletion requires an explicit brief ID.
+
 ## [7.0.3] - 2026-04-22
 
 Patch release for the structured checkpoint search fix.
