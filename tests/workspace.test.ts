@@ -2,6 +2,8 @@ import { describe, it, expect, afterEach } from 'bun:test';
 import {
   normalizeWorkspace,
   resolveWorkspace,
+  resolveWorkspaceWithSource,
+  getUnsafeCwdWorkspaceReason,
   getMemoriesDir,
   getBriefsDir,
   getPlansDir,
@@ -253,6 +255,103 @@ describe('resolveWorkspace', () => {
       ],
       cwd: '/fallback/cwd'
     })).toBe('/fallback/cwd');
+  });
+});
+
+describe('resolveWorkspaceWithSource', () => {
+  const originalEnv = process.env.GOLDFISH_WORKSPACE;
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.GOLDFISH_WORKSPACE;
+    else process.env.GOLDFISH_WORKSPACE = originalEnv;
+  });
+
+  it('tags explicit paths as source=explicit', () => {
+    process.env.GOLDFISH_WORKSPACE = '/env/path';
+    expect(resolveWorkspaceWithSource('/explicit/path')).toEqual({
+      path: '/explicit/path',
+      source: 'explicit'
+    });
+  });
+
+  it('tags GOLDFISH_WORKSPACE values as source=env', () => {
+    process.env.GOLDFISH_WORKSPACE = '/env/path';
+    expect(resolveWorkspaceWithSource()).toEqual({
+      path: '/env/path',
+      source: 'env'
+    });
+  });
+
+  it('tags roots-derived paths as source=roots', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    expect(resolveWorkspaceWithSource(undefined, {
+      roots: [{ uri: pathToFileURL('/roots/project').href }],
+      cwd: '/fallback/cwd'
+    })).toEqual({
+      path: '/roots/project',
+      source: 'roots'
+    });
+  });
+
+  it('tags cwd fallback as source=cwd', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    expect(resolveWorkspaceWithSource(undefined, {
+      cwd: '/fallback/cwd'
+    })).toEqual({
+      path: '/fallback/cwd',
+      source: 'cwd'
+    });
+  });
+
+  it('tags cwd fallback when roots are empty/invalid', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    expect(resolveWorkspaceWithSource(undefined, {
+      roots: [{ uri: 'notaurl' }],
+      cwd: '/fallback/cwd'
+    })).toEqual({
+      path: '/fallback/cwd',
+      source: 'cwd'
+    });
+  });
+
+  it('treats "current" the same as undefined for source tagging', () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    expect(resolveWorkspaceWithSource('current', {
+      roots: [{ uri: pathToFileURL('/roots/project').href }],
+      cwd: '/fallback/cwd'
+    })).toEqual({
+      path: '/roots/project',
+      source: 'roots'
+    });
+  });
+});
+
+describe('getUnsafeCwdWorkspaceReason', () => {
+  it('rejects filesystem roots, home directories, and Windows system locations', () => {
+    expect(getUnsafeCwdWorkspaceReason('/', { HOME: '/Users/murphy' })).toBe('filesystem root');
+    expect(getUnsafeCwdWorkspaceReason('C:\\', {})).toBe('filesystem root');
+    expect(getUnsafeCwdWorkspaceReason('\\\\server\\share', {})).toBe('filesystem root');
+
+    expect(getUnsafeCwdWorkspaceReason('~', {})).toBe('home directory');
+    expect(getUnsafeCwdWorkspaceReason('~/', {})).toBe('home directory');
+    expect(getUnsafeCwdWorkspaceReason('/Users/murphy', { HOME: '/Users/murphy' })).toBe('home directory');
+    expect(getUnsafeCwdWorkspaceReason('/Users/murphy/', { HOME: '/Users/murphy' })).toBe('home directory');
+    expect(getUnsafeCwdWorkspaceReason('C:\\Users\\murphy', {})).toBe('home directory');
+    expect(getUnsafeCwdWorkspaceReason('C:/Users/murphy/', {})).toBe('home directory');
+
+    expect(getUnsafeCwdWorkspaceReason('C:\\Windows', {})).toBe('Windows system directory');
+    expect(getUnsafeCwdWorkspaceReason('c:/windows/system32', {})).toBe('Windows system directory');
+    expect(getUnsafeCwdWorkspaceReason('C:\\Windows\\SysWOW64', {})).toBe('Windows system directory');
+  });
+
+  it('allows project paths under home or normal workspace directories', () => {
+    expect(getUnsafeCwdWorkspaceReason('/Users/murphy/source/goldfish', { HOME: '/Users/murphy' })).toBeUndefined();
+    expect(getUnsafeCwdWorkspaceReason('/home/murphy/project', { HOME: '/home/murphy' })).toBeUndefined();
+    expect(getUnsafeCwdWorkspaceReason('C:\\Users\\murphy\\source\\goldfish', {})).toBeUndefined();
+    expect(getUnsafeCwdWorkspaceReason('C:\\work\\goldfish', {})).toBeUndefined();
   });
 });
 

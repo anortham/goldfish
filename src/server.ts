@@ -24,9 +24,13 @@ import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js';
 import type { CheckpointArgs, RecallArgs, BriefArgs } from './types.js';
 import { getLogger } from './logger.js';
-import { getGoldfishHomeDir, resolveWorkspace } from './workspace.js';
+import {
+  getGoldfishHomeDir,
+  getUnsafeCwdWorkspaceReason,
+  resolveWorkspaceWithSource
+} from './workspace.js';
 
-export const SERVER_VERSION = '7.0.4';
+export const SERVER_VERSION = '7.0.5';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 
@@ -91,13 +95,23 @@ async function hydrateWorkspaceArguments(
     ? undefined
     : await getCachedRoots(cache, sessionId, sendRequest);
 
-  const workspacePath = roots
-    ? resolveWorkspace(workspace, { roots })
-    : resolveWorkspace(workspace);
+  const resolved = roots
+    ? resolveWorkspaceWithSource(workspace, { roots })
+    : resolveWorkspaceWithSource(workspace);
+
+  const unsafeCwdReason = resolved.source === 'cwd'
+    ? getUnsafeCwdWorkspaceReason(resolved.path)
+    : undefined;
+  if (unsafeCwdReason) {
+    throw new Error(
+      `Refusing to use ${unsafeCwdReason} (${resolved.path}) as workspace from process cwd. ` +
+        'Set GOLDFISH_WORKSPACE to your project path or open a project folder in your MCP client.'
+    );
+  }
 
   return {
     ...args,
-    workspace: workspacePath
+    workspace: resolved.path
   };
 }
 

@@ -723,6 +723,113 @@ describe('Request-time workspace hydration', () => {
       await rm(cwdFallback, { recursive: true, force: true });
     }
   });
+
+  it('rejects filesystem-root cwd fallback with a helpful error', async () => {
+    process.chdir('/');
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    const { createServer } = await import('../src/server');
+    const server = createServer();
+    const client = new Client(
+      { name: 'goldfish-test-client', version: '1.0.0' },
+      {}
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport)
+      ]);
+
+      const result = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'should be rejected' }
+      });
+
+      expect(result.isError).toBe(true);
+      const text = getFirstTextContent(result);
+      expect(text).toContain('GOLDFISH_WORKSPACE');
+      expect(text.toLowerCase()).toContain('filesystem root');
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+      process.chdir(ORIGINAL_CWD);
+    }
+  });
+
+  it('rejects home-directory cwd fallback with a helpful error', async () => {
+    const originalHome = process.env.HOME;
+    const homeFallback = await mkdtemp(join(tmpdir(), 'test-server-home-'));
+    process.chdir(homeFallback);
+    process.env.HOME = process.cwd();
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    const { createServer } = await import('../src/server');
+    const server = createServer();
+    const client = new Client(
+      { name: 'goldfish-test-client', version: '1.0.0' },
+      {}
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport)
+      ]);
+
+      const result = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'should be rejected' }
+      });
+
+      expect(result.isError).toBe(true);
+      const text = getFirstTextContent(result);
+      expect(text).toContain('GOLDFISH_WORKSPACE');
+      expect(text.toLowerCase()).toContain('home directory');
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+      process.chdir(ORIGINAL_CWD);
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      await rm(homeFallback, { recursive: true, force: true });
+    }
+  });
+
+  it('allows GOLDFISH_WORKSPACE=/ as an explicit user override', async () => {
+    process.chdir('/');
+    process.env.GOLDFISH_WORKSPACE = '/';
+
+    const { createServer } = await import('../src/server');
+    const server = createServer();
+    const client = new Client(
+      { name: 'goldfish-test-client', version: '1.0.0' },
+      {}
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport)
+      ]);
+
+      const result = await client.callTool({
+        name: 'recall',
+        arguments: { workspace: 'current', limit: 1 }
+      });
+
+      // We don't assert success of the storage operation (cwd=/ is read-only on
+      // most CI machines anyway). The contract is: explicit env override is not
+      // pre-rejected with the filesystem-root guard.
+      const text = getFirstTextContent(result);
+      expect(text.toLowerCase()).not.toContain('filesystem root');
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+      process.chdir(ORIGINAL_CWD);
+      delete process.env.GOLDFISH_WORKSPACE;
+    }
+  });
 });
 
 describe('Error handling', () => {

@@ -4,6 +4,20 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.5] - 2026-05-09
+
+Patch release for safer default workspace resolution in user-level MCP installs.
+
+### Added
+
+- Added source-aware workspace resolution so MCP request hydration can distinguish explicit, environment, roots-derived, and weak cwd-derived workspace paths.
+- Added unsafe cwd fallback detection for filesystem roots, home directories, Windows user-profile roots, and Windows system directories.
+
+### Fixed
+
+- Goldfish now refuses unsafe cwd-derived default workspaces with a helpful `GOLDFISH_WORKSPACE`/project-folder error instead of writing `.memories/` into broad system or home paths.
+- MCP roots and explicit workspace overrides still take precedence, allowing user-level installs to bind correctly when the client provides project roots or the caller passes a concrete workspace.
+
 ## [7.0.4] - 2026-05-05
 
 Patch release for the brief deletion MCP surface.
