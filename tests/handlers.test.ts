@@ -4,10 +4,33 @@ import { handleRecall } from '../src/handlers/recall';
 import { handleBrief } from '../src/handlers/brief';
 import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { getBrief, saveBrief } from '../src/briefs';
-import { ensureMemoriesDir } from '../src/workspace';
-import { rm, mkdtemp, stat } from 'fs/promises';
+import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
+import { rm, mkdtemp, mkdir, writeFile, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+
+async function withFrozenTime<T>(isoTimestamp: string, fn: () => Promise<T>): Promise<T> {
+  const RealDate = Date;
+  const fixedTime = new RealDate(isoTimestamp).getTime();
+
+  class FrozenDate extends RealDate {
+    constructor(value?: string | number | Date) {
+      super(value ?? fixedTime);
+    }
+
+    static now(): number {
+      return fixedTime;
+    }
+  }
+
+  globalThis.Date = FrozenDate as DateConstructor;
+
+  try {
+    return await fn();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
 
 let tempGoldfishHome: string;
 const originalGoldfishHome = process.env.GOLDFISH_HOME;
@@ -362,6 +385,40 @@ describe('Readable markdown responses', () => {
 
       // Should have separator
       expect(text).toContain('---');
+    });
+
+    it('renders a one-line nudge instead of the body for a stale active brief', async () => {
+      await saveBrief({
+        id: 'stale-plan',
+        title: 'Stale Plan',
+        content: 'Plan content here',
+        workspace: TEST_DIR,
+        activate: true
+      });
+
+      // Old checkpoint referencing the brief — 14 days before the frozen "now".
+      const dir = join(getMemoriesDir(TEST_DIR), '2026-05-01');
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, '120000_stale.md'),
+        `---\nid: checkpoint_stale\ntimestamp: "2026-05-01T12:00:00.000Z"\nbriefId: stale-plan\n---\n\nOld work\n`,
+        'utf-8'
+      );
+
+      const result = await withFrozenTime('2026-05-15T12:00:00.000Z', () =>
+        handleRecall({ workspace: TEST_DIR })
+      );
+      const text = result.content[0]!.text;
+
+      // Action-oriented nudge line, no brief body
+      expect(text).toContain('⚠️');
+      expect(text).toContain('Active brief "Stale Plan" untouched 14d');
+      expect(text).toContain('complete or archive');
+      expect(text).not.toContain('## Active Brief:');
+      expect(text).not.toContain('Plan content here');
+
+      // Header signals a brief-related notice surfaced
+      expect(text).toContain('+ stale brief notice');
     });
 
     it('includes diagnostics in header', async () => {

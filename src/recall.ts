@@ -5,13 +5,61 @@
  * search delegated to ranking.ts.
  */
 
-import type { Brief, Checkpoint, RecallOptions, RecallResult, WorkspaceSummary } from './types';
-import { getCheckpointsForDateRange, getAllCheckpoints, hasValidCalendarDate } from './checkpoints';
+import type { Brief, Checkpoint, RecallOptions, RecallResult, StaleBriefNotice, WorkspaceSummary } from './types';
+import {
+  getCheckpointsForDateRange,
+  getAllCheckpoints,
+  findLatestCheckpointTimestampForBrief,
+  hasValidCalendarDate
+} from './checkpoints';
 import { buildCompactSearchDescription } from './digests';
 import { getActiveBrief } from './briefs';
 import { listRegisteredProjects } from './registry';
 import { searchCheckpoints } from './ranking';
 import { resolveWorkspace } from './workspace';
+
+/**
+ * A brief is considered stale once its newest activity is older than this many
+ * days. Activity is the newest checkpoint referencing the brief, falling back
+ * to the brief's creation time when no checkpoint references it yet.
+ */
+const STALE_BRIEF_DAYS = 7;
+
+/**
+ * Resolve the active brief for a workspace, applying staleness suppression.
+ *
+ * Non-destructive: when the active brief's newest activity is older than
+ * STALE_BRIEF_DAYS, the brief body is withheld (activeBrief: null) and a
+ * staleBrief notice is returned instead. The brief's status on disk is never
+ * mutated.
+ */
+async function resolveActiveBrief(
+  workspace: string
+): Promise<{ activeBrief: Brief | null; staleBrief: StaleBriefNotice | null }> {
+  const brief = await getActiveBrief(workspace);
+  if (!brief) {
+    return { activeBrief: null, staleBrief: null };
+  }
+
+  const latestActivity = await findLatestCheckpointTimestampForBrief(workspace, brief.id);
+  const lastActivity = latestActivity ?? brief.created;
+  const ageMs = Date.now() - new Date(lastActivity).getTime();
+  const daysSinceActivity = Math.floor(ageMs / 86_400_000);
+
+  if (daysSinceActivity > STALE_BRIEF_DAYS) {
+    return {
+      activeBrief: null,
+      staleBrief: {
+        id: brief.id,
+        title: brief.title,
+        lastActivity,
+        daysSinceActivity
+      }
+    };
+  }
+
+  return { activeBrief: brief, staleBrief: null };
+}
 
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -230,14 +278,16 @@ async function recallFromWorkspace(
 ): Promise<{
   checkpoints: Checkpoint[];
   activeBrief: Brief | null;
+  staleBrief: StaleBriefNotice | null;
 }> {
   // Short-circuit: limit=0 means brief only, skip checkpoint I/O
   const limit = Math.max(0, options.limit !== undefined ? options.limit : 5);
   if (limit === 0) {
-    const activeBrief = await getActiveBrief(workspace);
+    const { activeBrief, staleBrief } = await resolveActiveBrief(workspace);
     return {
       checkpoints: [],
-      activeBrief
+      activeBrief,
+      staleBrief
     };
   }
 
@@ -266,11 +316,12 @@ async function recallFromWorkspace(
   checkpoints = checkpoints.slice(0, limit);
   checkpoints = checkpoints.map(checkpoint => presentCheckpoint(checkpoint, options));
 
-  const activeBrief = await getActiveBrief(workspace);
+  const { activeBrief, staleBrief } = await resolveActiveBrief(workspace);
 
   return {
     checkpoints,
-    activeBrief
+    activeBrief,
+    staleBrief
   };
 }
 
@@ -287,11 +338,12 @@ export async function recall(options: RecallOptions = {}): Promise<RecallResult>
   if (workspace !== 'all') {
     const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
-    const { checkpoints, activeBrief } = await recallFromWorkspace(projectPath, normalizedOptions);
+    const { checkpoints, activeBrief, staleBrief } = await recallFromWorkspace(projectPath, normalizedOptions);
 
     return {
       checkpoints,
-      activeBrief
+      activeBrief,
+      staleBrief
     };
   }
 

@@ -85,9 +85,23 @@ export interface RecallOptions {
   _registryDir?: string;  // Internal: override registry dir for test isolation
 }
 
+/**
+ * Notice surfaced in place of a stale active brief. Recall suppresses the brief
+ * body when its newest activity is older than the staleness threshold and emits
+ * this instead, nudging the user to complete or archive it. Non-destructive:
+ * the brief's status on disk is never changed.
+ */
+export interface StaleBriefNotice {
+  id: string;
+  title: string;
+  lastActivity: string;     // ISO 8601 UTC — newest referencing checkpoint, or brief.created
+  daysSinceActivity: number;
+}
+
 export interface RecallResult {
   checkpoints: Checkpoint[];
   activeBrief?: Brief | null;
+  staleBrief?: StaleBriefNotice | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
 }
 

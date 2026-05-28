@@ -6,7 +6,7 @@ import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
-import type { Brief, Checkpoint, RecallArgs } from '../types.js';
+import type { Brief, Checkpoint, RecallArgs, StaleBriefNotice } from '../types.js';
 
 /**
  * Safely convert a value to an array for display.
@@ -135,6 +135,13 @@ function formatActiveBrief(brief: Brief): string {
 }
 
 /**
+ * Format the one-line, action-oriented nudge shown in place of a stale brief.
+ */
+function formatStaleBriefNotice(notice: StaleBriefNotice): string {
+  return `⚠️ Active brief "${notice.title}" untouched ${notice.daysSinceActivity}d — complete or archive it, or it'll keep surfacing stale.`;
+}
+
+/**
  * Handle recall tool calls
  */
 export async function handleRecall(args: RecallArgs) {
@@ -156,7 +163,12 @@ export async function handleRecall(args: RecallArgs) {
   // Build readable markdown response
   const count = result.checkpoints.length;
   const activeBrief = result.activeBrief;
-  const briefText = activeBrief ? ' + active brief' : '';
+  const staleBrief = result.staleBrief;
+  const briefText = activeBrief
+    ? ' + active brief'
+    : staleBrief
+      ? ' + stale brief notice'
+      : '';
   const fish = getFishEmoji();
 
   const lines: string[] = [];
@@ -174,12 +186,15 @@ export async function handleRecall(args: RecallArgs) {
     lines.push(`Memories: ${memoriesDir} (${memoriesExists ? 'found' : 'not found'})`);
   }
 
-  // Active brief section
+  // Active brief section (or stale-brief nudge in its place)
   if (activeBrief) {
     lines.push('');
     lines.push('---');
     lines.push('');
     lines.push(formatActiveBrief(activeBrief));
+  } else if (staleBrief) {
+    lines.push('');
+    lines.push(formatStaleBriefNotice(staleBrief));
   }
 
   // Workspace summaries for cross-project recall

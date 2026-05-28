@@ -30,7 +30,7 @@ import {
   resolveWorkspaceWithSource
 } from './workspace.js';
 
-export const SERVER_VERSION = '7.0.5';
+export const SERVER_VERSION = '7.1.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 

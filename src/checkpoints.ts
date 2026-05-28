@@ -573,6 +573,51 @@ export async function getAllCheckpoints(
 }
 
 /**
+ * Find the timestamp of the newest checkpoint that references a brief.
+ *
+ * Scans date directories newest-first; the first (newest) directory containing
+ * a matching checkpoint holds the newest match, so we early-exit there. Matches
+ * both `briefId` and the legacy `planId` affinity field. Returns null when no
+ * checkpoint references the brief (or the project has no memories).
+ */
+export async function findLatestCheckpointTimestampForBrief(
+  projectPath: string,
+  briefId: string
+): Promise<string | null> {
+  const memoriesDir = getMemoriesDir(projectPath);
+
+  let entries: string[];
+  try {
+    entries = await readdir(memoriesDir);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  const dateDirs = entries.filter(e => datePattern.test(e)).sort().reverse();
+
+  for (const dir of dateDirs) {
+    const checkpoints = await getCheckpointsForDay(projectPath, dir);
+    let latest: string | null = null;
+    for (const checkpoint of checkpoints) {
+      const affinity = checkpoint.briefId ?? checkpoint.planId;
+      if (affinity !== briefId) continue;
+      if (latest === null || new Date(checkpoint.timestamp).getTime() > new Date(latest).getTime()) {
+        latest = checkpoint.timestamp;
+      }
+    }
+    if (latest !== null) {
+      return latest;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Get all checkpoints across a date range (inclusive)
  *
  * @param projectPath - Path to the project directory

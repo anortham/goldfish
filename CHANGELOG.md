@@ -4,6 +4,24 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0] - 2026-05-28
+
+Stale active briefs no longer clutter recall.
+
+### Added
+
+- Recall now detects stale active briefs and, instead of surfacing the full brief on every call, emits a one-line action-oriented nudge ("complete or archive it, or it'll keep surfacing stale"). Staleness is based on the newest checkpoint referencing the brief (falling back to the brief's creation time), with a 7-day threshold.
+- `findLatestCheckpointTimestampForBrief` in the checkpoint store: a newest-first, early-exiting scan that returns the most recent checkpoint timestamp referencing a brief (matches both `briefId` and legacy `planId`).
+- `RecallResult.staleBrief` (`StaleBriefNotice`) carries the suppressed brief's id, title, last-activity timestamp, and age in days.
+
+### Changed
+
+- Single-workspace recall withholds the active brief body once it is stale and surfaces the nudge in its place; the header reads `+ stale brief notice`. Cross-workspace (`workspace: 'all'`) recall is unchanged.
+
+### Notes
+
+- Fully non-destructive: a brief's `status` on disk is never mutated by recall (covered by a regression test). Auto-archiving, retire-on-supersede, and applying staleness to handoff/standup/brief-status were considered and deliberately left out of this release.
+
 ## [7.0.5] - 2026-05-09
 
 Patch release for safer default workspace resolution in user-level MCP installs.

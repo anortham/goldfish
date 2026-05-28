@@ -5,6 +5,7 @@ import {
   getCheckpointsForDay,
   getCheckpointsForDateRange,
   getAllCheckpoints,
+  findLatestCheckpointTimestampForBrief,
   parseCheckpointFile,
   parseJsonCheckpoint,
   formatCheckpoint,
@@ -1534,6 +1535,68 @@ describe('getAllCheckpoints', () => {
     const emptyDir = join(tmpdir(), `test-empty-${Date.now()}`);
     const checkpoints = await getAllCheckpoints(emptyDir);
     expect(checkpoints).toEqual([]);
+  });
+});
+
+// ─── findLatestCheckpointTimestampForBrief ────────────────────────────
+
+describe('findLatestCheckpointTimestampForBrief', () => {
+  async function writeBriefCheckpoint(
+    date: string,
+    time: string,
+    id: string,
+    affinity: string
+  ): Promise<void> {
+    const memoriesDir = getMemoriesDir(tempDir);
+    const dir = join(memoriesDir, date);
+    await mkdir(dir, { recursive: true });
+    const content = `---\nid: ${id}\ntimestamp: "${date}T${time}.000Z"\n${affinity}---\n\nWork ${id}\n`;
+    await writeFile(join(dir, `${time.replace(/:/g, '')}_${id}.md`), content, 'utf-8');
+  }
+
+  it('returns null when no checkpoint references the brief', async () => {
+    await writeBriefCheckpoint('2026-05-01', '12:00:00', 'checkpoint_none', 'briefId: other-brief\n');
+    const result = await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the project has no memories at all', async () => {
+    const emptyDir = join(tmpdir(), `test-empty-brief-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const result = await findLatestCheckpointTimestampForBrief(emptyDir, 'target-brief');
+    expect(result).toBeNull();
+  });
+
+  it('returns the timestamp of the single matching checkpoint', async () => {
+    await writeBriefCheckpoint('2026-05-01', '12:00:00', 'checkpoint_one', 'briefId: target-brief\n');
+    const result = await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief');
+    expect(result).toBe('2026-05-01T12:00:00.000Z');
+  });
+
+  it('returns the newest matching checkpoint across multiple days', async () => {
+    await writeBriefCheckpoint('2026-05-01', '12:00:00', 'checkpoint_old', 'briefId: target-brief\n');
+    await writeBriefCheckpoint('2026-05-10', '09:00:00', 'checkpoint_new', 'briefId: target-brief\n');
+    const result = await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief');
+    expect(result).toBe('2026-05-10T09:00:00.000Z');
+  });
+
+  it('returns the max timestamp among multiple matches in the same day', async () => {
+    await writeBriefCheckpoint('2026-05-10', '09:00:00', 'checkpoint_am', 'briefId: target-brief\n');
+    await writeBriefCheckpoint('2026-05-10', '17:30:00', 'checkpoint_pm', 'briefId: target-brief\n');
+    const result = await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief');
+    expect(result).toBe('2026-05-10T17:30:00.000Z');
+  });
+
+  it('skips newer non-matching days and finds an older match', async () => {
+    await writeBriefCheckpoint('2026-05-01', '12:00:00', 'checkpoint_match', 'briefId: target-brief\n');
+    await writeBriefCheckpoint('2026-05-20', '08:00:00', 'checkpoint_unrelated', 'briefId: other-brief\n');
+    const result = await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief');
+    expect(result).toBe('2026-05-01T12:00:00.000Z');
+  });
+
+  it('matches legacy planId frontmatter', async () => {
+    await writeBriefCheckpoint('2026-05-05', '10:00:00', 'checkpoint_legacy', 'planId: legacy-brief\n');
+    const result = await findLatestCheckpointTimestampForBrief(tempDir, 'legacy-brief');
+    expect(result).toBe('2026-05-05T10:00:00.000Z');
   });
 });
 
