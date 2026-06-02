@@ -4,6 +4,28 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.0] - 2026-06-01
+
+Recall filtering plus a cluster of resilience fixes for corrupt or contended state.
+
+### Added
+
+- Recall `type` filter: `recall({ type: "decision" })` narrows to a single checkpoint type (`checkpoint` | `decision` | `incident` | `learning`). Untyped checkpoints count as `checkpoint`. Matched case-insensitively.
+- Recall `tags` filter: `recall({ tags: ["db", "ops"] })` returns checkpoints carrying ALL listed tags (case-insensitive AND match). Accepts an array or a comma-separated string for non-Claude clients.
+- Both filters compose with each other and with `search`, and scan the full corpus (not just the most-recent-N window) so older matches are not lost — in single- and cross-workspace recall.
+- Checkpoint `type` is now part of the BM25 search corpus, so a free-text search like `incident` surfaces incident-typed checkpoints even when the word is absent from the body.
+
+### Fixed
+
+- File locking no longer stalls ~30s when the lock directory is unwritable: non-`EEXIST` errors now fail fast. Stale-lock detection is liveness-aware (checks the holder PID on the same host via `process.kill(pid, 0)`, age-based otherwise) and reclaims via atomic rename to close a TOCTOU window.
+- A corrupt `.active-brief` file (or any unreadable brief) no longer crashes recall: `getActiveBrief` returns null and `listBriefs` skips the bad file, both with a warning. `getBrief` still throws loudly for direct callers.
+- A corrupt `~/.goldfish/registry.json` is backed up to `registry.json.corrupt-<ts>-<rand>` and reinitialized instead of being silently overwritten (which previously dropped every registered project). Applies to both register and unregister; if the backup itself fails, the write aborts rather than wiping data.
+- The active-brief staleness scan is bounded to date directories at/after the brief's creation date, keeping fresh-brief recall off a full-history scan.
+
+### Removed
+
+- Dead v7.0 legacy-directory cleanup code in the server startup path (the migration window has passed).
+
 ## [7.1.0] - 2026-05-28
 
 Stale active briefs no longer clutter recall.

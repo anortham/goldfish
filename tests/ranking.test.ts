@@ -65,6 +65,29 @@ describe('Checkpoint search (Orama BM25)', () => {
     expect(results[0]!.description).toContain('Refactored');
   });
 
+  it('surfaces a checkpoint by its type even when the word is absent from the body', async () => {
+    // A free-text search for "incident" should reach incident-typed checkpoints
+    // whose narrative never spells out the word — the type is part of the corpus.
+    const typed: Checkpoint[] = [
+      {
+        id: 'cp_typed_incident',
+        timestamp: '2025-10-13T10:00:00.000Z',
+        description: 'Database connection pool exhausted during the morning spike',
+        type: 'incident'
+      },
+      {
+        id: 'cp_typed_plain',
+        timestamp: '2025-10-13T11:00:00.000Z',
+        description: 'Tuned the retry budget for the payment client'
+      }
+    ];
+
+    const results = await searchCheckpoints('incident', typed);
+
+    expect(results.length).toBe(1);
+    expect(results[0]!.id).toBe('cp_typed_incident');
+  });
+
   it('searches across structured decision fields', async () => {
     const results = await searchCheckpoints('cqrs', checkpoints);
 

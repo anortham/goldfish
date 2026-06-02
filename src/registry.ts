@@ -6,10 +6,12 @@
  */
 
 import { join, resolve } from 'path';
-import { mkdir, stat } from 'fs/promises';
+import { mkdir, stat, rename } from 'fs/promises';
+import { randomBytes } from 'crypto';
 import { atomicWriteFile } from './file-io';
 import { withLock } from './lock';
 import { normalizeWorkspace, getGoldfishHomeDir } from './workspace';
+import { getLogger } from './logger';
 import type { Registry, RegisteredProject } from './types';
 
 /**
@@ -54,6 +56,50 @@ export async function getRegistry(registryDir?: string): Promise<Registry> {
 }
 
 /**
+ * Read the registry for a mutation. Unlike getRegistry (the read path), a
+ * corrupt registry file here is NOT silently swallowed: overwriting it would
+ * permanently drop every other registered project. Instead the corrupt file is
+ * renamed aside to registry.json.corrupt-<ts>-<rand> so the data is recoverable,
+ * then we start fresh. Callers must already hold the registry lock.
+ *
+ * @param filePath - Absolute path to registry.json
+ */
+async function loadRegistryForWrite(filePath: string): Promise<Registry> {
+  let content: string;
+  try {
+    content = await Bun.file(filePath).text();
+  } catch {
+    // File doesn't exist yet - a fresh registry is the correct starting point.
+    return { projects: [] };
+  }
+
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && Array.isArray(parsed.projects)) {
+      return parsed as Registry;
+    }
+    // Parsed but structurally wrong (e.g. {} or an array) - treat as corrupt.
+  } catch {
+    // Invalid JSON - fall through to backup.
+  }
+
+  const backupPath = `${filePath}.corrupt-${Date.now()}-${randomBytes(4).toString('hex')}`;
+  try {
+    await rename(filePath, backupPath);
+    getLogger().warn(
+      `registry at ${filePath} is corrupt; backed up to ${backupPath} and reinitialized`
+    );
+  } catch (error: any) {
+    // If we cannot preserve the corrupt file, fail loudly rather than wipe it.
+    throw new Error(
+      `registry at ${filePath} is corrupt and could not be backed up: ${error?.message ?? 'rename failed'}`
+    );
+  }
+
+  return { projects: [] };
+}
+
+/**
  * Register a project in the cross-project registry.
  * Idempotent - if the project path already exists, this is a no-op.
  *
@@ -69,8 +115,9 @@ export async function registerProject(projectPath: string, registryDir?: string)
   await mkdir(dir, { recursive: true });
 
   await withLock(filePath, async () => {
-    // Read current registry (inside lock to prevent races)
-    const registry = await getRegistry(dir);
+    // Read current registry (inside lock to prevent races). Use the write-path
+    // loader so a corrupt file is preserved, not silently overwritten.
+    const registry = await loadRegistryForWrite(filePath);
 
     // Check for existing entry (idempotent, normalize stored paths for comparison)
     const exists = registry.projects.some(p => p.path.replace(/\\/g, '/') === absolutePath);
@@ -106,7 +153,9 @@ export async function unregisterProject(projectPath: string, registryDir?: strin
   await mkdir(dir, { recursive: true });
 
   await withLock(filePath, async () => {
-    const registry = await getRegistry(dir);
+    // loadRegistryForWrite backs up + heals a corrupt file rather than leaving
+    // the corruption to silently break every later read.
+    const registry = await loadRegistryForWrite(filePath);
 
     const filtered = registry.projects.filter(p => p.path.replace(/\\/g, '/') !== absolutePath);
 

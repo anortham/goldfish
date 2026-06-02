@@ -5,7 +5,7 @@
  * search delegated to ranking.ts.
  */
 
-import type { Brief, Checkpoint, RecallOptions, RecallResult, StaleBriefNotice, WorkspaceSummary } from './types';
+import type { Brief, Checkpoint, RecallInput, RecallOptions, RecallResult, StaleBriefNotice, WorkspaceSummary } from './types';
 import {
   getCheckpointsForDateRange,
   getAllCheckpoints,
@@ -41,7 +41,11 @@ async function resolveActiveBrief(
     return { activeBrief: null, staleBrief: null };
   }
 
-  const latestActivity = await findLatestCheckpointTimestampForBrief(workspace, brief.id);
+  // Bound the scan to dirs at/after the brief's creation date: no checkpoint can
+  // reference a brief that did not yet exist, so this never misses a match but
+  // keeps recall() off a full-history scan when the active brief is fresh.
+  const createdDate = typeof brief.created === 'string' ? brief.created.split('T')[0] : undefined;
+  const latestActivity = await findLatestCheckpointTimestampForBrief(workspace, brief.id, createdDate);
   const lastActivity = latestActivity ?? brief.created;
   const ageMs = Date.now() - new Date(lastActivity).getTime();
   const daysSinceActivity = Math.floor(ageMs / 86_400_000);
@@ -66,6 +70,72 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return trimmed ? trimmed : undefined;
 }
 
+/**
+ * Coerce a tags filter input into a lowercased, de-duplicated list. Accepts a
+ * real array or a comma-separated string (e.g. from a slash-command surface).
+ * Lowercasing here makes the later tag match case-insensitive; checkpoint tags
+ * keep their original case for display. Returns undefined when nothing usable
+ * remains, so the filter is skipped rather than excluding everything.
+ */
+function normalizeTagsFilter(value: string[] | string | undefined): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  const raw = Array.isArray(value) ? value : value.split(',');
+  const cleaned = raw
+    .map(tag => (typeof tag === 'string' ? tag.trim().toLowerCase() : ''))
+    .filter(tag => tag.length > 0);
+  const unique = Array.from(new Set(cleaned));
+  return unique.length > 0 ? unique : undefined;
+}
+
+/** A checkpoint with no explicit type is conceptually the default 'checkpoint'. */
+function getCheckpointType(checkpoint: Checkpoint): string {
+  return (checkpoint.type ?? 'checkpoint').toLowerCase();
+}
+
+function getCheckpointTagsLower(checkpoint: Checkpoint): string[] {
+  if (!Array.isArray(checkpoint.tags)) return [];
+  return checkpoint.tags
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map(tag => tag.toLowerCase());
+}
+
+/**
+ * Apply structured (non-textual) filters shared by single- and cross-workspace
+ * recall: brief affinity, checkpoint type, and tags (AND semantics — every
+ * requested tag must be present). Type and tags are matched case-insensitively.
+ */
+/**
+ * Whether any structured (non-textual) filter is active. When one is, recall
+ * must scan the full corpus before slicing to `limit` — otherwise it would
+ * filter only the most recent N checkpoints and miss older matches.
+ */
+function hasStructuredFilter(options: RecallOptions): boolean {
+  return Boolean(options.briefId) || Boolean(options.type) || Boolean(options.tags && options.tags.length > 0);
+}
+
+function applyStructuredFilters(checkpoints: Checkpoint[], options: RecallOptions): Checkpoint[] {
+  let filtered = checkpoints;
+
+  if (options.briefId) {
+    filtered = filtered.filter(cp => getCheckpointBriefId(cp) === options.briefId);
+  }
+
+  if (options.type) {
+    const wantType = options.type.toLowerCase();
+    filtered = filtered.filter(cp => getCheckpointType(cp) === wantType);
+  }
+
+  if (options.tags && options.tags.length > 0) {
+    const wantTags = options.tags;
+    filtered = filtered.filter(cp => {
+      const cpTags = getCheckpointTagsLower(cp);
+      return wantTags.every(tag => cpTags.includes(tag));
+    });
+  }
+
+  return filtered;
+}
+
 // Read-side legacy: existing checkpoint markdown may still carry a `planId`
 // frontmatter field. The Checkpoint type retains that field and the parser
 // populates it for older files, so the briefId filter has to consult both
@@ -74,7 +144,7 @@ function getCheckpointBriefId(checkpoint: Checkpoint): string | undefined {
   return checkpoint.briefId ?? checkpoint.planId;
 }
 
-function normalizeRecallOptions(options: RecallOptions): RecallOptions {
+function normalizeRecallOptions(options: RecallInput): RecallOptions {
   const days = typeof options.days === 'number' && Number.isFinite(options.days) && options.days > 0
     ? options.days
     : undefined;
@@ -84,9 +154,14 @@ function normalizeRecallOptions(options: RecallOptions): RecallOptions {
   const to = normalizeOptionalString(options.to);
   const search = normalizeOptionalString(options.search);
   const briefId = normalizeOptionalString(options.briefId);
+  const type = normalizeOptionalString(options.type);
+  const tags = normalizeTagsFilter(options.tags);
 
+  // Explicit `tags` overrides the spread's wider (string | string[]) type so
+  // `normalized` is a clean RecallOptions; the placeholder is corrected below.
   const normalized: RecallOptions = {
-    ...options
+    ...options,
+    tags: tags ?? []
   };
 
   if (workspace !== undefined) normalized.workspace = workspace;
@@ -109,6 +184,12 @@ function normalizeRecallOptions(options: RecallOptions): RecallOptions {
 
   if (briefId !== undefined) normalized.briefId = briefId;
   else delete normalized.briefId;
+
+  if (type !== undefined) normalized.type = type;
+  else delete normalized.type;
+
+  if (tags !== undefined) normalized.tags = tags;
+  else delete normalized.tags;
 
   return normalized;
 }
@@ -233,15 +314,15 @@ async function loadWorkspaceCheckpoints(workspace: string, options: RecallOption
     const { from, to } = getDateRange(options);
     checkpoints = await getCheckpointsForDateRange(workspace, from, to);
   } else {
-    const earlyLimit = options.search ? undefined : (options.limit !== undefined ? options.limit : 5);
+    // Load the full corpus when searching or filtering so matches outside the
+    // most-recent-N window are not lost before the filter/search runs.
+    const earlyLimit = options.search || hasStructuredFilter(options)
+      ? undefined
+      : (options.limit !== undefined ? options.limit : 5);
     checkpoints = await getAllCheckpoints(workspace, earlyLimit);
   }
 
-  if (options.briefId) {
-    checkpoints = checkpoints.filter(cp => getCheckpointBriefId(cp) === options.briefId);
-  }
-
-  return checkpoints;
+  return applyStructuredFilters(checkpoints, options);
 }
 
 function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Checkpoint {
@@ -297,13 +378,13 @@ async function recallFromWorkspace(
     const { from, to } = getDateRange(options);
     checkpoints = await getCheckpointsForDateRange(workspace, from, to);
   } else {
-    const earlyLimit = options.search ? undefined : limit;
+    // Load the full corpus when searching or filtering so matches outside the
+    // most-recent-N window are not lost before the filter/search runs.
+    const earlyLimit = options.search || hasStructuredFilter(options) ? undefined : limit;
     checkpoints = await getAllCheckpoints(workspace, earlyLimit);
   }
 
-  if (options.briefId) {
-    checkpoints = checkpoints.filter(cp => getCheckpointBriefId(cp) === options.briefId);
-  }
+  checkpoints = applyStructuredFilters(checkpoints, options);
 
   if (options.search) {
     checkpoints = await searchCheckpoints(options.search, checkpoints);
@@ -330,7 +411,7 @@ async function recallFromWorkspace(
  *
  * Retrieves checkpoints from specified workspace(s) with optional search
  */
-export async function recall(options: RecallOptions = {}): Promise<RecallResult> {
+export async function recall(options: RecallInput = {}): Promise<RecallResult> {
   const normalizedOptions = normalizeRecallOptions(options);
   const workspace = normalizedOptions.workspace || 'current';
 

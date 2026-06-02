@@ -18,6 +18,7 @@ import type { Checkpoint } from './types'
 const SEARCH_SCHEMA = {
   id: 'string',
   description: 'string',
+  type: 'string',
   brief: 'string',
   decision: 'string',
   impact: 'string',
@@ -34,6 +35,7 @@ const SEARCH_SCHEMA = {
 
 const SEARCH_BOOSTS = {
   description: 2.0,
+  type: 1.0,
   brief: 1.0,
   decision: 1.5,
   impact: 1.3,
@@ -59,6 +61,7 @@ function joinList(values?: string[]): string {
 interface SearchDocument {
   id: string
   description: string
+  type: string
   brief: string
   decision: string
   impact: string
@@ -77,6 +80,7 @@ function toSearchDocument(checkpoint: Checkpoint): SearchDocument {
   return {
     id: checkpoint.id,
     description: checkpoint.description,
+    type: checkpoint.type ?? '',
     brief: checkpoint.briefId ?? checkpoint.planId ?? '',
     decision: checkpoint.decision ?? '',
     impact: checkpoint.impact ?? '',

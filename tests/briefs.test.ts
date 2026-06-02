@@ -880,3 +880,42 @@ describe('Brief deletion', () => {
     }
   });
 });
+
+describe('Brief corruption resilience', () => {
+  it('getActiveBrief returns null (does not throw) when the active brief file is corrupt', async () => {
+    await saveBrief({
+      id: 'corrupt-active',
+      title: 'Corrupt Active',
+      content: 'Content',
+      workspace: TEST_DIR,
+      activate: true
+    });
+
+    // Corrupt the brief file on disk (no valid YAML frontmatter)
+    const briefPath = join(getBriefsDir(TEST_DIR), 'corrupt-active.md');
+    await writeFile(briefPath, 'this is not a valid brief file', 'utf-8');
+
+    // A corrupt active brief must degrade to "no active brief", never crash recall.
+    const active = await getActiveBrief(TEST_DIR);
+    expect(active).toBeNull();
+  });
+
+  it('listBriefs skips a corrupt brief and still returns the valid ones', async () => {
+    await saveBrief({ id: 'good-1', title: 'Good One', content: 'C', workspace: TEST_DIR, activate: false });
+    await saveBrief({ id: 'bad-1', title: 'Bad One', content: 'C', workspace: TEST_DIR, activate: false });
+    await saveBrief({ id: 'good-2', title: 'Good Two', content: 'C', workspace: TEST_DIR, activate: false });
+
+    await writeFile(join(getBriefsDir(TEST_DIR), 'bad-1.md'), '{ garbage, no frontmatter', 'utf-8');
+
+    const briefs = await listBriefs(TEST_DIR);
+    const ids = briefs.map(b => b.id).sort();
+    expect(ids).toEqual(['good-1', 'good-2']);
+  });
+
+  it('getBrief still throws on an explicitly requested corrupt brief (loud for direct fetch)', async () => {
+    await saveBrief({ id: 'explicit-bad', title: 'Explicit Bad', content: 'C', workspace: TEST_DIR, activate: false });
+    await writeFile(join(getBriefsDir(TEST_DIR), 'explicit-bad.md'), 'no frontmatter here', 'utf-8');
+
+    await expect(getBrief(TEST_DIR, 'explicit-bad')).rejects.toThrow(/Invalid brief file/);
+  });
+});

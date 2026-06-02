@@ -20,8 +20,12 @@ mcp__goldfish__recall({})
 - Recent work only: `recall({ since: "2h" })`
 - Wider history: `recall({ days: 7, limit: 20 })`
 - Search: `recall({ search: "auth refactor", full: true })`
+- Past decisions: `recall({ type: "decision" })`
+- By tags (AND): `recall({ tags: ["db", "ops"] })`
 - Cross-project scan: `recall({ workspace: "all", days: 1 })`
 - Brief only: `recall({ limit: 0 })`
+
+`type` keeps one of checkpoint/decision/incident/learning (untyped counts as checkpoint); `tags` matches checkpoints carrying ALL listed tags, case-insensitive. Both combine with `search` and each other.
 
 ## Read The Result Correctly
 

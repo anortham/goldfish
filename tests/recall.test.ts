@@ -556,6 +556,25 @@ describe('Active brief integration', () => {
     expect(result.activeBrief).toBeDefined();
     expect(result.activeBrief!.id).toBe('test-plan');
   });
+
+  it('does not crash recall when the active brief file is corrupt', async () => {
+    await saveBrief({
+      id: 'corrupt-plan',
+      title: 'Corrupt Plan',
+      content: 'Content',
+      workspace: TEST_DIR_A,
+      activate: true
+    });
+
+    // Corrupt the active brief on disk
+    const briefPath = join(getMemoriesDir(TEST_DIR_A), 'briefs', 'corrupt-plan.md');
+    await writeFile(briefPath, 'not a valid brief', 'utf-8');
+
+    // Recall must still return the checkpoint trail, degrading the brief to null.
+    const result = await recall({ workspace: TEST_DIR_A });
+    expect(result.activeBrief ?? null).toBeNull();
+    expect(result.checkpoints.length).toBeGreaterThan(0);
+  });
 });
 
 describe('Stale brief suppression', () => {
@@ -575,13 +594,13 @@ describe('Stale brief suppression', () => {
   }
 
   it('surfaces a fresh active brief whose newest checkpoint is within 7 days', async () => {
-    await saveBrief({
+    await withFrozenTime('2026-05-10T12:00:00.000Z', () => saveBrief({
       id: 'fresh-brief',
       title: 'Fresh Brief',
       content: 'content',
       workspace: TEST_DIR_A,
       activate: true
-    });
+    }));
     await writeBriefCheckpoint(TEST_DIR_A, '2026-05-14', '12:00:00', 'checkpoint_fresh', 'fresh-brief');
 
     const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
@@ -592,13 +611,13 @@ describe('Stale brief suppression', () => {
   });
 
   it('hides a stale active brief whose newest checkpoint is older than 7 days', async () => {
-    await saveBrief({
+    await withFrozenTime('2026-04-25T12:00:00.000Z', () => saveBrief({
       id: 'stale-brief',
       title: 'Stale Brief',
       content: 'content',
       workspace: TEST_DIR_A,
       activate: true
-    });
+    }));
     await writeBriefCheckpoint(TEST_DIR_A, '2026-05-01', '12:00:00', 'checkpoint_stale', 'stale-brief');
 
     const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
@@ -646,13 +665,13 @@ describe('Stale brief suppression', () => {
   });
 
   it('uses the newest checkpoint when a brief has both old and recent activity', async () => {
-    await saveBrief({
+    await withFrozenTime('2026-03-25T12:00:00.000Z', () => saveBrief({
       id: 'mixed-brief',
       title: 'Mixed Brief',
       content: 'content',
       workspace: TEST_DIR_A,
       activate: true
-    });
+    }));
     await writeBriefCheckpoint(TEST_DIR_A, '2026-04-01', '12:00:00', 'checkpoint_mixed_old', 'mixed-brief');
     await writeBriefCheckpoint(TEST_DIR_A, '2026-05-14', '12:00:00', 'checkpoint_mixed_new', 'mixed-brief');
 
@@ -664,13 +683,13 @@ describe('Stale brief suppression', () => {
   });
 
   it('does not mutate brief status on disk when flagging it stale (non-destructive)', async () => {
-    await saveBrief({
+    await withFrozenTime('2026-04-25T12:00:00.000Z', () => saveBrief({
       id: 'untouched-brief',
       title: 'Untouched Brief',
       content: 'content',
       workspace: TEST_DIR_A,
       activate: true
-    });
+    }));
     await writeBriefCheckpoint(TEST_DIR_A, '2026-05-01', '12:00:00', 'checkpoint_nd', 'untouched-brief');
 
     await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
@@ -681,13 +700,13 @@ describe('Stale brief suppression', () => {
   });
 
   it('reports a stale brief in limit:0 (brief-only) mode', async () => {
-    await saveBrief({
+    await withFrozenTime('2026-04-25T12:00:00.000Z', () => saveBrief({
       id: 'stale-brief-only',
       title: 'Stale Brief Only',
       content: 'content',
       workspace: TEST_DIR_A,
       activate: true
-    });
+    }));
     await writeBriefCheckpoint(TEST_DIR_A, '2026-05-01', '12:00:00', 'checkpoint_bo', 'stale-brief-only');
 
     const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A, limit: 0 }));
@@ -1536,5 +1555,185 @@ describe('Phase 2 consolidation removal', () => {
       expect(memoryModule.writeMemory).toBeUndefined();
       expect(memoryModule.writeConsolidationState).toBeUndefined();
     }
+  });
+});
+
+describe('Structured recall filters (type / tags)', () => {
+  async function seedTypedCheckpoints(workspace: string): Promise<void> {
+    await saveCheckpoint({
+      description: 'Chose Postgres over Mongo',
+      type: 'decision',
+      tags: ['db', 'architecture'],
+      workspace
+    });
+    await new Promise(resolve => setTimeout(resolve, 2));
+    await saveCheckpoint({
+      description: 'Prod outage from connection pool exhaustion',
+      type: 'incident',
+      tags: ['db', 'ops'],
+      workspace
+    });
+    await new Promise(resolve => setTimeout(resolve, 2));
+    await saveCheckpoint({
+      description: 'Wired the migration runner',
+      // no explicit type → stored untyped, conceptually a 'checkpoint'
+      tags: ['db'],
+      workspace
+    });
+    await new Promise(resolve => setTimeout(resolve, 2));
+  }
+
+  it('filters checkpoints by a single type', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    const result = await recall({ type: 'decision', workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Chose Postgres over Mongo');
+    expect(result.checkpoints[0]!.type).toBe('decision');
+  });
+
+  it('treats an untyped checkpoint as the default "checkpoint" type', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    const result = await recall({ type: 'checkpoint', workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Wired the migration runner');
+  });
+
+  it('matches type case-insensitively', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    const result = await recall({ type: 'INCIDENT', workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Prod outage from connection pool exhaustion');
+  });
+
+  it('filters checkpoints that contain ALL requested tags (AND semantics)', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    const result = await recall({ tags: ['db', 'ops'], workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Prod outage from connection pool exhaustion');
+  });
+
+  it('returns every checkpoint carrying a single requested tag', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    const result = await recall({ tags: ['db'], workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(3);
+  });
+
+  it('matches tags case-insensitively', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    const result = await recall({ tags: ['Architecture'], workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Chose Postgres over Mongo');
+  });
+
+  it('combines type and tags filters (both must match)', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    const matched = await recall({ type: 'decision', tags: ['db'], workspace: TEST_DIR_A });
+    expect(matched.checkpoints).toHaveLength(1);
+    expect(matched.checkpoints[0]!.description).toBe('Chose Postgres over Mongo');
+
+    // type matches but the tag set does not → no results
+    const missed = await recall({ type: 'decision', tags: ['ops'], workspace: TEST_DIR_A });
+    expect(missed.checkpoints).toHaveLength(0);
+  });
+
+  it('applies structured filters alongside search', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    // "db" matches all three by tag/body, but type narrows to the incident.
+    const result = await recall({ search: 'pool', type: 'incident', workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toContain('connection pool');
+  });
+
+  it('accepts a comma-separated tags string from non-array clients', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+
+    // Some MCP clients send scalars where the schema declares an array.
+    const result = await recall({ tags: 'db, ops' as unknown as string[], workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Prod outage from connection pool exhaustion');
+  });
+
+  it('finds a filtered match older than the default limit window', async () => {
+    // The only 'decision' is the OLDEST checkpoint, buried behind more than
+    // `limit` newer checkpoints. A correct filter must scan past the recent-N
+    // window instead of slicing to the newest 5 before filtering.
+    await saveCheckpoint({
+      description: 'Old architectural decision',
+      type: 'decision',
+      tags: ['legacy'],
+      workspace: TEST_DIR_A
+    });
+    await new Promise(resolve => setTimeout(resolve, 2));
+    for (let i = 0; i < 6; i++) {
+      await saveCheckpoint({
+        description: `Routine progress ${i}`,
+        workspace: TEST_DIR_A
+      });
+      await new Promise(resolve => setTimeout(resolve, 2));
+    }
+
+    const result = await recall({ type: 'decision', workspace: TEST_DIR_A });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Old architectural decision');
+  });
+
+  it('applies structured filters in cross-workspace recall', async () => {
+    await seedTypedCheckpoints(TEST_DIR_A);
+    await saveCheckpoint({
+      description: 'Decided to adopt feature flags',
+      type: 'decision',
+      tags: ['rollout'],
+      workspace: TEST_DIR_B
+    });
+
+    const { registerProject } = await import('../src/registry');
+    await registerProject(TEST_DIR_A);
+    await registerProject(TEST_DIR_B);
+
+    const result = await recall({ type: 'decision', workspace: 'all' });
+
+    const descriptions = result.checkpoints.map(c => c.description).sort();
+    expect(descriptions).toEqual(['Chose Postgres over Mongo', 'Decided to adopt feature flags']);
+  });
+
+  it('finds a cross-workspace filtered match older than the per-project default window', async () => {
+    // The only 'decision' is the oldest checkpoint in its project, behind more
+    // than the default per-project window. Cross-workspace filtering must scan
+    // the full corpus, not just each project's newest few.
+    await saveCheckpoint({
+      description: 'Buried cross-project decision',
+      type: 'decision',
+      workspace: TEST_DIR_A
+    });
+    await new Promise(resolve => setTimeout(resolve, 2));
+    for (let i = 0; i < 6; i++) {
+      await saveCheckpoint({ description: `Filler ${i}`, workspace: TEST_DIR_A });
+      await new Promise(resolve => setTimeout(resolve, 2));
+    }
+
+    const { registerProject } = await import('../src/registry');
+    await registerProject(TEST_DIR_A);
+
+    const result = await recall({ type: 'decision', workspace: 'all' });
+
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.description).toBe('Buried cross-project decision');
   });
 });

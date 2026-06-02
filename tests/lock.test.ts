@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { acquireLock, withLock, tryAcquireLock } from '../src/lock';
+import { acquireLock, withLock, tryAcquireLock, isStaleLock, isLockHeldError } from '../src/lock';
 import { join } from 'path';
 import { rm, mkdir, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
+import { tmpdir, hostname } from 'os';
 
 const TEST_DIR = join(tmpdir(), `test-locks-${Date.now()}`);
 const TEST_FILE = join(TEST_DIR, 'test.txt');
@@ -188,6 +188,67 @@ describe('File locking', () => {
     } finally {
       await release();
     }
+  });
+
+  it('classifies only EEXIST as lock-held; EPERM/EACCES are hard errors', () => {
+    expect(isLockHeldError('EEXIST')).toBe(true);
+    expect(isLockHeldError('EPERM')).toBe(false);
+    expect(isLockHeldError('EACCES')).toBe(false);
+    expect(isLockHeldError(undefined)).toBe(false);
+  });
+
+  it('does not treat a live same-host holder as stale, even when old', () => {
+    // A lock owned by a process that is provably alive on this host must never
+    // be force-stolen, regardless of age (fixes "live lock stolen at 30s").
+    const old = Date.now() - 60_000;
+    expect(isStaleLock({ pid: process.pid, host: hostname(), timestamp: old })).toBe(false);
+  });
+
+  it('treats an age-expired lock with no host as stale', () => {
+    expect(isStaleLock({ pid: 999999, timestamp: Date.now() - 60_000 })).toBe(true);
+  });
+
+  it('treats a fresh lock with no host as not stale', () => {
+    expect(isStaleLock({ pid: 999999, timestamp: Date.now() })).toBe(false);
+  });
+
+  it('treats a malformed lock (no usable timestamp) as stale', () => {
+    expect(isStaleLock({ pid: 1 } as any)).toBe(true);
+  });
+
+  it('fails fast (does not spin) when the lock file cannot be created', async () => {
+    const { chmod } = await import('fs/promises');
+    const roDir = join(TEST_DIR, 'ro');
+    await mkdir(roDir, { recursive: true });
+    await chmod(roDir, 0o555); // read-only: creating the lock file fails (EPERM/EACCES)
+    const target = join(roDir, 'x.txt');
+    try {
+      const result = await Promise.race([
+        acquireLock(target).then(
+          (release) => { release(); return 'acquired' as const; },
+          (err) => ({ error: err as Error })
+        ),
+        new Promise<'timeout'>((res) => setTimeout(() => res('timeout'), 2000)),
+      ]);
+      await chmod(roDir, 0o755);
+      if (result === 'timeout') throw new Error('acquireLock spun instead of failing fast on permission error');
+      if (result === 'acquired') throw new Error('acquireLock should not succeed in a read-only directory');
+      expect((result as { error: Error }).error.message).toMatch(/Failed to acquire lock/);
+    } finally {
+      await chmod(roDir, 0o755).catch(() => {});
+    }
+  });
+
+  it('reclaims a stale lock left by a crashed process and records this host/pid', async () => {
+    const lockPath = `${TEST_FILE}.lock`;
+    await writeFile(lockPath, JSON.stringify({ pid: 999999, timestamp: Date.now() - 60_000 }));
+
+    const release = await acquireLock(TEST_FILE);
+    const data = JSON.parse(await Bun.file(lockPath).text());
+    expect(data.pid).toBe(process.pid);
+    expect(data.host).toBe(hostname());
+    await release();
+    expect(await Bun.file(lockPath).exists()).toBe(false);
   });
 
   it('does not loop forever when a stale lock cannot be deleted', async () => {

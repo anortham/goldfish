@@ -193,6 +193,51 @@ describe('Register project', () => {
     expect(registry.projects).toHaveLength(1);
   });
 
+  it('backs up a corrupt registry instead of silently wiping registered projects', async () => {
+    // A corrupt registry.json must not be silently overwritten — that would
+    // permanently drop every other registered project on the next write.
+    const garbage = '{ "projects": [ {"path": "/home/a/proj-a"  truncated...';
+    await writeFile(join(GOLDFISH_DIR, 'registry.json'), garbage, 'utf-8');
+
+    const projectPath = join(TEST_DIR, 'post-corruption');
+    await mkdir(projectPath, { recursive: true });
+    await registerProject(projectPath, GOLDFISH_DIR);
+
+    // Registry self-heals: the new project is registered.
+    const registry = await getRegistry(GOLDFISH_DIR);
+    expect(registry.projects).toHaveLength(1);
+    expect(registry.projects[0]!.name).toBe('post-corruption');
+
+    // The corrupt content is preserved in a backup, not destroyed.
+    const files = await readdir(GOLDFISH_DIR);
+    const backups = files.filter(f => f.startsWith('registry.json.corrupt'));
+    expect(backups).toHaveLength(1);
+    const backupContent = await readFile(join(GOLDFISH_DIR, backups[0]!), 'utf-8');
+    expect(backupContent).toBe(garbage);
+  });
+
+  it('backs up a corrupt registry on the unregister path instead of leaving it', async () => {
+    // Any mutation attempt against a corrupt registry should preserve the bad
+    // content and heal the file, not silently leave the corruption in place.
+    const garbage = 'not json at all }{';
+    await writeFile(join(GOLDFISH_DIR, 'registry.json'), garbage, 'utf-8');
+
+    const projectPath = join(TEST_DIR, 'never-registered');
+    await mkdir(projectPath, { recursive: true });
+    await unregisterProject(projectPath, GOLDFISH_DIR);
+
+    // The corrupt content is preserved in a backup.
+    const files = await readdir(GOLDFISH_DIR);
+    const backups = files.filter(f => f.startsWith('registry.json.corrupt'));
+    expect(backups).toHaveLength(1);
+    const backupContent = await readFile(join(GOLDFISH_DIR, backups[0]!), 'utf-8');
+    expect(backupContent).toBe(garbage);
+
+    // Reads after healing return a clean empty registry, not a parse error.
+    const registry = await getRegistry(GOLDFISH_DIR);
+    expect(registry.projects).toEqual([]);
+  });
+
   it('leaves no temp or lock files behind after register and unregister', async () => {
     const projectPath = join(TEST_DIR, 'temp-cleanup-project');
     await mkdir(projectPath, { recursive: true });

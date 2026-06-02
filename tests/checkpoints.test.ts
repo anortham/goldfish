@@ -1598,6 +1598,23 @@ describe('findLatestCheckpointTimestampForBrief', () => {
     const result = await findLatestCheckpointTimestampForBrief(tempDir, 'legacy-brief');
     expect(result).toBe('2026-05-05T10:00:00.000Z');
   });
+
+  it('ignores date directories older than the notBefore cutoff', async () => {
+    await writeBriefCheckpoint('2026-01-01', '12:00:00', 'checkpoint_jan', 'briefId: target-brief\n');
+    await writeBriefCheckpoint('2026-03-01', '12:00:00', 'checkpoint_mar', 'briefId: target-brief\n');
+
+    // No cutoff: full scan finds the newest match.
+    expect(await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief'))
+      .toBe('2026-03-01T12:00:00.000Z');
+
+    // Cutoff between the two: only the March match is in range.
+    expect(await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief', '2026-02-01'))
+      .toBe('2026-03-01T12:00:00.000Z');
+
+    // Cutoff after both: nothing in range, so it stops without scanning older history.
+    expect(await findLatestCheckpointTimestampForBrief(tempDir, 'target-brief', '2026-04-01'))
+      .toBeNull();
+  });
 });
 
 // ─── Auto-registration ──────────────────────────────────────────────

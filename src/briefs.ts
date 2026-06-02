@@ -27,6 +27,7 @@ import {
   resolveWorkspace
 } from './workspace';
 import { withLock } from './lock';
+import { getLogger } from './logger';
 
 type StoredBrief = {
   brief: Brief;
@@ -275,8 +276,17 @@ export async function listBriefs(projectPath: string): Promise<Brief[]> {
     ...await listBriefIds(getPlansDir(projectPath))
   ]);
 
+  // Tolerate a single corrupt brief: skip and log rather than letting one
+  // unreadable file (Promise.all rejection) hide every valid brief.
   const briefs = await Promise.all(
-    [...ids].map(async (id) => getBrief(projectPath, id))
+    [...ids].map(async (id) => {
+      try {
+        return await getBrief(projectPath, id);
+      } catch (error: any) {
+        getLogger().warn(`skipping unreadable brief '${id}': ${error?.message ?? 'parse error'}`);
+        return null;
+      }
+    })
   );
 
   return briefs
@@ -295,7 +305,19 @@ export async function getActiveBrief(projectPath: string): Promise<Brief | null>
     return null;
   }
 
-  const brief = await getBrief(projectPath, briefId);
+  // A corrupt active brief must never crash recall. Degrade to "no active
+  // brief" and log loudly, instead of propagating a parse error up through
+  // recall(). An explicit getBrief(id) still throws — see getBrief.
+  let brief: Brief | null;
+  try {
+    brief = await getBrief(projectPath, briefId);
+  } catch (error: any) {
+    getLogger().warn(
+      `active brief '${briefId}' is unreadable, ignoring: ${error?.message ?? 'parse error'}`
+    );
+    return null;
+  }
+
   if (brief && brief.status !== 'active') {
     return null;
   }

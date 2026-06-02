@@ -8,8 +8,6 @@
  * - brief: Manage durable strategic context
  */
 
-import { rm } from 'fs/promises';
-import { join } from 'path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -25,12 +23,11 @@ import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js
 import type { CheckpointArgs, RecallArgs, BriefArgs } from './types.js';
 import { getLogger } from './logger.js';
 import {
-  getGoldfishHomeDir,
   getUnsafeCwdWorkspaceReason,
   resolveWorkspaceWithSource
 } from './workspace.js';
 
-export const SERVER_VERSION = '7.1.0';
+export const SERVER_VERSION = '7.2.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 
@@ -115,41 +112,7 @@ async function hydrateWorkspaceArguments(
   };
 }
 
-/**
- * v7.0-only migration cleanup. REMOVE IN v7.1.0.
- *
- * v6 wrote a derived semantic cache and downloaded MiniLM model weights
- * under ~/.goldfish/, plus per-workspace consolidation cursors under
- * ~/.goldfish/consolidation-state/. v7 dropped the entire semantic stack
- * in favor of Orama BM25 and removed the consolidation pipeline, leaving
- * those three directories as dead bytes on every upgrade.
- *
- * This helper deletes all three directories on first server startup. After
- * one v7 startup per machine the dirs are gone and this becomes permanent
- * dead code, so it must be removed in v7.1.0.
- */
-export async function cleanupV7LegacyDirectories(): Promise<void> {
-  try {
-    const home = getGoldfishHomeDir();
-    await Promise.all([
-      rm(join(home, 'cache', 'semantic'), { recursive: true, force: true }),
-      rm(join(home, 'models', 'transformers'), { recursive: true, force: true }),
-      rm(join(home, 'consolidation-state'), { recursive: true, force: true })
-    ]);
-  } catch {
-    // Best-effort: never propagate errors from migration cleanup.
-  }
-}
-
-let v7CleanupRan = false;
-
 export function createServer() {
-  // v7.0-only migration cleanup. REMOVE IN v7.1.0 (see cleanupV7LegacyDirectories).
-  if (!v7CleanupRan) {
-    v7CleanupRan = true;
-    void cleanupV7LegacyDirectories();
-  }
-
   const server = new Server(
     {
       name: 'goldfish',

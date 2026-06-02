@@ -388,13 +388,18 @@ describe('Readable markdown responses', () => {
     });
 
     it('renders a one-line nudge instead of the body for a stale active brief', async () => {
-      await saveBrief({
-        id: 'stale-plan',
-        title: 'Stale Plan',
-        content: 'Plan content here',
-        workspace: TEST_DIR,
-        activate: true
-      });
+      // Create the brief at the same time as its referencing checkpoint so the
+      // created-date cutoff in recall sees the old activity. (A brief's created
+      // timestamp is always <= its referencing checkpoints in production.)
+      await withFrozenTime('2026-05-01T12:00:00.000Z', () =>
+        saveBrief({
+          id: 'stale-plan',
+          title: 'Stale Plan',
+          content: 'Plan content here',
+          workspace: TEST_DIR,
+          activate: true
+        })
+      );
 
       // Old checkpoint referencing the brief — 14 days before the frozen "now".
       const dir = join(getMemoriesDir(TEST_DIR), '2026-05-01');

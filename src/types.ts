@@ -82,7 +82,18 @@ export interface RecallOptions {
   limit?: number;         // Max checkpoints to return (default: 5)
   full?: boolean;         // Return full descriptions + all metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief
+  type?: string;          // Filter to a single checkpoint type (untyped == 'checkpoint')
+  tags?: string[];        // Filter to checkpoints containing ALL of these tags (case-insensitive)
   _registryDir?: string;  // Internal: override registry dir for test isolation
+}
+
+/**
+ * Wire-level recall input. Identical to RecallOptions except `tags` may arrive
+ * as a comma-separated string from non-Claude MCP clients; recall() normalizes
+ * it to a `string[]` before any internal use.
+ */
+export interface RecallInput extends Omit<RecallOptions, 'tags'> {
+  tags?: string[] | string;
 }
 
 /**
@@ -162,6 +173,8 @@ export interface RecallArgs {
   full?: boolean;
   briefId?: string;
   brief_id?: string;
+  type?: string;
+  tags?: string[] | string;
   _registryDir?: string;
 }
 

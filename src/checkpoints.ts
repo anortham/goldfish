@@ -579,10 +579,17 @@ export async function getAllCheckpoints(
  * a matching checkpoint holds the newest match, so we early-exit there. Matches
  * both `briefId` and the legacy `planId` affinity field. Returns null when no
  * checkpoint references the brief (or the project has no memories).
+ *
+ * `notBeforeDate` (YYYY-MM-DD) bounds the scan: date directories older than it
+ * are skipped. A checkpoint can only reference a brief that already existed, so
+ * passing the brief's creation date as the cutoff loses no matches while
+ * keeping the common session-start case (a fresh brief over a large history)
+ * from scanning and parsing the entire `.memories/` tree on every recall.
  */
 export async function findLatestCheckpointTimestampForBrief(
   projectPath: string,
-  briefId: string
+  briefId: string,
+  notBeforeDate?: string
 ): Promise<string | null> {
   const memoriesDir = getMemoriesDir(projectPath);
 
@@ -597,7 +604,11 @@ export async function findLatestCheckpointTimestampForBrief(
   }
 
   const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-  const dateDirs = entries.filter(e => datePattern.test(e)).sort().reverse();
+  let dateDirs = entries.filter(e => datePattern.test(e)).sort().reverse();
+  if (notBeforeDate) {
+    // Date-dir names are zero-padded YYYY-MM-DD, so lexical compare == chronological.
+    dateDirs = dateDirs.filter(dir => dir >= notBeforeDate);
+  }
 
   for (const dir of dateDirs) {
     const checkpoints = await getCheckpointsForDay(projectPath, dir);

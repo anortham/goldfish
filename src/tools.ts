@@ -133,6 +133,8 @@ Key parameters (all optional):
 - days: How far back to look in days
 - from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
 - search: Search query (matches descriptions, tags, branches, files)
+- type: Filter to one type: checkpoint, decision, incident, or learning
+- tags: Filter to checkpoints carrying ALL listed tags (case-insensitive)
 - full: Return full descriptions + metadata including files and git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - briefId: Filter checkpoints to those created under a specific brief
@@ -141,6 +143,8 @@ Examples:
 - recall() - last 5 checkpoints regardless of age
 - recall({ since: "2h" }) - last 2 hours
 - recall({ search: "auth", full: true }) - search with full details
+- recall({ type: "decision" }) - past decisions only
+- recall({ tags: ["db", "ops"] }) - checkpoints tagged both db and ops
 - recall({ workspace: "all", days: 1 }) - cross-project standup
 - recall({ limit: 0 }) - active brief only, no checkpoints
 
@@ -171,6 +175,16 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
           search: {
             type: 'string',
             description: 'Search query over descriptions, tags, branches, and files. Optional - omit to see all checkpoints in range.'
+          },
+          type: {
+            type: 'string',
+            enum: ['checkpoint', 'decision', 'incident', 'learning'],
+            description: 'Filter to a single checkpoint type. Untyped checkpoints count as "checkpoint". Combines with search and tags.'
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Filter to checkpoints that contain ALL of these tags (case-insensitive AND match). Combines with type and search.'
           },
           full: {
             type: 'boolean',
