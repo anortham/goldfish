@@ -301,7 +301,7 @@ Cut `plan` clean. Rename `plans.ts` → `briefs.ts`. Drop `planId` aliases. End 
 
 **What to build:** All code references the new name. `planId` is no longer accepted as a parameter alias on any tool. Existing checkpoint files with `planId:` in frontmatter still read correctly (legacy field on the `Checkpoint` type stays for read compatibility, no new writes use it).
 
-**Approach:** Do the renames via `git mv` first so git tracks the move. Then sweep imports with grep. The `Checkpoint.planId` legacy field is the one place to be careful: existing user `.memories/2026-*/​*.md` files have `planId:` in frontmatter. Those must continue to parse. The field can be removed from the *write* path but must stay in the *read* path. Verify with the existing checkpoint-file fixtures in tests.
+**Approach:** Do the renames via `git mv` first so git tracks the move. Then sweep imports with grep. The `Checkpoint.planId` legacy field is the one place to be careful: existing user `.memories/2026-*/*.md` files have `planId:` in frontmatter. Those must continue to parse. The field can be removed from the *write* path but must stay in the *read* path. Verify with the existing checkpoint-file fixtures in tests.
 
 **Acceptance criteria:**
 - [ ] `src/plans.ts` does not exist; `src/briefs.ts` does

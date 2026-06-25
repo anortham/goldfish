@@ -41,3 +41,4 @@ test-goldfish-data/
 
 # Local git worktrees
 .worktrees/
+.miller/
