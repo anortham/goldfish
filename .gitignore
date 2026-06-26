@@ -42,3 +42,6 @@ test-goldfish-data/
 # Local git worktrees
 .worktrees/
 .miller/
+
+# Local Codex CLI config (machine-specific MCP commands + absolute paths)
+.codex/

@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 7.2.1** -- Fixes a stale-roots-cache bug where desktop MCP clients (Cursor) that spawn the plugin with a home/filesystem-root cwd and return empty or failed `roots/list` on the first tool call would lock every later call out of the workspace for the whole session. Roots lookup now retries until a usable root arrives. See CHANGELOG.md for details.
+**Version 7.3.0** -- Workspace recovery for harnesses that spawn the plugin with a home/filesystem-root cwd and never advertise MCP roots (notably Cursor plugin installs). When the resolution chain reaches the cwd fallback, goldfish now recovers a project root from the cross-project registry (cwd or an ancestor is registered) or by walking up to the nearest `.memories/` or `.git/` (skipping unsafe dirs) before accepting cwd or refusing. A single registered project auto-resolves for `recall` only; mutating tools refuse with a "Known projects" list. Also fixes the unsafe-cwd guard to recognize home through a symlink (macOS `/var` vs `/private/var`). See CHANGELOG.md for details.
 
 ---
 
@@ -63,6 +63,26 @@ Once the plugin is loaded, Goldfish works through manual invocation and agent-dr
 2. **You work** -- checkpoint with `/checkpoint` at meaningful milestones
 3. **Direction persists** -- save a brief with `/brief` when goals, constraints, or success criteria should survive the session
 4. **Next session** -- recall replays the same context
+
+### Cursor
+
+Cursor runs Goldfish as a plugin. Note a client quirk that affects workspace binding: Cursor advertises MCP `roots` to **user-config** MCP servers (registered in `~/.cursor/mcp.json`) but **not** to plugin-launched servers, and it spawns plugin servers with `cwd` set to your home directory rather than the open project. That means a freshly-installed Goldfish plugin in a brand-new project — before any checkpoint has registered it — has no project path signal and will refuse mutating tools with guidance rather than guess.
+
+Goldfish 7.3+ recovers automatically once a project is known: if `cwd` or an ancestor is in the cross-project registry, or a parent directory has `.memories/` or `.git/`, recovery resolves the project root without roots. Until that first checkpoint lands, the reliable escape hatch is the same as Codex Desktop — register Goldfish per-project with an explicit `GOLDFISH_WORKSPACE`:
+
+```json
+{
+  "mcpServers": {
+    "goldfish": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/goldfish/src/server.ts"],
+      "env": { "GOLDFISH_WORKSPACE": "/absolute/path/to/your/project" }
+    }
+  }
+}
+```
+
+Add that to the project's `.cursor/mcp.json` (or your user config scoped to the project) for first use. Once you've checkpointed there once, the plugin's recovery takes over and the override is no longer needed.
 
 ### Codex Desktop
 

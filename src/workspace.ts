@@ -5,9 +5,9 @@
  * its memories in a local .memories/ directory.
  */
 
-import { mkdir } from 'fs/promises';
+import { mkdir, realpath, stat } from 'fs/promises';
 import { homedir, tmpdir } from 'os';
-import { join, win32 } from 'path';
+import { join, posix, win32 } from 'path';
 import { fileURLToPath } from 'url';
 
 export interface WorkspaceRoot {
@@ -76,15 +76,28 @@ export function normalizeWorkspace(pathOrName: string): string {
  * Source of the workspace path returned by resolveWorkspaceWithSource.
  *
  * - 'explicit': caller passed a non-'current' workspace argument
- * - 'env':     GOLDFISH_WORKSPACE was set
- * - 'roots':   came from MCP roots/list
- * - 'cwd':     fell back to process.cwd() — least trustworthy on desktop MCP clients
+ * - 'env':      GOLDFISH_WORKSPACE was set
+ * - 'roots':    came from MCP roots/list
+ * - 'cwd':      fell back to process.cwd() — least trustworthy on desktop MCP clients
+ * - 'registry': recovered from the cross-project registry (cwd or an ancestor is a
+ *               registered project, or the single-registered recall-only fallback)
+ * - 'walk':     recovered by walking up from cwd to the nearest .memories/ or .git/
  */
-export type WorkspaceSource = 'explicit' | 'env' | 'roots' | 'cwd';
+export type WorkspaceSource = 'explicit' | 'env' | 'roots' | 'cwd' | 'registry' | 'walk';
 
 export interface ResolvedWorkspace {
   path: string;
   source: WorkspaceSource;
+}
+
+/**
+ * Result of a workspace recovery attempt (registry lookup or parent walk).
+ * Used when the resolution chain reaches the cwd fallback and tries to find a
+ * better root before accepting cwd or refusing.
+ */
+export interface RecoveredWorkspace {
+  path: string;
+  source: 'registry' | 'walk';
 }
 
 /**
@@ -149,6 +162,13 @@ function normalizeWindowsPathKey(value: string): string {
   return win32.normalize(value).replace(/[\\/]+$/g, '').toLowerCase();
 }
 
+export function normalizePathKeyForSafetyCheck(value: string): string {
+  if (isWindowsPath(value)) {
+    return normalizeWindowsPathKey(value).replace(/\\/g, '/');
+  }
+  return normalizePosixPathKey(value);
+}
+
 function pathsEqualForSafetyCheck(left: string, right: string): boolean {
   if (isWindowsPath(left) || isWindowsPath(right)) {
     return normalizeWindowsPathKey(left) === normalizeWindowsPathKey(right);
@@ -198,6 +218,128 @@ export function getUnsafeCwdWorkspaceReason(
     if (windowsHomeRoot) {
       return 'home directory';
     }
+  }
+
+  return undefined;
+}
+
+/**
+ * Async, realpath-aware variant of `getUnsafeCwdWorkspaceReason`.
+ *
+ * The sync function compares cwd against HOME/USERPROFILE via string equality,
+ * which fails when the two paths differ only by a symlink (macOS: cwd resolves
+ * to `/private/var/...` while HOME is `/var/...`). That would let a home cwd
+ * slip past the guard and let `.memories/` be written into home. This helper
+ * canonicalizes cwd and each home candidate through `realpath` before
+ * delegating to the sync checker; on any realpath failure (non-existent path,
+ * broken symlink, permission) it falls back to the sync string comparison so
+ * existing behavior with fake/abstract paths is preserved.
+ *
+ * Use this in async call sites (server hydration, parent walk, recovery).
+ */
+export async function resolveUnsafeCwdReason(
+  workspacePath: string,
+  env: Record<string, string | undefined> = process.env
+): Promise<string | undefined> {
+  // Cheap path: the sync check handles `/`, `~`, Windows system dirs, and
+  // exact/trailing-slash home matches without any filesystem access. If it
+  // already flags the path, we're done.
+  const syncReason = getUnsafeCwdWorkspaceReason(workspacePath, env);
+  if (syncReason) return syncReason;
+
+  // Otherwise, the sync check said "safe" — but cwd and HOME may be the same
+  // dir under different symlink forms. Re-check home equality via realpath.
+  const homeCandidates = [env.HOME, env.USERPROFILE, homedir()].filter(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0
+  );
+  if (homeCandidates.length === 0) return undefined;
+
+  const cwdReal = await tryRealpath(workspacePath);
+  if (cwdReal === undefined) return undefined; // couldn't canonicalize cwd; trust the sync "safe"
+
+  for (const home of homeCandidates) {
+    const homeReal = await tryRealpath(home);
+    if (homeReal !== undefined && homeReal === cwdReal) {
+      return 'home directory';
+    }
+  }
+  return undefined;
+}
+
+async function tryRealpath(p: string): Promise<string | undefined> {
+  try {
+    return await realpath(p);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Walk upward from `cwd` (inclusive) to the filesystem root, looking for a
+ * directory containing `.memories/` (preferred) or `.git/` (file or dir). The
+ * first safe match wins and becomes the workspace root.
+ *
+ * Recovery helper for the cwd fallback in the resolution chain. Safe to call
+ * on any cwd; returns `undefined` when no marker is found.
+ *
+ * Safety: any candidate that `getUnsafeCwdWorkspaceReason` flags (home dir,
+ * filesystem root, Windows system dirs) is skipped — it never matches there.
+ * This closes the regression where a user who `git init`s their home dir for
+ * dotfile tracking would otherwise have the walk match `$HOME/.git` and write
+ * `.memories/` into home (the original v1 silent-home-write bug).
+ *
+ * The walk uses the raw `path.dirname` chain (no `realpath` of the whole chain
+ * up front) so which marker is found reflects the path the caller actually
+ * used, not a canonicalized one.
+ *
+ * Pure with respect to the registry: this helper does NOT import registry.ts,
+ * avoiding a module cycle (registry.ts already imports from workspace.ts).
+ */
+export async function parentWalkWorkspace(
+  cwd: string,
+  opts: { env?: Record<string, string | undefined> } = {}
+): Promise<RecoveredWorkspace | undefined> {
+  const env = opts.env ?? process.env;
+
+  // Walk from cwd (inclusive) up to the root. On each level, check .memories/
+  // first (preferred), then .git/. Skip any candidate flagged as unsafe.
+  const pathOps = isWindowsPath(cwd) ? win32 : posix;
+  let current = cwd;
+  // Guard against infinite loops on degenerate input; the dirname walk is
+  // naturally bounded because dirname(root) === root.
+  let guard = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (guard++ > 128) break;
+
+    // realpath-aware unsafe check so a home dir reached via a symlink form
+    // (macOS /var vs /private/var) is still skipped, not matched.
+    const unsafe = await resolveUnsafeCwdReason(current, env);
+    if (!unsafe) {
+      // Prefer .memories/ at this level.
+      try {
+        const memoriesStat = await stat(pathOps.join(current, '.memories'));
+        if (memoriesStat.isDirectory()) {
+          return { path: current, source: 'walk' };
+        }
+      } catch {
+        // no .memories/ here
+      }
+
+      // Fall back to .git/ (file or dir) — enables first use in a git repo
+      // that has not yet saved a checkpoint.
+      try {
+        await stat(pathOps.join(current, '.git'));
+        return { path: current, source: 'walk' };
+      } catch {
+        // no .git/ here
+      }
+    }
+
+    const parent = pathOps.dirname(current);
+    // dirname of a root returns the root itself; stop when we can't go higher.
+    if (parent === current) break;
+    current = parent;
   }
 
   return undefined;

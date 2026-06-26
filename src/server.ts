@@ -23,11 +23,13 @@ import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js
 import type { CheckpointArgs, RecallArgs, BriefArgs } from './types.js';
 import { getLogger } from './logger.js';
 import {
-  getUnsafeCwdWorkspaceReason,
+  resolveUnsafeCwdReason,
   resolveWorkspaceWithSource
 } from './workspace.js';
+import { recoverWorkspace, formatKnownProjects, type RecoveredWorkspace } from './workspace-recovery.js';
+import { listRegisteredProjects } from './registry.js';
 
-export const SERVER_VERSION = '7.2.1';
+export const SERVER_VERSION = '7.3.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 
@@ -77,21 +79,21 @@ async function hydrateWorkspaceArguments(
   cache: Map<string, Root[] | null | undefined>,
   sessionId: string,
   sendRequest: (request: { method: 'roots/list' }, resultSchema: typeof ListRootsResultSchema) => Promise<{ roots: Root[] }>
-): Promise<Record<string, unknown>> {
+): Promise<{ args: Record<string, unknown>; recovered?: RecoveredWorkspace }> {
   const args = asObject(rawArgs);
 
   if (!WORKSPACE_AWARE_TOOLS.has(name)) {
-    return args;
+    return { args };
   }
 
   const workspace = typeof args.workspace === 'string' ? args.workspace : undefined;
 
   if (workspace === 'all') {
-    return args;
+    return { args };
   }
 
   if (workspace && workspace !== 'current') {
-    return args;
+    return { args };
   }
 
   const roots = process.env.GOLDFISH_WORKSPACE
@@ -102,20 +104,69 @@ async function hydrateWorkspaceArguments(
     ? resolveWorkspaceWithSource(workspace, { roots })
     : resolveWorkspaceWithSource(workspace);
 
-  const unsafeCwdReason = resolved.source === 'cwd'
-    ? getUnsafeCwdWorkspaceReason(resolved.path)
+  // When the chain falls through to process.cwd(), try to recover a better
+  // project root before accepting cwd or refusing. Cursor plugin installs (and
+  // other harnesses that spawn the server with cwd=home and never advertise
+  // the MCP roots capability) would otherwise hard-refuse on every call. The
+  // registry reader is real here; tests inject a stub via GOLDFISH_HOME.
+  let effective = resolved;
+  let recovered: RecoveredWorkspace | undefined;
+  if (resolved.source === 'cwd') {
+    recovered = await recoverWorkspace({
+      cwd: resolved.path,
+      tool: name as 'checkpoint' | 'recall' | 'brief',
+      registryReader: () => listRegisteredProjects()
+    });
+    if (recovered) {
+      const log = getLogger();
+      log.info(`workspace.recovered source=${recovered.source} path=${recovered.path} cwd=${resolved.path}`);
+      effective = { path: recovered.path, source: recovered.source };
+    }
+  }
+
+  const unsafeCwdReason = effective.source === 'cwd'
+    ? await resolveUnsafeCwdReason(effective.path)
     : undefined;
   if (unsafeCwdReason) {
+    let knownProjects = '';
+    try {
+      const projects = await listRegisteredProjects();
+      knownProjects = formatKnownProjects(projects);
+    } catch {
+      // Registry read failure must not silence the underlying refusal.
+    }
     throw new Error(
-      `Refusing to use ${unsafeCwdReason} (${resolved.path}) as workspace from process cwd. ` +
-        'Set GOLDFISH_WORKSPACE to your project path or open a project folder in your MCP client.'
+      `Refusing to use ${unsafeCwdReason} (${effective.path}) as workspace from process cwd. ` +
+        'Set GOLDFISH_WORKSPACE to your project path, pass `workspace:` to a tool call, ' +
+        'or open a project folder in your MCP client.' +
+        knownProjects
     );
   }
 
-  return {
-    ...args,
-    workspace: resolved.path
+  const hydrated: { args: Record<string, unknown>; recovered?: RecoveredWorkspace } = {
+    args: {
+      ...args,
+      workspace: effective.path
+    }
   };
+  if (recovered) {
+    hydrated.recovered = recovered;
+  }
+  return hydrated;
+}
+
+/**
+ * Append a "Workspace: … (recovered via …)" line to a checkpoint/brief result
+ * so the agent can see where a recovered root landed. Recovery can pick a
+ * wrong-but-plausible root (e.g. a parent .git); without this line the
+ * misplacement is silent. Recall already prints its own workspace line, so we
+ * only surface for the mutating tools.
+ */
+function appendRecoveryNotice(result: { content: Array<{ type: string; text?: string }> }, recovered: RecoveredWorkspace): void {
+  const first = result.content?.[0];
+  if (!first || first.type !== 'text' || typeof first.text !== 'string') return;
+  const sourceLabel = recovered.source === 'registry' ? 'registry' : 'parent walk';
+  first.text = `${first.text}\n\nWorkspace: ${recovered.path} (recovered via ${sourceLabel})`;
 }
 
 export function createServer() {
@@ -147,7 +198,7 @@ export function createServer() {
     const start = performance.now();
 
     try {
-      const hydratedArgs = await hydrateWorkspaceArguments(
+      const { args: hydratedArgs, recovered } = await hydrateWorkspaceArguments(
         name,
         args,
         rootsCache,
@@ -167,6 +218,13 @@ export function createServer() {
           break;
         default:
           throw new Error(`Unknown tool: ${name}`);
+      }
+
+      // Surface where a recovered root landed for mutating tools. Recall
+      // already prints its own workspace line; checkpoint/brief do not, so a
+      // wrong-but-plausible recovery would otherwise be silent.
+      if (recovered && (name === 'checkpoint' || name === 'brief')) {
+        appendRecoveryNotice(result as { content: Array<{ type: string; text?: string }> }, recovered);
       }
 
       const ms = (performance.now() - start).toFixed(1);

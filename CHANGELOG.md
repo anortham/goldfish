@@ -4,6 +4,28 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.0] - 2026-06-26
+
+Workspace recovery for harnesses that spawn the plugin with an unsafe cwd and no MCP roots, plus a realpath fix to the unsafe-cwd guard.
+
+### Added
+
+- Registry + parent-walk workspace recovery. When the resolution chain (explicit arg > `GOLDFISH_WORKSPACE` > MCP `roots/list`) falls through to `process.cwd()`, goldfish now tries to recover a project root before accepting cwd or refusing: (4a) gather the deepest registered ancestor candidate; (5) gather the nearest safe parent-walk candidate containing `.memories/` (preferred) or `.git/`; choose the deeper candidate, keeping `registry` when both identify the same on-disk path; (4b) else, if exactly one project is registered and the calling tool is `recall`, use it. This resolves the Cursor plugin scenario where the plugin server is spawned with `cwd=home` and the `roots` capability is never advertised to plugin-launched servers (only to user-config servers), so every `checkpoint`/`recall`/`brief` call previously hard-refused. Recovery runs on every cwd fallback, so a safe cwd that is a subdirectory of a project now resolves to the nearest project root instead of writing `.memories/` into the subdir or an outer registered repo.
+- `recoverWorkspace` orchestrator in a new `src/workspace-recovery.ts` module (kept out of `workspace.ts` to avoid a cycle with `registry.ts`, which already imports from `workspace.ts`). The registry reader is injected, so tests never touch the real `~/.goldfish/registry.json`.
+- `parentWalkWorkspace` pure helper in `src/workspace.ts` (registry-free) and `resolveUnsafeCwdReason` async helper (realpath-aware).
+- Sharpened refusal message: when recovery fails and the cwd is unsafe, the error now appends a "Known projects: … — pass one as `workspace:`." line listing registered projects when the registry is non-empty, turning a generic refusal into actionable guidance.
+- Observability: recovery events are logged (`workspace.recovered source=registry|walk path=… cwd=…`).
+- Recovery feedback: `checkpoint` and `brief` responses now append a `Workspace: <path> (recovered via <source>)` line when the workspace was recovered, so a wrong-but-plausible root (e.g. a parent `.git`) is visible to the agent instead of silent. `recall` already prints its workspace line.
+
+### Changed
+
+- `4b` single-registered auto-pick is `recall`-only. A single historical registration is usable evidence for where to *read* memories from, not where to *write* them; `checkpoint` and `brief` refuse-with-list so a wrong-path write (a silent data-placement bug) cannot happen. A safe-subdir cwd that is inside a registered or markered project still resolves via 4a/5 for all tools.
+
+### Fixed
+
+- The unsafe-cwd guard now recognizes home through a symlink. Previously `getUnsafeCwdWorkspaceReason` compared `cwd` against `HOME` via string equality, so on macOS — where `process.cwd()` resolves to `/private/var/...` while `HOME` is `/var/...` — a home cwd slipped past the guard and `.memories/` could be written into home. `resolveUnsafeCwdReason` canonicalizes both sides through `fs.realpath` (with a string-compare fallback when `realpath` fails) and is used at the async call sites (server hydration, parent walk, recovery). The sync `getUnsafeCwdWorkspaceReason` is unchanged for the cheap checks (`/`, `~`, Windows system dirs) and still used where async is not available.
+- A registered `$HOME` can no longer bypass the mutating-tool guard. The 4a registry-ancestor candidate is now checked with `resolveUnsafeCwdReason` for mutating tools (`checkpoint`/`brief`); if the registered candidate is itself an unsafe dir (e.g. `~` was registered after a one-off run from home), it is dropped and recovery falls back to the parent walk rather than writing into home. Recall remains read-only and may still use a registered home. Closes a regression where the new recovery layer would have re-opened the silent-home-write class of bug it was built to prevent.
+
 ## [7.2.1] - 2026-06-26
 
 Fixes a stale-roots-cache bug that blocked desktop MCP clients from recovering a usable workspace.

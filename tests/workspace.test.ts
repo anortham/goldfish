@@ -9,10 +9,11 @@ import {
   getPlansDir,
   ensureMemoriesDir,
   getGoldfishHomeDir,
+  parentWalkWorkspace,
 } from '../src/workspace';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { rm, stat } from 'fs/promises';
+import { mkdir, rm, stat, symlink } from 'fs/promises';
 import { pathToFileURL } from 'url';
 
 describe('Workspace normalization', () => {
@@ -353,6 +354,24 @@ describe('getUnsafeCwdWorkspaceReason', () => {
     expect(getUnsafeCwdWorkspaceReason('C:\\Users\\murphy\\source\\goldfish', {})).toBeUndefined();
     expect(getUnsafeCwdWorkspaceReason('C:\\work\\goldfish', {})).toBeUndefined();
   });
+
+  it('recognizes home via realpath when cwd and HOME differ only by a symlink (macOS /var vs /private/var)', async () => {
+    const { realpath, mkdtemp, rm } = await import('fs/promises');
+    const { tmpdir } = await import('os');
+    const { join } = await import('path');
+    const { resolveUnsafeCwdReason } = await import('../src/workspace');
+    const home = await mkdtemp(join(tmpdir(), 'test-unsafe-realpath-'));
+    // process.cwd() on macOS returns the /private/... realpath form, while
+    // HOME is often the /var/... symlink form. Both refer to the same dir.
+    const homeViaSymlink = home; // HOME stored as the symlink-style path
+    const cwdViaRealpath = await realpath(home);
+    // If the platform doesn't symlink-differ (home === realpath(home)), this
+    // test still exercises the equality path; the realpath branch must handle
+    // both "same string" and "different string, same dir" without throwing.
+    const reason = await resolveUnsafeCwdReason(cwdViaRealpath, { HOME: homeViaSymlink });
+    expect(reason).toBe('home directory');
+    await rm(home, { recursive: true, force: true }).catch(() => {});
+  });
 });
 
 describe('Goldfish home directory', () => {
@@ -391,3 +410,150 @@ describe('Goldfish home directory', () => {
     }
   });
 });
+
+describe('parentWalkWorkspace', () => {
+  const tmpDirs: string[] = [];
+  const originalHome = process.env.HOME;
+  const originalUserProfile = process.env.USERPROFILE;
+
+  function makeTmpDir(): string {
+    const dir = join(tmpdir(), `test-goldfish-walk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    tmpDirs.push(dir);
+    return dir;
+  }
+
+  async function makeProjectTree(): Promise<{ root: string; subdir: string; nestedRoot: string; nestedSub: string }> {
+    const root = makeTmpDir();
+    await mkdir(join(root, '.memories'), { recursive: true });
+    const subdir = join(root, 'src');
+    await mkdir(subdir, { recursive: true });
+
+    // Nested inner repo with its own .git, inside a subdir of root that also has .git at root.
+    const nestedRoot = join(root, 'workspaces', 'inner');
+    await mkdir(nestedRoot, { recursive: true });
+    await Bun.write(join(nestedRoot, '.git'), '');
+    const nestedSub = join(nestedRoot, 'lib');
+    await mkdir(nestedSub, { recursive: true });
+    return { root, subdir, nestedRoot, nestedSub };
+  }
+
+  afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = originalUserProfile;
+
+    for (const dir of tmpDirs) {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+    tmpDirs.length = 0;
+  });
+
+  it('resolves to the enclosing project root when cwd is a subdirectory with .memories/', async () => {
+    const { root, subdir } = await makeProjectTree();
+
+    const result = await parentWalkWorkspace(subdir, { env: { HOME: '/nonexistent-home' } });
+    expect(result).toEqual({ path: root, source: 'walk' });
+  });
+
+  it('finds the innermost repo when nested repos both have markers (cwd in inner)', async () => {
+    const { nestedSub } = await makeProjectTree();
+
+    const result = await parentWalkWorkspace(nestedSub, { env: { HOME: '/nonexistent-home' } });
+    // The inner repo (workspaces/inner) has .git and is the first match walking up.
+    expect(result?.path).toMatch(/workspaces\/inner$/);
+    expect(result?.source).toBe('walk');
+  });
+
+  it('resolves to a repo root via .git alone when no .memories/ exists (first use)', async () => {
+    const repo = makeTmpDir();
+    await Bun.write(join(repo, '.git'), '');
+    const sub = join(repo, 'pkg');
+    await mkdir(sub, { recursive: true });
+
+    const result = await parentWalkWorkspace(sub, { env: { HOME: '/nonexistent-home' } });
+    expect(result).toEqual({ path: repo, source: 'walk' });
+  });
+
+  it('prefers .memories/ over .git/ at the same level', async () => {
+    const dir = makeTmpDir();
+    await mkdir(join(dir, '.memories'), { recursive: true });
+    await Bun.write(join(dir, '.git'), '');
+
+    const result = await parentWalkWorkspace(dir, { env: { HOME: '/nonexistent-home' } });
+    expect(result).toEqual({ path: dir, source: 'walk' });
+  });
+
+  it('includes cwd itself as a candidate', async () => {
+    const dir = makeTmpDir();
+    await mkdir(join(dir, '.memories'), { recursive: true });
+
+    const result = await parentWalkWorkspace(dir, { env: { HOME: '/nonexistent-home' } });
+    expect(result).toEqual({ path: dir, source: 'walk' });
+  });
+
+  it('skips an unsafe home directory that happens to contain .git and keeps walking', async () => {
+    const home = makeTmpDir();
+    // Simulate a user who `git init`s their home dir for dotfile tracking.
+    await Bun.write(join(home, '.git'), '');
+    // A real project lives under home and has .memories/.
+    const project = join(home, 'source', 'myproj');
+    await mkdir(join(project, '.memories'), { recursive: true });
+    const sub = join(project, 'src');
+    await mkdir(sub, { recursive: true });
+
+    const result = await parentWalkWorkspace(sub, { env: { HOME: home } });
+    expect(result).toEqual({ path: project, source: 'walk' });
+  });
+
+  it('returns undefined when walking from home with no project markers (home skipped, nothing above)', async () => {
+    const home = makeTmpDir();
+    // No .memories/ or .git/ under home or above.
+
+    const result = await parentWalkWorkspace(home, { env: { HOME: home } });
+    expect(result).toBeUndefined();
+  });
+
+  it('returns undefined when home itself has .git but nothing else (regression: must not match home)', async () => {
+    const home = makeTmpDir();
+    await Bun.write(join(home, '.git'), '');
+
+    const result = await parentWalkWorkspace(home, { env: { HOME: home } });
+    expect(result).toBeUndefined();
+  });
+
+  it('does not canonicalize the whole chain up front (walks raw dirname)', async () => {
+    // Build a real symlinked path so realpath would change the starting directory,
+    // but the walk must use the raw path so the marker at the real root is found
+    // via the symlinked ancestor chain.
+    const realRoot = makeTmpDir();
+    await mkdir(join(realRoot, '.memories'), { recursive: true });
+    const linkParent = makeTmpDir();
+    await mkdir(linkParent, { recursive: true });
+    const link = join(linkParent, 'link');
+    await symlink(realRoot, link);
+    const sub = join(link, 'src');
+    await mkdir(sub, { recursive: true });
+
+    const result = await parentWalkWorkspace(sub, { env: { HOME: '/nonexistent-home' } });
+    // Walking raw dirname from the symlinked path should find the marker at `link`
+    // (the symlink resolves to realRoot on stat, but the returned path is the walked
+    // ancestor, i.e. the link). We accept either the link or its real target as the
+    // resolved root, since both point at the same on-disk project.
+    const resolved = result?.path ?? '';
+    expect(
+      resolved === link ||
+      resolved === realRoot ||
+      await realpathEquals(resolved, realRoot)
+    ).toBe(true);
+  });
+});
+
+async function realpathEquals(candidate: string, target: string): Promise<boolean> {
+  try {
+    const { realpath } = await import('fs/promises');
+    return await realpath(candidate) === await realpath(target);
+  } catch {
+    return false;
+  }
+}
