@@ -685,6 +685,117 @@ describe('Request-time workspace hydration', () => {
     }
   });
 
+  it('retries roots lookup when the first call returns an empty list', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'test-server-root-late-'));
+    const home = await mkdtemp(join(tmpdir(), 'test-server-home-late-'));
+    const originalHome = process.env.HOME;
+    process.chdir(home);
+    process.env.HOME = process.cwd();
+    const roots: Array<{ uri: string }> = [];
+    const connection = await connectServerWithRoots(() => roots);
+
+    try {
+      // First tool call arrives before the client has populated roots. Empty
+      // roots must not be cached as a permanent failure: the cwd fallback here
+      // points at a home directory and is rejected.
+      const firstAttempt = await connection.client.callTool({
+        name: 'recall',
+        arguments: { limit: 1 }
+      });
+      expect(firstAttempt.isError).toBe(true);
+      expect(getFirstTextContent(firstAttempt).toLowerCase()).toContain('home directory');
+      expect(connection.rootsCalls).toBe(1);
+
+      // Client now advertises the real project root.
+      roots.push({ uri: pathToFileURL(rootDir).href });
+
+      const checkpoint = await connection.client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'checkpoint after roots populated' }
+      });
+      expect(checkpoint.isError).not.toBe(true);
+      expect(connection.rootsCalls).toBe(2);
+
+      const recall = await connection.client.callTool({
+        name: 'recall',
+        arguments: { workspace: rootDir, full: true }
+      });
+      expect(getFirstTextContent(recall)).toContain('checkpoint after roots populated');
+      expect((await stat(join(rootDir, '.memories'))).isDirectory()).toBe(true);
+    } finally {
+      await Promise.all([connection.client.close(), connection.server.close()]);
+      process.chdir(ORIGINAL_CWD);
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      await rm(rootDir, { recursive: true, force: true });
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it('retries roots lookup after a failed first call', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'test-server-root-fail-'));
+    const home = await mkdtemp(join(tmpdir(), 'test-server-home-fail-'));
+    const originalHome = process.env.HOME;
+    process.chdir(home);
+    process.env.HOME = process.cwd();
+    let roots: Array<{ uri: string }> | 'throw' = 'throw';
+    const { createServer } = await import('../src/server');
+
+    const server = createServer();
+    const client = new Client(
+      { name: 'goldfish-test-client', version: '1.0.0' },
+      { capabilities: { roots: { listChanged: true } } }
+    );
+    let rootsCalls = 0;
+    client.setRequestHandler(ListRootsRequestSchema, async () => {
+      rootsCalls += 1;
+      if (roots === 'throw') {
+        throw new Error('roots/list temporarily unavailable');
+      }
+      return { roots };
+    });
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport)
+      ]);
+
+      const firstAttempt = await client.callTool({
+        name: 'recall',
+        arguments: { limit: 1 }
+      });
+      expect(firstAttempt.isError).toBe(true);
+      expect(getFirstTextContent(firstAttempt).toLowerCase()).toContain('home directory');
+      expect(rootsCalls).toBe(1);
+
+      roots = [{ uri: pathToFileURL(rootDir).href }];
+
+      const checkpoint = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'checkpoint after roots recover' }
+      });
+      expect(checkpoint.isError).not.toBe(true);
+      expect(rootsCalls).toBe(2);
+
+      const recall = await client.callTool({
+        name: 'recall',
+        arguments: { workspace: rootDir, full: true }
+      });
+      expect(getFirstTextContent(recall)).toContain('checkpoint after roots recover');
+      expect((await stat(join(rootDir, '.memories'))).isDirectory()).toBe(true);
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+      process.chdir(ORIGINAL_CWD);
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      await rm(rootDir, { recursive: true, force: true });
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it('falls back to cwd when roots lookup is unavailable', async () => {
     const cwdFallback = await mkdtemp(join(tmpdir(), 'test-server-cwd-'));
     process.chdir(cwdFallback);

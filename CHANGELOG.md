@@ -4,6 +4,14 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.1] - 2026-06-26
+
+Fixes a stale-roots-cache bug that blocked desktop MCP clients from recovering a usable workspace.
+
+### Fixed
+
+- `roots/list` results are no longer cached when empty or failed. Previously, `getCachedRoots` cached empty root lists and thrown/failed lookups for the entire session, so a desktop MCP client (Cursor) that spawned the plugin with a home or filesystem-root cwd — and returned empty roots or a transient failure on the first tool call — would lock every later `checkpoint`/`recall`/`brief` call out of the workspace, surfacing as "Refusing to use home directory (/Users/...) as workspace from process cwd" even after the client later advertised the real project root. Only non-empty successful results are cached now; empty and failed lookups return without caching so the next workspace-aware call re-queries `roots/list` and recovers. This mirrors the deferred-retry pattern already used by Miller and Eros in the same Cursor environment.
+
 ## [7.2.0] - 2026-06-01
 
 Recall filtering plus a cluster of resilience fixes for corrupt or contended state.

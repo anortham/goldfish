@@ -27,7 +27,7 @@ import {
   resolveWorkspaceWithSource
 } from './workspace.js';
 
-export const SERVER_VERSION = '7.2.0';
+export const SERVER_VERSION = '7.2.1';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
 
@@ -51,16 +51,22 @@ async function getCachedRoots(
   sessionId: string,
   sendRequest: (request: { method: 'roots/list' }, resultSchema: typeof ListRootsResultSchema) => Promise<{ roots: Root[] }>
 ): Promise<Root[] | undefined> {
+  // Only a non-empty successful result is worth caching. An empty list or a
+  // failed lookup is treated as "no roots yet" rather than a permanent answer:
+  // desktop MCP clients (Cursor) often populate roots late or after a transient
+  // failure, and caching the empty/failed state would lock every later tool
+  // call out of the workspace for the whole session.
   if (cache.has(sessionId)) {
     return cache.get(sessionId) ?? undefined;
   }
 
   try {
     const result = await sendRequest({ method: 'roots/list' }, ListRootsResultSchema);
-    cache.set(sessionId, result.roots);
+    if (result.roots && result.roots.length > 0) {
+      cache.set(sessionId, result.roots);
+    }
     return result.roots;
   } catch {
-    cache.set(sessionId, null);
     return undefined;
   }
 }
