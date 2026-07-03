@@ -457,6 +457,22 @@ describe('Readable markdown responses', () => {
       );
     });
 
+    it('shows Files and Symbols lines for intent-blame filtered compact results', async () => {
+      const dir = join(getMemoriesDir(TEST_DIR), '2026-05-01');
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, '100000_blame.md'),
+        `---\nid: checkpoint_blame\ntimestamp: "2026-05-01T10:00:00.000Z"\nsymbols:\n  - recoverWorkspace\ngit:\n  branch: main\n  commit: abc1234\n  files:\n    - src/recall.ts\n---\n\nIntent blame work\n`,
+        'utf-8'
+      );
+
+      const fileResult = await handleRecall({ workspace: TEST_DIR, file: 'recall.ts' });
+      expect(fileResult.content[0]!.text).toContain('Files: src/recall.ts');
+
+      const symbolResult = await handleRecall({ workspace: TEST_DIR, symbol: 'recoverWorkspace' });
+      expect(symbolResult.content[0]!.text).toContain('Symbols: recoverWorkspace');
+    });
+
     it('includes diagnostics in header', async () => {
       const result = await handleRecall({
         workspace: TEST_DIR,

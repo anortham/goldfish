@@ -1844,3 +1844,181 @@ describe('Structured recall filters (type / tags)', () => {
     expect(result.checkpoints[0]!.description).toBe('Buried cross-project decision');
   });
 });
+
+describe('File recall filter', () => {
+  async function writeFileCheckpoint(
+    workspace: string,
+    date: string,
+    time: string,
+    id: string,
+    files: string[],
+    body: string
+  ): Promise<void> {
+    const dir = join(getMemoriesDir(workspace), date);
+    await mkdir(dir, { recursive: true });
+    const filesYaml = files.map(f => `    - ${f}`).join('\n');
+    const content = `---\nid: ${id}\ntimestamp: "${date}T${time}.000Z"\ngit:\n  branch: main\n  commit: abc1234\n  files:\n${filesYaml}\n---\n\n${body}\n`;
+    await writeFile(join(dir, `${time.replace(/:/g, '')}_${id}.md`), content, 'utf-8');
+  }
+
+  beforeEach(async () => {
+    await writeFileCheckpoint(TEST_DIR_A, '2026-05-01', '10:00:00', 'cp_recall', ['src/recall.ts'], 'Recall module work');
+    await new Promise(resolve => setTimeout(resolve, 2));
+    await writeFileCheckpoint(TEST_DIR_A, '2026-05-02', '10:00:00', 'cp_handler', ['src/handlers/recall.ts'], 'Handler work');
+    await new Promise(resolve => setTimeout(resolve, 2));
+    await writeFileCheckpoint(TEST_DIR_A, '2026-05-03', '10:00:00', 'cp_install', ['src/install-all.ts'], 'Install script');
+  });
+
+  it('matches path suffix with boundary guard', async () => {
+    const recallHits = await recall({ file: 'recall.ts', workspace: TEST_DIR_A });
+    expect(recallHits.checkpoints.map(c => c.id).sort()).toEqual(['cp_handler', 'cp_recall']);
+
+    const handlerOnly = await recall({ file: 'handlers/recall.ts', workspace: TEST_DIR_A });
+    expect(handlerOnly.checkpoints).toHaveLength(1);
+    expect(handlerOnly.checkpoints[0]!.id).toBe('cp_handler');
+
+    const noBoundary = await recall({ file: 'all.ts', workspace: TEST_DIR_A });
+    expect(noBoundary.checkpoints).toHaveLength(0);
+  });
+
+  it('normalizes Windows-style queries and matches case-insensitively', async () => {
+    const result = await recall({ file: 'src\\recall.ts', workspace: TEST_DIR_A });
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.id).toBe('cp_recall');
+  });
+
+  it('scans the full corpus and composes with other filters', async () => {
+    for (let i = 0; i < 6; i++) {
+      await saveCheckpoint({ description: `Filler ${i}`, workspace: TEST_DIR_A });
+      await new Promise(resolve => setTimeout(resolve, 2));
+    }
+    await writeFileCheckpoint(TEST_DIR_A, '2026-04-01', '10:00:00', 'cp_old', ['src/recall.ts'], 'Old recall change');
+
+    const result = await recall({ file: 'recall.ts', workspace: TEST_DIR_A });
+    expect(result.checkpoints.map(c => c.id)).toContain('cp_old');
+
+    const typed = await recall({ file: 'recall.ts', type: 'decision', workspace: TEST_DIR_A });
+    expect(typed.checkpoints).toHaveLength(0);
+  });
+
+  it('works in cross-workspace recall', async () => {
+    await writeFileCheckpoint(TEST_DIR_B, '2026-05-01', '10:00:00', 'cp_b', ['src/recall.ts'], 'Other project');
+    const { registerProject } = await import('../src/registry');
+    await registerProject(TEST_DIR_A);
+    await registerProject(TEST_DIR_B);
+
+    const result = await recall({ file: 'recall.ts', workspace: 'all' });
+    const ids = result.checkpoints.map(c => c.id).sort();
+    expect(ids).toEqual(['cp_b', 'cp_handler', 'cp_recall']);
+  });
+});
+
+describe('Symbol recall filter', () => {
+  async function writeSymbolCheckpoint(
+    workspace: string,
+    date: string,
+    time: string,
+    id: string,
+    symbols: string[],
+    body: string
+  ): Promise<void> {
+    const dir = join(getMemoriesDir(workspace), date);
+    await mkdir(dir, { recursive: true });
+    const symbolsYaml = symbols.map(s => `  - ${s}`).join('\n');
+    const content = `---\nid: ${id}\ntimestamp: "${date}T${time}.000Z"\nsymbols:\n${symbolsYaml}\n---\n\n${body}\n`;
+    await writeFile(join(dir, `${time.replace(/:/g, '')}_${id}.md`), content, 'utf-8');
+  }
+
+  beforeEach(async () => {
+    await writeSymbolCheckpoint(
+      TEST_DIR_A,
+      '2026-05-01',
+      '10:00:00',
+      'cp_recover',
+      ['recoverWorkspace', 'parentWalkWorkspace'],
+      'Workspace recovery'
+    );
+  });
+
+  it('matches whole symbol names case-insensitively', async () => {
+    const hit = await recall({ symbol: 'recoverWorkspace', workspace: TEST_DIR_A });
+    expect(hit.checkpoints).toHaveLength(1);
+    expect(hit.checkpoints[0]!.id).toBe('cp_recover');
+
+    const partial = await recall({ symbol: 'recover', workspace: TEST_DIR_A });
+    expect(partial.checkpoints).toHaveLength(0);
+
+    const caseHit = await recall({ symbol: 'RECOVERWORKSPACE', workspace: TEST_DIR_A });
+    expect(caseHit.checkpoints).toHaveLength(1);
+  });
+
+  it('scans the full corpus and works cross-workspace', async () => {
+    for (let i = 0; i < 6; i++) {
+      await saveCheckpoint({ description: `Filler ${i}`, workspace: TEST_DIR_A });
+      await new Promise(resolve => setTimeout(resolve, 2));
+    }
+    await writeSymbolCheckpoint(TEST_DIR_A, '2026-04-01', '10:00:00', 'cp_old', ['recoverWorkspace'], 'Old recovery');
+
+    const result = await recall({ symbol: 'recoverWorkspace', workspace: TEST_DIR_A });
+    expect(result.checkpoints.map(c => c.id)).toContain('cp_old');
+
+    await writeSymbolCheckpoint(TEST_DIR_B, '2026-05-02', '10:00:00', 'cp_b', ['recoverWorkspace'], 'Other project');
+    const { registerProject } = await import('../src/registry');
+    await registerProject(TEST_DIR_A);
+    await registerProject(TEST_DIR_B);
+
+    const all = await recall({ symbol: 'recoverWorkspace', workspace: 'all' });
+    expect(all.checkpoints.map(c => c.id).sort()).toEqual(['cp_b', 'cp_old', 'cp_recover']);
+  });
+});
+
+describe('Compact display for intent-blame filters', () => {
+  async function writeFileCheckpoint(
+    workspace: string,
+    date: string,
+    time: string,
+    id: string,
+    files: string[],
+    symbols: string[] | undefined,
+    body: string
+  ): Promise<void> {
+    const dir = join(getMemoriesDir(workspace), date);
+    await mkdir(dir, { recursive: true });
+    const filesYaml = files.map(f => `    - ${f}`).join('\n');
+    const symbolsBlock = symbols && symbols.length > 0
+      ? `symbols:\n${symbols.map(s => `  - ${s}`).join('\n')}\n`
+      : '';
+    const content = `---\nid: ${id}\ntimestamp: "${date}T${time}.000Z"\n${symbolsBlock}git:\n  branch: main\n  commit: abc1234\n  files:\n${filesYaml}\n---\n\n${body}\n`;
+    await writeFile(join(dir, `${time.replace(/:/g, '')}_${id}.md`), content, 'utf-8');
+  }
+
+  it('retains git.files in compact file-filtered recall', async () => {
+    await writeFileCheckpoint(TEST_DIR_A, '2026-05-01', '10:00:00', 'cp_file', ['src/recall.ts'], undefined, 'Recall work');
+
+    const result = await recall({ file: 'recall.ts', workspace: TEST_DIR_A });
+    expect(result.checkpoints[0]!.git?.files).toEqual(['src/recall.ts']);
+  });
+
+  it('retains symbols in compact symbol-filtered recall', async () => {
+    await writeFileCheckpoint(TEST_DIR_A, '2026-05-01', '10:00:00', 'cp_sym', [], ['recoverWorkspace'], 'Recovery work');
+
+    const result = await recall({ symbol: 'recoverWorkspace', workspace: TEST_DIR_A });
+    expect(result.checkpoints[0]!.symbols).toEqual(['recoverWorkspace']);
+  });
+
+  it('strips git and symbols in unfiltered compact recall', async () => {
+    await writeFileCheckpoint(
+      TEST_DIR_A,
+      '2026-05-01',
+      '10:00:00',
+      'cp_strip',
+      ['src/recall.ts'],
+      ['recoverWorkspace'],
+      'Mixed metadata'
+    );
+
+    const result = await recall({ workspace: TEST_DIR_A, limit: 1 });
+    expect(result.checkpoints[0]!.git).toBeUndefined();
+    expect(result.checkpoints[0]!.symbols).toBeUndefined();
+  });
+});

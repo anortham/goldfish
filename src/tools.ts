@@ -135,6 +135,8 @@ Key parameters (all optional):
 - search: Search query (matches descriptions, tags, branches, files)
 - type: Filter to one type: checkpoint, decision, incident, or learning
 - tags: Filter to checkpoints carrying ALL listed tags (case-insensitive)
+- file: Filter to checkpoints whose captured git.files match this path suffix
+- symbol: Filter to checkpoints listing this exact symbol (case-insensitive)
 - full: Return full descriptions + metadata including files and git info (default: false)
 - workspace: "current" (default), "all" (cross-workspace), or specific path
 - briefId: Filter checkpoints to those created under a specific brief
@@ -145,6 +147,8 @@ Examples:
 - recall({ search: "auth", full: true }) - search with full details
 - recall({ type: "decision" }) - past decisions only
 - recall({ tags: ["db", "ops"] }) - checkpoints tagged both db and ops
+- recall({ file: "recall.ts" }) - checkpoints that touched matching file paths
+- recall({ symbol: "recoverWorkspace" }) - checkpoints listing that symbol
 - recall({ workspace: "all", days: 1 }) - cross-project standup
 - recall({ limit: 0 }) - active brief only, no checkpoints
 
@@ -185,6 +189,14 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
             type: 'array',
             items: { type: 'string' },
             description: 'Filter to checkpoints that contain ALL of these tags (case-insensitive AND match). Combines with type and search.'
+          },
+          file: {
+            type: 'string',
+            description: 'Filter to checkpoints whose git.files match this path suffix (case-insensitive, /-boundary). Combines with other filters.'
+          },
+          symbol: {
+            type: 'string',
+            description: 'Filter to checkpoints listing this exact symbol name (case-insensitive). Combines with other filters.'
           },
           full: {
             type: 'boolean',

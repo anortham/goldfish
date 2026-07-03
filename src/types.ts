@@ -84,6 +84,8 @@ export interface RecallOptions {
   briefId?: string;       // Filter to checkpoints associated with this brief
   type?: string;          // Filter to a single checkpoint type (untyped == 'checkpoint')
   tags?: string[];        // Filter to checkpoints containing ALL of these tags (case-insensitive)
+  file?: string;          // Filter to checkpoints whose git.files match this path suffix
+  symbol?: string;        // Filter to checkpoints listing this exact symbol (case-insensitive)
   _registryDir?: string;  // Internal: override registry dir for test isolation
 }
 
@@ -183,6 +185,8 @@ export interface RecallArgs {
   brief_id?: string;
   type?: string;
   tags?: string[] | string;
+  file?: string;
+  symbol?: string;
   _registryDir?: string;
 }
 

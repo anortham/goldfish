@@ -124,6 +124,50 @@ function getCheckpointTagsLower(checkpoint: Checkpoint): string[] {
     .map(tag => tag.toLowerCase());
 }
 
+function getCheckpointSymbols(checkpoint: Checkpoint): string[] {
+  const raw = checkpoint.symbols;
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter((symbol): symbol is string => typeof symbol === 'string');
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((symbol): symbol is string => typeof symbol === 'string');
+      }
+    } catch { /* not JSON */ }
+    return [raw];
+  }
+  return [];
+}
+
+function normalizeFilePathForMatch(path: string): string {
+  return path
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+}
+
+function checkpointMatchesFile(checkpoint: Checkpoint, query: string): boolean {
+  const files = checkpoint.git?.files;
+  if (!files || !Array.isArray(files) || files.length === 0) return false;
+  const normalizedQuery = normalizeFilePathForMatch(query);
+  return files.some(file => {
+    if (typeof file !== 'string') return false;
+    const stored = normalizeFilePathForMatch(file);
+    return stored === normalizedQuery || stored.endsWith(`/${normalizedQuery}`);
+  });
+}
+
+function checkpointMatchesSymbol(checkpoint: Checkpoint, query: string): boolean {
+  const want = query.toLowerCase();
+  return getCheckpointSymbols(checkpoint).some(symbol => symbol.toLowerCase() === want);
+}
+
 /**
  * Apply structured (non-textual) filters shared by single- and cross-workspace
  * recall: brief affinity, checkpoint type, and tags (AND semantics — every
@@ -135,7 +179,11 @@ function getCheckpointTagsLower(checkpoint: Checkpoint): string[] {
  * filter only the most recent N checkpoints and miss older matches.
  */
 function hasStructuredFilter(options: RecallOptions): boolean {
-  return Boolean(options.briefId) || Boolean(options.type) || Boolean(options.tags && options.tags.length > 0);
+  return Boolean(options.briefId)
+    || Boolean(options.type)
+    || Boolean(options.tags && options.tags.length > 0)
+    || Boolean(options.file)
+    || Boolean(options.symbol);
 }
 
 function applyStructuredFilters(checkpoints: Checkpoint[], options: RecallOptions): Checkpoint[] {
@@ -156,6 +204,14 @@ function applyStructuredFilters(checkpoints: Checkpoint[], options: RecallOption
       const cpTags = getCheckpointTagsLower(cp);
       return wantTags.every(tag => cpTags.includes(tag));
     });
+  }
+
+  if (options.file) {
+    filtered = filtered.filter(cp => checkpointMatchesFile(cp, options.file!));
+  }
+
+  if (options.symbol) {
+    filtered = filtered.filter(cp => checkpointMatchesSymbol(cp, options.symbol!));
   }
 
   return filtered;
@@ -180,6 +236,8 @@ function normalizeRecallOptions(options: RecallInput): RecallOptions {
   const search = normalizeOptionalString(options.search);
   const briefId = normalizeOptionalString(options.briefId);
   const type = normalizeOptionalString(options.type);
+  const file = normalizeOptionalString(options.file);
+  const symbol = normalizeOptionalString(options.symbol);
   const tags = normalizeTagsFilter(options.tags);
 
   // Explicit `tags` overrides the spread's wider (string | string[]) type so
@@ -212,6 +270,12 @@ function normalizeRecallOptions(options: RecallInput): RecallOptions {
 
   if (type !== undefined) normalized.type = type;
   else delete normalized.type;
+
+  if (file !== undefined) normalized.file = file;
+  else delete normalized.file;
+
+  if (symbol !== undefined) normalized.symbol = symbol;
+  else delete normalized.symbol;
 
   if (tags !== undefined) normalized.tags = tags;
   else delete normalized.tags;
@@ -365,11 +429,18 @@ function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Chec
 
   if (!options.full) {
     const {
-      git, context, decision, alternatives, evidence,
-      impact, symbols, unknowns, confidence,
+      git,
+      symbols,
+      summary,
+      context, decision, alternatives, evidence,
+      impact, unknowns, confidence,
       ...minimal
     } = withDescription;
-    return minimal;
+    return {
+      ...minimal,
+      ...(options.file && git ? { git } : {}),
+      ...(options.symbol && symbols ? { symbols } : {})
+    };
   }
 
   return withDescription;
