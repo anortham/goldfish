@@ -1,9 +1,9 @@
 ---
 id: v7-0-0-subtract-sprint-then-handoff
 title: v7.0.0 subtract sprint, then handoff
-status: active
+status: completed
 created: 2026-04-16T18:51:58.346Z
-updated: 2026-04-16T19:24:58.926Z
+updated: 2026-07-03T11:46:28.329Z
 tags:
   - v7.0.0
   - strategic

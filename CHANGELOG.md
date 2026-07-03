@@ -4,6 +4,21 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.0] - 2026-07-03
+
+Intent-blame recall filters and a brief refresh nudge for zombie briefs.
+
+### Added
+
+- Brief refresh nudge when an active brief has not been updated in 14+ days but recent checkpoints keep it from being suppressed (non-destructive)
+- `file:` recall filter for intent-blame queries over `git.files` (path-suffix match with normalization)
+- `symbol:` recall filter for exact, case-insensitive symbol name match over checkpoint `symbols`
+- Compact recall results retain `Files:` / `Symbols:` metadata when the matching filter is active
+
+### Fixed
+
+- Abandoned-staleness suppression now honors `brief.updated`, so updating an abandoned brief un-suppresses it
+
 ## [7.3.0] - 2026-06-26
 
 Workspace recovery for harnesses that spawn the plugin with an unsafe cwd and no MCP roots, plus a realpath fix to the unsafe-cwd guard.

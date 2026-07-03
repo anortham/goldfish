@@ -431,7 +431,6 @@ function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Chec
     const {
       git,
       symbols,
-      summary,
       context, decision, alternatives, evidence,
       impact, unknowns, confidence,
       ...minimal
