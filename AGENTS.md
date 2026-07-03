@@ -128,6 +128,10 @@ interface RecallOptions {
   search?: string;        // BM25 search query (Orama)
   full?: boolean;         // Include full descriptions + git metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief
+  type?: string;          // Filter to a single checkpoint type (untyped == 'checkpoint')
+  tags?: string[];        // Filter to checkpoints containing ALL of these tags (case-insensitive)
+  file?: string;          // Filter to checkpoints whose git.files match this path suffix
+  symbol?: string;        // Filter to checkpoints listing this exact symbol (case-insensitive)
 }
 
 interface RegisteredProject {
@@ -247,6 +251,8 @@ MCP tool descriptions are **directive about quality, encouraging about frequency
 - **Quality guidance stays strong**: checkpoint descriptions must be structured markdown with WHAT/WHY/HOW/IMPACT. Lazy descriptions are unacceptable.
 - **Frequency guidance is positive**: "when in doubt, checkpoint" with concrete triggers (after committing, at stopping points). No "Do NOT" lists.
 - **Recall is invoked manually**: agents call `recall()` at session start or when context is missing; users can also invoke `/recall` for targeted queries.
+- **Intent-blame filters**: `file` and `symbol` params query already-captured frontmatter; encourage `symbols` on checkpoints and checkpoint-before-commit for file coverage.
+- **Brief refresh nudge**: recall surfaces a non-destructive warning when an active brief is 14+ days stale but recent checkpoints keep it active.
 - **Briefs keep strong language**: brief persistence genuinely matters and the directive tone is warranted there.
 
 Recalibrated twice (first overuse, then underuse) before landing here. The lesson: positive triggers drive adoption better than prohibitions.

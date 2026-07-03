@@ -218,6 +218,8 @@ recall({ since: "2h" })                     # Last 2 hours
 recall({ search: "auth bug" })              # BM25 search across descriptions
 recall({ days: 7, limit: 20, full: true })  # Extended history with metadata
 recall({ workspace: "all", days: 1 })       # Cross-project (for standups)
+recall({ file: "workspace.ts" })            # Intent-blame: who touched this file?
+recall({ symbol: "recoverWorkspace" })      # Intent-blame: who touched this symbol?
 recall({ limit: 0 })                        # Active brief only
 ```
 

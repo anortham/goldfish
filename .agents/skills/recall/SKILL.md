@@ -22,16 +22,19 @@ mcp__goldfish__recall({})
 - Search: `recall({ search: "auth refactor", full: true })`
 - Past decisions: `recall({ type: "decision" })`
 - By tags (AND): `recall({ tags: ["db", "ops"] })`
+- By file path: `recall({ file: "workspace.ts" })`
+- By symbol: `recall({ symbol: "recoverWorkspace" })`
 - Cross-project scan: `recall({ workspace: "all", days: 1 })`
 - Brief only: `recall({ limit: 0 })`
 
-`type` keeps one of checkpoint/decision/incident/learning (untyped counts as checkpoint); `tags` matches checkpoints carrying ALL listed tags, case-insensitive. Both combine with `search` and each other.
+`type` keeps one of checkpoint/decision/incident/learning (untyped counts as checkpoint); `tags` matches checkpoints carrying ALL listed tags, case-insensitive. `file` matches git.files path suffixes; `symbol` matches exact symbol names. All combine with `search` and each other.
 
 ## Read The Result Correctly
 
 Recall can surface:
 
 - Active brief, which is the current strategic direction
+- A brief refresh nudge when the active brief has not been updated in 14+ days
 - Checkpoints, which are the evidence trail
 - Workspace summaries for cross-project recall
 

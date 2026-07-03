@@ -60,6 +60,8 @@ Use `type` to classify your checkpoint for better searchability:
 
 All types benefit from `symbols`, `next`, and `impact`.
 
+Populate `symbols` with the key functions, classes, or modules you touched (e.g. `["recoverWorkspace", "resolveActiveBrief"]`). Intent-blame recall can filter on them later with `recall({ symbol: "recoverWorkspace" })`.
+
 ## Tags — Think About Future Search
 
 Tags power fuzzy search recall. Write them for **discoverability** — how would future-you search for this?
@@ -89,5 +91,7 @@ You don't need to include these — Goldfish captures them:
 - **Git commit** — current HEAD short hash
 - **Changed files** — files modified since last commit (`.memories/` excluded)
 - **Timestamp** — UTC, always
+
+`git.files` reflects the working tree at checkpoint time. **Checkpoint before committing** so captured paths match what you just changed; committed-only changes are not in the diff snapshot.
 
 Focus your description on the MEANING, not the mechanics.
