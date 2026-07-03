@@ -823,6 +823,22 @@ describe('Brief refresh nudge', () => {
     expect(result.activeBrief).toBeDefined();
     expect(result.briefRefresh!.daysSinceUpdated).toBe(20);
   });
+
+  it('nudges at exactly 14 days since the brief was last updated', async () => {
+    await withFrozenTime('2026-05-01T12:00:00.000Z', () => saveBrief({
+      id: 'boundary-brief',
+      title: 'Boundary Brief',
+      content: 'content',
+      workspace: TEST_DIR_A,
+      activate: true
+    }));
+    await writeBriefCheckpoint(TEST_DIR_A, '2026-05-14', '12:00:00', 'checkpoint_boundary', 'boundary-brief');
+
+    const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
+
+    expect(result.briefRefresh).toBeDefined();
+    expect(result.briefRefresh!.daysSinceUpdated).toBe(14);
+  });
 });
 
 describe('Date range filtering', () => {
@@ -1883,6 +1899,13 @@ describe('File recall filter', () => {
 
   it('normalizes Windows-style queries and matches case-insensitively', async () => {
     const result = await recall({ file: 'src\\recall.ts', workspace: TEST_DIR_A });
+    expect(result.checkpoints).toHaveLength(1);
+    expect(result.checkpoints[0]!.id).toBe('cp_recall');
+  });
+
+  it('matches absolute path queries against stored relative git.files', async () => {
+    const absolute = join(TEST_DIR_A, 'src/recall.ts');
+    const result = await recall({ file: absolute, workspace: TEST_DIR_A });
     expect(result.checkpoints).toHaveLength(1);
     expect(result.checkpoints[0]!.id).toBe('cp_recall');
   });

@@ -78,7 +78,7 @@ async function resolveActiveBrief(
 
   const updatedAgeMs = Date.now() - new Date(updatedAt).getTime();
   const daysSinceUpdated = Math.floor(updatedAgeMs / 86_400_000);
-  const briefRefresh = daysSinceUpdated > BRIEF_REFRESH_DAYS
+  const briefRefresh = daysSinceUpdated >= BRIEF_REFRESH_DAYS
     ? {
         id: brief.id,
         title: brief.title,
@@ -159,7 +159,10 @@ function checkpointMatchesFile(checkpoint: Checkpoint, query: string): boolean {
   return files.some(file => {
     if (typeof file !== 'string') return false;
     const stored = normalizeFilePathForMatch(file);
-    return stored === normalizedQuery || stored.endsWith(`/${normalizedQuery}`);
+    return stored === normalizedQuery
+      || stored.endsWith(`/${normalizedQuery}`)
+      || normalizedQuery.endsWith(`/${stored}`)
+      || normalizedQuery === stored;
   });
 }
 
