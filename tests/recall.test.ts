@@ -2,7 +2,7 @@ import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach 
 import { recall, parseSince } from '../src/recall';
 import { formatCheckpoint, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { buildCompactSearchDescription } from '../src/digests';
-import { saveBrief, getBrief } from '../src/briefs';
+import { saveBrief, getBrief, updateBrief } from '../src/briefs';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -607,6 +607,26 @@ describe('Stale brief suppression', () => {
 
     expect(result.activeBrief).toBeDefined();
     expect(result.activeBrief!.id).toBe('fresh-brief');
+    expect(result.staleBrief ?? null).toBeNull();
+  });
+
+  it('un-suppresses a brief when updated recently even without recent checkpoints', async () => {
+    await withFrozenTime('2026-04-15T12:00:00.000Z', () => saveBrief({
+      id: 'updated-brief',
+      title: 'Updated Brief',
+      content: 'original',
+      workspace: TEST_DIR_A,
+      activate: true
+    }));
+    await writeBriefCheckpoint(TEST_DIR_A, '2026-05-05', '12:00:00', 'checkpoint_old', 'updated-brief');
+    await withFrozenTime('2026-05-13T12:00:00.000Z', () =>
+      updateBrief(TEST_DIR_A, 'updated-brief', { content: 'refreshed' })
+    );
+
+    const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
+
+    expect(result.activeBrief).toBeDefined();
+    expect(result.activeBrief!.id).toBe('updated-brief');
     expect(result.staleBrief ?? null).toBeNull();
   });
 

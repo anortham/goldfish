@@ -21,7 +21,8 @@ import { resolveWorkspace } from './workspace';
 /**
  * A brief is considered stale once its newest activity is older than this many
  * days. Activity is the newest checkpoint referencing the brief, falling back
- * to the brief's creation time when no checkpoint references it yet.
+ * to the brief's creation time when no checkpoint references it yet. A recent
+ * brief.updated also counts as activity.
  */
 const STALE_BRIEF_DAYS = 7;
 
@@ -46,7 +47,14 @@ async function resolveActiveBrief(
   // keeps recall() off a full-history scan when the active brief is fresh.
   const createdDate = typeof brief.created === 'string' ? brief.created.split('T')[0] : undefined;
   const latestActivity = await findLatestCheckpointTimestampForBrief(workspace, brief.id, createdDate);
-  const lastActivity = latestActivity ?? brief.created;
+  const updatedAt = brief.updated ?? brief.created;
+  let lastActivity = brief.created;
+  if (new Date(updatedAt).getTime() > new Date(lastActivity).getTime()) {
+    lastActivity = updatedAt;
+  }
+  if (latestActivity && new Date(latestActivity).getTime() > new Date(lastActivity).getTime()) {
+    lastActivity = latestActivity;
+  }
   const ageMs = Date.now() - new Date(lastActivity).getTime();
   const daysSinceActivity = Math.floor(ageMs / 86_400_000);
 
