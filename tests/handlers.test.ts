@@ -426,6 +426,37 @@ describe('Readable markdown responses', () => {
       expect(text).toContain('+ stale brief notice');
     });
 
+    it('appends the refresh nudge under an active brief that has not been updated in 14+ days', async () => {
+      await withFrozenTime('2026-04-25T12:00:00.000Z', () =>
+        saveBrief({
+          id: 'zombie-plan',
+          title: 'Zombie Plan',
+          content: 'Plan content here',
+          workspace: TEST_DIR,
+          activate: true
+        })
+      );
+
+      const dir = join(getMemoriesDir(TEST_DIR), '2026-05-14');
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, '120000_recent.md'),
+        `---\nid: checkpoint_recent\ntimestamp: "2026-05-14T12:00:00.000Z"\nbriefId: zombie-plan\n---\n\nRecent work\n`,
+        'utf-8'
+      );
+
+      const result = await withFrozenTime('2026-05-15T12:00:00.000Z', () =>
+        handleRecall({ workspace: TEST_DIR })
+      );
+      const text = result.content[0]!.text;
+
+      expect(text).toContain('## Active Brief: Zombie Plan (active)');
+      expect(text).toContain('+ active brief');
+      expect(text).toContain(
+        '⚠️ Active brief not updated in 20d — still the direction? Update it to reaffirm, or complete/archive it.'
+      );
+    });
+
     it('includes diagnostics in header', async () => {
       const result = await handleRecall({
         workspace: TEST_DIR,

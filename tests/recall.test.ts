@@ -738,6 +738,93 @@ describe('Stale brief suppression', () => {
   });
 });
 
+describe('Brief refresh nudge', () => {
+  const NOW = '2026-05-15T12:00:00.000Z';
+
+  async function writeBriefCheckpoint(
+    workspace: string,
+    date: string,
+    time: string,
+    id: string,
+    briefId: string
+  ): Promise<void> {
+    const dir = join(getMemoriesDir(workspace), date);
+    await mkdir(dir, { recursive: true });
+    const content = `---\nid: ${id}\ntimestamp: "${date}T${time}.000Z"\nbriefId: ${briefId}\n---\n\nWork ${id}\n`;
+    await writeFile(join(dir, `${time.replace(/:/g, '')}_${id}.md`), content, 'utf-8');
+  }
+
+  it('nudges when the brief body is stale but recent checkpoints keep it active', async () => {
+    await withFrozenTime('2026-04-25T12:00:00.000Z', () => saveBrief({
+      id: 'zombie-brief',
+      title: 'Zombie Brief',
+      content: 'old direction',
+      workspace: TEST_DIR_A,
+      activate: true
+    }));
+    await writeBriefCheckpoint(TEST_DIR_A, '2026-05-14', '12:00:00', 'checkpoint_recent', 'zombie-brief');
+
+    const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
+
+    expect(result.activeBrief).toBeDefined();
+    expect(result.activeBrief!.id).toBe('zombie-brief');
+    expect(result.staleBrief ?? null).toBeNull();
+    expect(result.briefRefresh).toBeDefined();
+    expect(result.briefRefresh!.daysSinceUpdated).toBe(20);
+    expect(result.briefRefresh!.title).toBe('Zombie Brief');
+  });
+
+  it('does not nudge when the brief was updated within 14 days', async () => {
+    await withFrozenTime('2026-05-10T12:00:00.000Z', () => saveBrief({
+      id: 'fresh-brief',
+      title: 'Fresh Brief',
+      content: 'current direction',
+      workspace: TEST_DIR_A,
+      activate: true
+    }));
+    await writeBriefCheckpoint(TEST_DIR_A, '2026-05-14', '12:00:00', 'checkpoint_fresh', 'fresh-brief');
+
+    const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
+
+    expect(result.activeBrief).toBeDefined();
+    expect(result.briefRefresh ?? null).toBeNull();
+  });
+
+  it('never double-fires briefRefresh alongside staleBrief suppression', async () => {
+    await withFrozenTime('2026-04-25T12:00:00.000Z', () => saveBrief({
+      id: 'abandoned-brief',
+      title: 'Abandoned Brief',
+      content: 'content',
+      workspace: TEST_DIR_A,
+      activate: true
+    }));
+    await writeBriefCheckpoint(TEST_DIR_A, '2026-05-01', '12:00:00', 'checkpoint_abandoned', 'abandoned-brief');
+
+    const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A }));
+
+    expect(result.activeBrief ?? null).toBeNull();
+    expect(result.staleBrief).toBeDefined();
+    expect(result.briefRefresh ?? null).toBeNull();
+  });
+
+  it('carries the refresh notice in limit:0 brief-only mode', async () => {
+    await withFrozenTime('2026-04-25T12:00:00.000Z', () => saveBrief({
+      id: 'zombie-only',
+      title: 'Zombie Only',
+      content: 'content',
+      workspace: TEST_DIR_A,
+      activate: true
+    }));
+    await writeBriefCheckpoint(TEST_DIR_A, '2026-05-14', '12:00:00', 'checkpoint_zo', 'zombie-only');
+
+    const result = await withFrozenTime(NOW, () => recall({ workspace: TEST_DIR_A, limit: 0 }));
+
+    expect(result.checkpoints).toHaveLength(0);
+    expect(result.activeBrief).toBeDefined();
+    expect(result.briefRefresh!.daysSinceUpdated).toBe(20);
+  });
+});
+
 describe('Date range filtering', () => {
   it('respects from/to date range', async () => {
     await saveCheckpoint({

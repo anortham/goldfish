@@ -6,7 +6,7 @@ import { stat } from 'fs/promises';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
-import type { Brief, Checkpoint, RecallArgs, StaleBriefNotice } from '../types.js';
+import type { Brief, BriefRefreshNotice, Checkpoint, RecallArgs, StaleBriefNotice } from '../types.js';
 
 /**
  * Safely convert a value to an array for display.
@@ -134,6 +134,10 @@ function formatActiveBrief(brief: Brief): string {
   return lines.join('\n');
 }
 
+function formatBriefRefreshNotice(notice: BriefRefreshNotice): string {
+  return `⚠️ Active brief not updated in ${notice.daysSinceUpdated}d — still the direction? Update it to reaffirm, or complete/archive it.`;
+}
+
 /**
  * Format the one-line, action-oriented nudge shown in place of a stale brief.
  */
@@ -192,6 +196,10 @@ export async function handleRecall(args: RecallArgs) {
     lines.push('---');
     lines.push('');
     lines.push(formatActiveBrief(activeBrief));
+    if (result.briefRefresh) {
+      lines.push('');
+      lines.push(formatBriefRefreshNotice(result.briefRefresh));
+    }
   } else if (staleBrief) {
     lines.push('');
     lines.push(formatStaleBriefNotice(staleBrief));

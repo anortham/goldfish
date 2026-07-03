@@ -109,10 +109,18 @@ export interface StaleBriefNotice {
   daysSinceActivity: number;
 }
 
+export interface BriefRefreshNotice {
+  id: string;
+  title: string;
+  updated: string;          // ISO 8601 UTC — brief.updated
+  daysSinceUpdated: number;
+}
+
 export interface RecallResult {
   checkpoints: Checkpoint[];
   activeBrief?: Brief | null;
   staleBrief?: StaleBriefNotice | null;
+  briefRefresh?: BriefRefreshNotice | null;
   workspaces?: WorkspaceSummary[];  // When workspace='all'
 }
 
