@@ -10,7 +10,7 @@ import { mkdir, stat, rename } from 'fs/promises';
 import { randomBytes } from 'crypto';
 import { atomicWriteFile } from './file-io';
 import { withLock } from './lock';
-import { normalizeWorkspace, getGoldfishHomeDir } from './workspace';
+import { normalizeWorkspace, getGoldfishHomeDir, normalizePathKeyForSafetyCheck } from './workspace';
 import { getLogger } from './logger';
 import type { Registry, RegisteredProject } from './types';
 
@@ -21,6 +21,16 @@ import type { Registry, RegisteredProject } from './types';
  */
 function normalizePath(p: string): string {
   return resolve(p).replace(/\\/g, '/');
+}
+
+/**
+ * Comparison key for registry entries. Windows filesystems are
+ * case-insensitive, so `c:/proj` and `C:/proj` are the same project and must
+ * not produce duplicate entries (harnesses vary in the drive-letter casing
+ * their process.cwd() reports). POSIX paths keep case-sensitive comparison.
+ */
+function registryPathKey(p: string): string {
+  return normalizePathKeyForSafetyCheck(p);
 }
 
 /**
@@ -119,8 +129,8 @@ export async function registerProject(projectPath: string, registryDir?: string)
     // loader so a corrupt file is preserved, not silently overwritten.
     const registry = await loadRegistryForWrite(filePath);
 
-    // Check for existing entry (idempotent, normalize stored paths for comparison)
-    const exists = registry.projects.some(p => p.path.replace(/\\/g, '/') === absolutePath);
+    // Check for existing entry (idempotent, separator- and case-normalized)
+    const exists = registry.projects.some(p => registryPathKey(p.path) === registryPathKey(absolutePath));
     if (exists) {
       return;
     }
@@ -157,7 +167,7 @@ export async function unregisterProject(projectPath: string, registryDir?: strin
     // the corruption to silently break every later read.
     const registry = await loadRegistryForWrite(filePath);
 
-    const filtered = registry.projects.filter(p => p.path.replace(/\\/g, '/') !== absolutePath);
+    const filtered = registry.projects.filter(p => registryPathKey(p.path) !== registryPathKey(absolutePath));
 
     // Only write if something changed
     if (filtered.length !== registry.projects.length) {
@@ -180,10 +190,19 @@ export async function listRegisteredProjects(registryDir?: string): Promise<Regi
   const dir = registryDir ?? getGoldfishHomeDir();
   const registry = await getRegistry(dir);
 
-  // Check which projects have .memories/ directories
+  // Check which projects have .memories/ directories. Registries written by
+  // older versions can hold the same project twice under different casings or
+  // separators; collapse those on read (first occurrence wins) so cross-
+  // workspace recall never scans a project twice. The file is not rewritten.
   const validProjects: RegisteredProject[] = [];
+  const seenKeys = new Set<string>();
 
   for (const project of registry.projects) {
+    const key = registryPathKey(project.path);
+    if (seenKeys.has(key)) {
+      continue;
+    }
+    seenKeys.add(key);
     try {
       const memoriesPath = `${project.path}/.memories`;
       const stats = await stat(memoriesPath);

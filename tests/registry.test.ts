@@ -14,6 +14,15 @@ import {
 const TEST_DIR = join(tmpdir(), `test-registry-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 const GOLDFISH_DIR = join(TEST_DIR, '.goldfish');
 
+// Flip the case of a Windows drive letter (C: -> c:). Returns the path
+// unchanged on POSIX, where paths have no drive letter and case is
+// significant, so case-dedup tests degenerate to exact-match dedup there.
+function flipDriveLetterCase(path: string): string {
+  return path.replace(/^([A-Za-z]):/, (_, drive: string) =>
+    (drive === drive.toLowerCase() ? drive.toUpperCase() : drive.toLowerCase()) + ':'
+  );
+}
+
 beforeEach(async () => {
   await mkdir(GOLDFISH_DIR, { recursive: true });
 });
@@ -193,6 +202,30 @@ describe('Register project', () => {
     expect(registry.projects).toHaveLength(1);
   });
 
+  it('deduplicates Windows paths that differ only by drive-letter case', async () => {
+    const projectPath = join(TEST_DIR, 'case-dedup-test');
+    await mkdir(projectPath, { recursive: true });
+
+    // Pre-populate registry with a drive-letter-case variant of the path
+    // (simulates a harness whose process.cwd() reports a lowercase drive).
+    // On POSIX there is no drive letter, so the variant equals the original
+    // and this degenerates to the plain idempotency case.
+    const caseVariant = flipDriveLetterCase(projectPath.replace(/\\/g, '/'));
+    const seedRegistry = {
+      projects: [{
+        path: caseVariant,
+        name: 'case-dedup-test',
+        registered: new Date().toISOString()
+      }]
+    };
+    await writeFile(join(GOLDFISH_DIR, 'registry.json'), JSON.stringify(seedRegistry), 'utf-8');
+
+    await registerProject(projectPath, GOLDFISH_DIR);
+
+    const registry = await getRegistry(GOLDFISH_DIR);
+    expect(registry.projects).toHaveLength(1);
+  });
+
   it('backs up a corrupt registry instead of silently wiping registered projects', async () => {
     // A corrupt registry.json must not be silently overwritten — that would
     // permanently drop every other registered project on the next write.
@@ -278,6 +311,18 @@ describe('Unregister project', () => {
     expect(registry).toEqual({ projects: [] });
   });
 
+  it('removes an entry that differs only by drive-letter case', async () => {
+    const projectPath = join(TEST_DIR, 'case-unregister-test');
+    await mkdir(projectPath, { recursive: true });
+
+    await registerProject(projectPath, GOLDFISH_DIR);
+    expect((await getRegistry(GOLDFISH_DIR)).projects).toHaveLength(1);
+
+    // Unregister using a drive-letter-case variant of the same path.
+    await unregisterProject(flipDriveLetterCase(projectPath), GOLDFISH_DIR);
+    expect((await getRegistry(GOLDFISH_DIR)).projects).toHaveLength(0);
+  });
+
   it('is no-op for unregistered project', async () => {
     const projectPath = join(TEST_DIR, 'my-project');
     await mkdir(projectPath, { recursive: true });
@@ -343,6 +388,45 @@ describe('List registered projects', () => {
 
     const projects = await listRegisteredProjects(GOLDFISH_DIR);
     expect(projects.map(p => p.name)).toEqual(['alpha', 'bravo', 'charlie']);
+  });
+
+  it('collapses case-variant duplicate entries already in the registry file', async () => {
+    // Registries written by earlier versions can contain the same project
+    // twice under different drive-letter casings. Listing must heal that on
+    // read so cross-workspace recall does not scan the project twice.
+    const projectPath = join(TEST_DIR, 'case-heal-test');
+    await mkdir(join(projectPath, '.memories'), { recursive: true });
+
+    const normalized = projectPath.replace(/\\/g, '/');
+    const seedRegistry = {
+      projects: [
+        { path: normalized, name: 'case-heal-test', registered: '2026-01-01T00:00:00.000Z' },
+        { path: flipDriveLetterCase(normalized), name: 'case-heal-test', registered: '2026-02-01T00:00:00.000Z' }
+      ]
+    };
+    await writeFile(join(GOLDFISH_DIR, 'registry.json'), JSON.stringify(seedRegistry), 'utf-8');
+
+    const projects = await listRegisteredProjects(GOLDFISH_DIR);
+    expect(projects).toHaveLength(1);
+    // First occurrence wins; the registry file itself is not rewritten.
+    expect(projects[0]!.path).toBe(normalized);
+  });
+
+  it('collapses exact duplicate entries already in the registry file', async () => {
+    const projectPath = join(TEST_DIR, 'exact-heal-test');
+    await mkdir(join(projectPath, '.memories'), { recursive: true });
+
+    const normalized = projectPath.replace(/\\/g, '/');
+    const seedRegistry = {
+      projects: [
+        { path: normalized, name: 'exact-heal-test', registered: '2026-01-01T00:00:00.000Z' },
+        { path: normalized.replace(/\//g, '\\'), name: 'exact-heal-test', registered: '2026-02-01T00:00:00.000Z' }
+      ]
+    };
+    await writeFile(join(GOLDFISH_DIR, 'registry.json'), JSON.stringify(seedRegistry), 'utf-8');
+
+    const projects = await listRegisteredProjects(GOLDFISH_DIR);
+    expect(projects).toHaveLength(1);
   });
 
   it('does not modify registry file when filtering stale entries', async () => {
