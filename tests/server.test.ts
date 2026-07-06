@@ -465,6 +465,29 @@ describe('Server exports', () => {
     expect(packageJson.scripts!['sync:agent-skills']).toContain('scripts/sync-agent-skills.ts');
   });
 
+  it('keeps prepare safe outside a git checkout', async () => {
+    const packageJson = JSON.parse(
+      await Bun.file(new URL('../package.json', import.meta.url)).text()
+    ) as { scripts?: Record<string, string> };
+    const tempDir = await mkdtemp(join(tmpdir(), 'test-prepare-no-git-'));
+    await writeFile(join(tempDir, 'package.json'), JSON.stringify({
+      name: 'prepare-smoke',
+      scripts: { prepare: packageJson.scripts!['prepare'] }
+    }));
+
+    try {
+      const result = Bun.spawnSync(['bun', 'run', 'prepare'], {
+        cwd: tempDir,
+        stdout: 'pipe',
+        stderr: 'pipe'
+      });
+
+      expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('keeps canonical skills and repo-local agent skills mirrored', async () => {
     const { readdir } = await import('fs/promises');
 

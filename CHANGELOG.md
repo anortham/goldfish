@@ -4,6 +4,14 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.2] - 2026-07-06
+
+Patch release for source archive install safety.
+
+### Fixed
+
+- `bun install --frozen-lockfile` now succeeds from GitHub-generated source archives by making the `prepare` script skip git hook configuration outside a git checkout.
+
 ## [7.4.1] - 2026-07-06
 
 Patch release for Windows registry deduplication and stuck MCP roots recovery.
