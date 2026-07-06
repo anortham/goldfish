@@ -4,6 +4,16 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.1] - 2026-07-06
+
+Patch release for Windows registry deduplication and stuck MCP roots recovery.
+
+### Fixed
+
+- Windows registry path comparisons now use a case-insensitive normalized key, so `C:/...`, `c:/...`, and separator variants do not register as duplicate workspaces. Listing registered projects also collapses legacy duplicate entries on read so cross-workspace recall does not scan the same workspace twice.
+- Request-time MCP `roots/list` hydration now times out and falls back through the existing workspace resolution/recovery path instead of hanging indefinitely when a client connection is dead or desynced.
+- The package build script now targets Bun, matching the server runtime and Bun APIs used by the source.
+
 ## [7.4.0] - 2026-07-03
 
 Intent-blame recall filters and a brief refresh nudge for zombie briefs.

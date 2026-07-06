@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 7.4.0** -- Intent-blame recall filters (`file:`, `symbol:`) over captured checkpoint frontmatter, plus a brief refresh nudge for zombie briefs (14+ days without an update). Abandoned-staleness suppression now honors `brief.updated`. See CHANGELOG.md for details.
+**Version 7.4.1** -- Patch release for Windows registry deduplication and stuck MCP `roots/list` recovery. Goldfish now collapses legacy Windows drive-case duplicate registry entries and bounds roots lookup so a dead client connection cannot hang workspace-aware tool calls. See CHANGELOG.md for details.
 
 ---
 
