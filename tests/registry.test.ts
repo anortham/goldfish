@@ -412,6 +412,32 @@ describe('List registered projects', () => {
     expect(projects[0]!.path).toBe(normalized);
   });
 
+  it('collapses literal Windows drive-case duplicate entries already in the registry file', async () => {
+    const originalCwd = process.cwd();
+    const sandbox = join(TEST_DIR, 'windows-drive-case-fixture');
+    const workspaceSuffix = join('Users', 'keaedwar', 'source', 'repos', 'MyraNext', '.memories');
+    await mkdir(join(sandbox, 'C:', workspaceSuffix), { recursive: true });
+    await mkdir(join(sandbox, 'c:', workspaceSuffix), { recursive: true });
+
+    const seedRegistry = {
+      projects: [
+        { path: 'C:/Users/keaedwar/source/repos/MyraNext', name: 'MyraNext', registered: '2026-01-01T00:00:00.000Z' },
+        { path: 'c:/Users/keaedwar/source/repos/MyraNext', name: 'MyraNext', registered: '2026-02-01T00:00:00.000Z' }
+      ]
+    };
+    await writeFile(join(GOLDFISH_DIR, 'registry.json'), JSON.stringify(seedRegistry), 'utf-8');
+
+    try {
+      process.chdir(sandbox);
+      const projects = await listRegisteredProjects(GOLDFISH_DIR);
+
+      expect(projects).toHaveLength(1);
+      expect(projects[0]!.path).toBe('C:/Users/keaedwar/source/repos/MyraNext');
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   it('collapses exact duplicate entries already in the registry file', async () => {
     const projectPath = join(TEST_DIR, 'exact-heal-test');
     await mkdir(join(projectPath, '.memories'), { recursive: true });

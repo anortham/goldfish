@@ -836,6 +836,58 @@ describe('Request-time workspace hydration', () => {
     }
   });
 
+  it('falls back to cwd when roots lookup never settles', async () => {
+    const cwdFallback = await mkdtemp(join(tmpdir(), 'test-server-cwd-hung-roots-'));
+    process.chdir(cwdFallback);
+
+    const { createServer } = await import('../src/server');
+    const server = createServer();
+    const client = new Client(
+      { name: 'goldfish-test-client', version: '1.0.0' },
+      { capabilities: { roots: { listChanged: true } } }
+    );
+    let rootsCalls = 0;
+    client.setRequestHandler(ListRootsRequestSchema, async () => {
+      rootsCalls += 1;
+      return await new Promise<never>(() => {});
+    });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport)
+      ]);
+
+      const checkpoint = await Promise.race([
+        client.callTool({
+          name: 'checkpoint',
+          arguments: { description: 'checkpoint through hung roots fallback' }
+        }),
+        new Promise<'timed out'>(resolve => setTimeout(() => resolve('timed out'), 1200))
+      ]);
+
+      if (checkpoint === 'timed out') {
+        throw new Error('checkpoint call did not return when roots/list never settled');
+      }
+      expect(checkpoint.isError).not.toBe(true);
+      expect(rootsCalls).toBe(1);
+
+      const recall = await client.callTool({
+        name: 'recall',
+        arguments: { workspace: cwdFallback, full: true }
+      });
+
+      const text = getFirstTextContent(recall);
+      expect(text).toContain('checkpoint through hung roots fallback');
+      expect((await stat(join(cwdFallback, '.memories'))).isDirectory()).toBe(true);
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+      process.chdir(ORIGINAL_CWD);
+      await rm(cwdFallback, { recursive: true, force: true });
+    }
+  });
+
   it('rejects filesystem-root cwd fallback with a helpful error', async () => {
     process.chdir('/');
     delete process.env.GOLDFISH_WORKSPACE;

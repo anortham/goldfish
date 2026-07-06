@@ -32,6 +32,7 @@ import { listRegisteredProjects } from './registry.js';
 export const SERVER_VERSION = '7.4.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 const DEFAULT_SESSION_KEY = 'default';
+const ROOTS_LIST_TIMEOUT_MS = 500;
 
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief };
@@ -62,14 +63,27 @@ async function getCachedRoots(
     return cache.get(sessionId) ?? undefined;
   }
 
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const result = await sendRequest({ method: 'roots/list' }, ListRootsResultSchema);
+    const result = await Promise.race([
+      sendRequest({ method: 'roots/list' }, ListRootsResultSchema),
+      new Promise<undefined>(resolve => {
+        timeout = setTimeout(() => resolve(undefined), ROOTS_LIST_TIMEOUT_MS);
+      })
+    ]);
+    if (!result) {
+      return undefined;
+    }
     if (result.roots && result.roots.length > 0) {
       cache.set(sessionId, result.roots);
     }
     return result.roots;
   } catch {
     return undefined;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 }
 
