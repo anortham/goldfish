@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { acquireLock, withLock, tryAcquireLock, isStaleLock, isLockHeldError } from '../src/lock';
 import { join } from 'path';
-import { rm, mkdir, writeFile } from 'fs/promises';
+import { rm, mkdir, writeFile, unlink, utimes } from 'fs/promises';
 import { tmpdir, hostname } from 'os';
 
 const TEST_DIR = join(tmpdir(), `test-locks-${Date.now()}`);
@@ -216,7 +216,61 @@ describe('File locking', () => {
     expect(isStaleLock({ pid: 1 } as any)).toBe(true);
   });
 
-  it('fails fast (does not spin) when the lock file cannot be created', async () => {
+  it('serializes critical sections under contention (no overlap)', async () => {
+    // Regression: writeFile(lockPath, data, {flag:'wx'}) creates the lock file
+    // before its content lands. A waiter that read the file in that window got
+    // '' -> JSON.parse throws -> treated as malformed/stale -> stole a LIVE
+    // lock, letting two holders into the critical section simultaneously.
+    let inside = 0;
+    let maxInside = 0;
+
+    await Promise.all(Array.from({ length: 5 }, () =>
+      withLock(TEST_FILE, async () => {
+        inside++;
+        maxInside = Math.max(maxInside, inside);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        inside--;
+      })
+    ));
+
+    expect(maxInside).toBe(1);
+  });
+
+  it('waits instead of stealing a fresh empty lock file (mid-write window)', async () => {
+    const lockPath = `${TEST_FILE}.lock`;
+    // A just-created lock whose content has not landed yet reads as empty.
+    await writeFile(lockPath, '');
+
+    const acquisition = acquireLock(TEST_FILE).then(release => ({ release }));
+    const raced = await Promise.race([
+      acquisition,
+      new Promise<'waiting'>(resolve => setTimeout(() => resolve('waiting'), 300))
+    ]);
+
+    // Must be waiting for the (apparent) holder, not have stolen the lock.
+    expect(raced).toBe('waiting');
+
+    // Simulate the holder finishing: remove the lock so the waiter proceeds.
+    await unlink(lockPath);
+    const { release } = await acquisition;
+    await release();
+  });
+
+  it('still steals an empty lock file whose mtime is old (genuinely corrupt)', async () => {
+    const lockPath = `${TEST_FILE}.lock`;
+    await writeFile(lockPath, '');
+    const past = new Date(Date.now() - 60_000);
+    await utimes(lockPath, past, past);
+
+    // An old malformed lock is corrupt, not mid-write — reclaim it promptly.
+    const release = await acquireLock(TEST_FILE);
+    await release();
+  });
+
+  // chmod 0o555 does not prevent file creation/deletion inside a directory on
+  // Windows (directory write bits are not enforced), so the failure these two
+  // tests provoke cannot be reproduced there. They still run on POSIX.
+  it.skipIf(process.platform === 'win32')('fails fast (does not spin) when the lock file cannot be created', async () => {
     const { chmod } = await import('fs/promises');
     const roDir = join(TEST_DIR, 'ro');
     await mkdir(roDir, { recursive: true });
@@ -251,7 +305,7 @@ describe('File locking', () => {
     expect(await Bun.file(lockPath).exists()).toBe(false);
   });
 
-  it('does not loop forever when a stale lock cannot be deleted', async () => {
+  it.skipIf(process.platform === 'win32')('does not loop forever when a stale lock cannot be deleted', async () => {
     const lockPath = `${TEST_FILE}.lock`;
     const { chmod } = await import('fs/promises');
 

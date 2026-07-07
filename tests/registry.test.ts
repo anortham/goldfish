@@ -413,29 +413,28 @@ describe('List registered projects', () => {
   });
 
   it('collapses literal Windows drive-case duplicate entries already in the registry file', async () => {
-    const originalCwd = process.cwd();
-    const sandbox = join(TEST_DIR, 'windows-drive-case-fixture');
-    const workspaceSuffix = join('Users', 'keaedwar', 'source', 'repos', 'MyraNext', '.memories');
-    await mkdir(join(sandbox, 'C:', workspaceSuffix), { recursive: true });
-    await mkdir(join(sandbox, 'c:', workspaceSuffix), { recursive: true });
+    const projectPath = join(TEST_DIR, 'drive-case-heal-test');
+    await mkdir(join(projectPath, '.memories'), { recursive: true });
+
+    // Two entries differing only in drive-letter case (harnesses vary in the
+    // casing process.cwd() reports). On POSIX there is no drive letter, so the
+    // variants coincide and this degenerates to the exact-duplicate case.
+    const normalized = projectPath.replace(/\\/g, '/');
+    const upperDrive = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    const lowerDrive = normalized.charAt(0).toLowerCase() + normalized.slice(1);
 
     const seedRegistry = {
       projects: [
-        { path: 'C:/Users/keaedwar/source/repos/MyraNext', name: 'MyraNext', registered: '2026-01-01T00:00:00.000Z' },
-        { path: 'c:/Users/keaedwar/source/repos/MyraNext', name: 'MyraNext', registered: '2026-02-01T00:00:00.000Z' }
+        { path: upperDrive, name: 'drive-case-heal-test', registered: '2026-01-01T00:00:00.000Z' },
+        { path: lowerDrive, name: 'drive-case-heal-test', registered: '2026-02-01T00:00:00.000Z' }
       ]
     };
     await writeFile(join(GOLDFISH_DIR, 'registry.json'), JSON.stringify(seedRegistry), 'utf-8');
 
-    try {
-      process.chdir(sandbox);
-      const projects = await listRegisteredProjects(GOLDFISH_DIR);
+    const projects = await listRegisteredProjects(GOLDFISH_DIR);
 
-      expect(projects).toHaveLength(1);
-      expect(projects[0]!.path).toBe('C:/Users/keaedwar/source/repos/MyraNext');
-    } finally {
-      process.chdir(originalCwd);
-    }
+    expect(projects).toHaveLength(1);
+    expect(projects[0]!.path).toBe(upperDrive);
   });
 
   it('collapses exact duplicate entries already in the registry file', async () => {

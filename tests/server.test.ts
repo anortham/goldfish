@@ -1069,6 +1069,13 @@ describe('Workspace recovery (registry + parent walk)', () => {
     return dir;
   }
 
+  // Registry-sourced workspace paths are reported with forward slashes (see
+  // normalizePath in src/registry.ts), while mkdtemp returns native
+  // separators on Windows — compare separator-insensitively.
+  function expectTextToContainPath(text: string, p: string): void {
+    expect(text.replace(/\\/g, '/')).toContain(p.replace(/\\/g, '/'));
+  }
+
   async function connectWithoutRoots() {
     const { createServer } = await import('../src/server');
     const server = createServer();
@@ -1121,7 +1128,7 @@ describe('Workspace recovery (registry + parent walk)', () => {
       // root is visible, not silent.
       const text = getFirstTextContent(checkpoint);
       expect(text).toContain('Workspace:');
-      expect(text).toContain(project);
+      expectTextToContainPath(text, project);
       expect(text.toLowerCase()).toContain('recovered');
     } finally {
       await Promise.all([client.close(), server.close()]);
@@ -1148,7 +1155,7 @@ describe('Workspace recovery (registry + parent walk)', () => {
       // Walk-sourced recovery is surfaced too, with the walk source label.
       const text = getFirstTextContent(checkpoint);
       expect(text).toContain('Workspace:');
-      expect(text).toContain(project);
+      expectTextToContainPath(text, project);
       expect(text.toLowerCase()).toContain('recovered');
     } finally {
       await Promise.all([client.close(), server.close()]);
@@ -1177,7 +1184,7 @@ describe('Workspace recovery (registry + parent walk)', () => {
       const text = getFirstTextContent(result);
       expect(text).toContain('Brief saved');
       expect(text).toContain('Workspace:');
-      expect(text).toContain(project);
+      expectTextToContainPath(text, project);
       expect(text.toLowerCase()).toContain('recovered');
     } finally {
       await Promise.all([client.close(), server.close()]);
@@ -1258,7 +1265,7 @@ describe('Workspace recovery (registry + parent walk)', () => {
       const text = getFirstTextContent(result);
       expect(text.toLowerCase()).toContain('home directory');
       expect(text).toContain('Known projects');
-      expect(text).toContain(project);
+      expectTextToContainPath(text, project);
     } finally {
       await Promise.all([client.close(), server.close()]);
     }
@@ -1299,7 +1306,7 @@ describe('Workspace recovery (registry + parent walk)', () => {
       const text = getFirstTextContent(result);
       expect(text.toLowerCase()).toContain('home directory');
       expect(text).toContain('Known projects');
-      expect(text).toContain(project);
+      expectTextToContainPath(text, project);
     } finally {
       await Promise.all([client.close(), server.close()]);
     }

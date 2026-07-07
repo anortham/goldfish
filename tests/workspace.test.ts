@@ -11,7 +11,7 @@ import {
   getGoldfishHomeDir,
   parentWalkWorkspace,
 } from '../src/workspace';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { mkdir, rm, stat, symlink } from 'fs/promises';
 import { pathToFileURL } from 'url';
@@ -204,13 +204,16 @@ describe('resolveWorkspace', () => {
   it('uses the first valid file root when no explicit path or env var exists', () => {
     delete process.env.GOLDFISH_WORKSPACE;
 
+    // resolve() makes the fixture a real absolute path on every OS — Windows
+    // fileURLToPath rejects drive-less file URLs like file:///roots/....
+    const rootPath = resolve('/roots/project one');
     expect(resolveWorkspace(undefined, {
       roots: [
         { uri: 'https://example.com/not-a-file-root' },
-        { uri: pathToFileURL('/roots/project one').href }
+        { uri: pathToFileURL(rootPath).href }
       ],
       cwd: '/fallback/cwd'
-    })).toBe('/roots/project one');
+    })).toBe(rootPath);
   });
 
   it('treats "current" same as undefined', () => {
@@ -221,10 +224,11 @@ describe('resolveWorkspace', () => {
   it('treats "current" as a roots-aware fallback when env is unset', () => {
     delete process.env.GOLDFISH_WORKSPACE;
 
+    const rootPath = resolve('/roots/current-project');
     expect(resolveWorkspace('current', {
-      roots: [{ uri: pathToFileURL('/roots/current-project').href }],
+      roots: [{ uri: pathToFileURL(rootPath).href }],
       cwd: '/fallback/cwd'
-    })).toBe('/roots/current-project');
+    })).toBe(rootPath);
   });
 
   it('prefers env var over roots', () => {
@@ -286,11 +290,12 @@ describe('resolveWorkspaceWithSource', () => {
   it('tags roots-derived paths as source=roots', () => {
     delete process.env.GOLDFISH_WORKSPACE;
 
+    const rootPath = resolve('/roots/project');
     expect(resolveWorkspaceWithSource(undefined, {
-      roots: [{ uri: pathToFileURL('/roots/project').href }],
+      roots: [{ uri: pathToFileURL(rootPath).href }],
       cwd: '/fallback/cwd'
     })).toEqual({
-      path: '/roots/project',
+      path: rootPath,
       source: 'roots'
     });
   });
@@ -320,11 +325,12 @@ describe('resolveWorkspaceWithSource', () => {
 
   it('treats "current" the same as undefined for source tagging', () => {
     delete process.env.GOLDFISH_WORKSPACE;
+    const rootPath = resolve('/roots/project');
     expect(resolveWorkspaceWithSource('current', {
-      roots: [{ uri: pathToFileURL('/roots/project').href }],
+      roots: [{ uri: pathToFileURL(rootPath).href }],
       cwd: '/fallback/cwd'
     })).toEqual({
-      path: '/roots/project',
+      path: rootPath,
       source: 'roots'
     });
   });
@@ -461,7 +467,7 @@ describe('parentWalkWorkspace', () => {
 
     const result = await parentWalkWorkspace(nestedSub, { env: { HOME: '/nonexistent-home' } });
     // The inner repo (workspaces/inner) has .git and is the first match walking up.
-    expect(result?.path).toMatch(/workspaces\/inner$/);
+    expect(result?.path.replace(/\\/g, '/')).toMatch(/workspaces\/inner$/);
     expect(result?.source).toBe('walk');
   });
 

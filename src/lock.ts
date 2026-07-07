@@ -5,7 +5,7 @@
  * in concurrent file operations.
  */
 
-import { writeFile, unlink, readFile, rename } from 'fs/promises';
+import { writeFile, unlink, readFile, rename, stat } from 'fs/promises';
 import { randomBytes } from 'crypto';
 import { hostname } from 'os';
 import { getLogger } from './logger';
@@ -13,6 +13,10 @@ import { getLogger } from './logger';
 const MAX_LOCK_AGE_MS = 30000; // 30 seconds - locks older than this are considered stale
 const LOCK_RETRY_DELAY_MS = 10;
 const MAX_LOCK_ATTEMPTS = 3000; // 30 seconds total (10ms * 3000)
+// writeFile with 'wx' creates the lock file before its content lands, so a
+// concurrent reader can observe it empty/partial. An unparsable lock younger
+// than this is presumed mid-write and waited on; older ones are corrupt.
+const MALFORMED_LOCK_GRACE_MS = 1000;
 
 const HOST = hostname();
 
@@ -174,6 +178,24 @@ export async function acquireLock(filePath: string): Promise<() => Promise<void>
 
       if (lockGone) {
         continue;
+      }
+
+      // An unparsable lock may simply be mid-write: 'wx' creates the file
+      // before the JSON content lands, and a reader in that window sees ''.
+      // Stealing here would break mutual exclusion against a live holder, so
+      // give a fresh malformed lock the write window to finish. Only a
+      // malformed lock that has sat past the grace period is truly corrupt.
+      if (parsed === null) {
+        let mtimeMs: number | undefined;
+        try {
+          mtimeMs = (await stat(lockPath)).mtimeMs;
+        } catch {
+          continue; // lock vanished — retry create immediately
+        }
+        if (Date.now() - mtimeMs < MALFORMED_LOCK_GRACE_MS) {
+          await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
+          continue;
+        }
       }
 
       if (isStaleLock(parsed)) {

@@ -473,9 +473,10 @@ describe('Cross-workspace functionality', () => {
     });
 
     expect(result.checkpoints).toHaveLength(1);
+    // Workspace summary paths are registry-normalized to forward slashes.
     expect(result.workspaces).toEqual([
       expect.objectContaining({
-        path: projectA,
+        path: projectA.replace(/\\/g, '/'),
         checkpointCount: 1
       })
     ]);
@@ -492,7 +493,8 @@ describe('Cross-workspace functionality', () => {
     expect(result.checkpoints).toHaveLength(1);
 
     // But workspace summary should report all matching checkpoints
-    const wsA = result.workspaces!.find(ws => ws.path === projectA);
+    // (summary paths are registry-normalized to forward slashes)
+    const wsA = result.workspaces!.find(ws => ws.path === projectA.replace(/\\/g, '/'));
     expect(wsA).toBeDefined();
     expect(wsA!.checkpointCount).toBe(3);
   });

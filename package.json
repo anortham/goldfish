@@ -1,6 +1,6 @@
 {
   "name": "goldfish",
-  "version": "7.4.2",
+  "version": "7.4.3",
   "description": "Cross-client MCP memory with checkpoints, recall, briefs, and standups",
   "type": "module",
   "main": "src/server.ts",
@@ -12,7 +12,7 @@
     "build": "bun build src/server.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit",
     "sync:agent-skills": "bun run scripts/sync-agent-skills.ts",
-    "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
+    "prepare": "git rev-parse --is-inside-work-tree &>/dev/null && git config core.hooksPath .githooks || true"
   },
   "keywords": [
     "mcp",

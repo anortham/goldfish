@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 7.4.2** -- Patch release for Windows registry deduplication, stuck MCP `roots/list` recovery, and source archive install safety. Goldfish now collapses legacy Windows drive-case duplicate registry entries, bounds roots lookup so a dead client connection cannot hang workspace-aware tool calls, and keeps `bun install` safe outside a git checkout. See CHANGELOG.md for details.
+**Version 7.4.3** -- Patch release fixing a file-lock race that could admit two concurrent writers (losing registry updates), transient Windows rename failures in atomic writes, and a `prepare` script that Bun 1.3's shell could not parse. See CHANGELOG.md for details.
 
 ---
 

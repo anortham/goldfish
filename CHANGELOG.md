@@ -4,6 +4,17 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.3] - 2026-07-07
+
+Patch release for a file-lock mutual exclusion race and Bun 1.3 compatibility on Windows.
+
+### Fixed
+
+- **File locking could admit two concurrent holders.** `writeFile(lockPath, data, {flag: 'wx'})` creates the lock file before its content lands, so a concurrent waiter could read it empty, treat it as malformed/stale, and steal a live lock. A malformed lock is now given a 1s mtime grace window (presumed mid-write) before it can be reclaimed; genuinely corrupt old locks are still stolen promptly. Bun 1.3 on Windows widened the create-to-content window enough to lose cross-project registry updates under concurrency.
+- Atomic writes now retry the final rename on transient Windows sharing violations (`EPERM`/`EACCES`/`EBUSY`), which occur when the destination is briefly held open by a concurrent replace, an unclosed reader, or an antivirus scan. The temp file is also cleaned up when the rename ultimately fails.
+- `bun install` no longer fails under Bun 1.3, whose built-in shell rejects two consecutive redirects (`>/dev/null 2>&1`) in the `prepare` script. The script now uses the combined `&>/dev/null` form, which Bun's shell parses and which remains valid bash/zsh.
+- Tests are no longer platform-dependent on Windows: workspace/recall assertions compare paths separator-insensitively, roots fixtures use real absolute paths (Windows `fileURLToPath` rejects drive-less `file:///` URLs), the registry drive-case dedup test uses genuine drive-letter case variants, and the two POSIX-only `chmod`-based lock tests are skipped on Windows where directory write bits are not enforced.
+
 ## [7.4.2] - 2026-07-06
 
 Patch release for source archive install safety.
