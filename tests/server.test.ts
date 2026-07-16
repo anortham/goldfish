@@ -532,7 +532,7 @@ describe('Server exports', () => {
 
     expect(readme).toContain('cross-client MCP memory system');
     expect(readme).toContain('### Claude Code');
-    expect(readme).toContain('### Codex Desktop');
+    expect(readme).toContain('### Codex');
     expect(readme).toContain('Codex Desktop does not send MCP roots');
     expect(readme).toContain('project-local `.codex/config.toml`');
     expect(readme).toContain('env = { GOLDFISH_WORKSPACE = "/absolute/path/to/your/project" }');

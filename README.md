@@ -2,7 +2,7 @@
 
 An evidence ledger for AI coding sessions. Checkpoints capture what changed and why; briefs hold durable strategic direction; recall pulls both back when the next session needs context. Everything lives as markdown in your repo, so it travels with the code, diffs in PRs, and outlasts any single harness.
 
-Goldfish is a cross-client MCP memory system. Claude Code gets the fullest adapter today, with plugin installation and slash-command skills. Codex Desktop and OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
+Goldfish is a cross-client MCP memory system. Claude Code and Codex both install as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
 **Version 7.5.0** -- Review-driven release: cross-workspace recall no longer silently caps results, brief lifecycle nudges land where work happens (checkpoint responses), search is ~20x faster at large corpora via in-memory caches, and instruction-only harnesses get a generated usage ruleset. See CHANGELOG.md for details.
 
@@ -84,9 +84,22 @@ Goldfish 7.3+ recovers automatically once a project is known: if `cwd` or an anc
 
 Add that to the project's `.cursor/mcp.json` (or your user config scoped to the project) for first use. Once you've checkpointed there once, the plugin's recovery takes over and the override is no longer needed.
 
-### Codex Desktop
+### Codex CLI / Desktop
 
-Codex shares MCP configuration between the CLI and the IDE extension through `~/.codex/config.toml`, and it also discovers repo-local skills from `.agents/skills`.
+**Recommended: install the plugin.** Goldfish ships a Codex plugin manifest (`.codex-plugin/plugin.json`) that delivers everything in one install — the MCP server (tools), the 6 skills, and a SessionStart hook that loads Goldfish's memory guidance into each new session.
+
+```bash
+codex plugin marketplace add anortham/goldfish
+codex plugin add goldfish@goldfish
+```
+
+This same install covers the Codex desktop app: restart it after installing and it picks up the plugin.
+
+**One-time hook trust review.** Installing or enabling a plugin does not automatically trust its hooks — Codex skips them until you approve. Run `codex`, open `/hooks`, review and trust Goldfish's SessionStart hook, then start a new thread. Until you do, tools and skills work but the session-start guidance stays silent.
+
+The hook is deliberately minimal: it fires once at session start (and after `/clear` or a compact), prints static guidance, makes no tool calls, and writes no state.
+
+**Manual alternative: `.codex/config.toml`.** If you would rather not install the plugin, register the server yourself. Codex shares MCP configuration between the CLI and the IDE extension through `~/.codex/config.toml`, and it discovers repo-local skills from `.agents/skills`.
 
 Codex Desktop does not send MCP roots. If you want Goldfish bound to the current repo, the reliable setup is a project-local `.codex/config.toml` in that repo so you can pass `GOLDFISH_WORKSPACE` for that project.
 
@@ -422,6 +435,12 @@ goldfish/
     skills/               # Repo-local skill mirror for Codex/OpenCode
   .claude-plugin/
     plugin.json           # Claude Code plugin manifest
+  .codex-plugin/
+    plugin.json           # Codex plugin manifest (tools + skills + hooks)
+    mcp.json              # Codex MCP server map
+  hooks/
+    goldfish-hooks.json   # SessionStart hook map, shared by both manifests
+    session-start.ts      # Prints the session guidance to stdout
   skills/
     brief/SKILL.md        # Canonical brief skill
     brief-status/SKILL.md # Canonical brief-status skill

@@ -394,7 +394,12 @@ Keep these docs updated:
 - `AGENTS.md` - Pointer to CLAUDE.md for AI agents
 - `CONTRIBUTING.md` - This file (development guide for contributors)
 - `docs/IMPLEMENTATION.md` - Detailed technical specification
+- `docs/agent-portability.md` - Per-harness support tiers and drift guards
 - Code comments - Only for "why", not "what"
+
+### Version Bumping
+
+A release updates the version in six surfaces plus `CHANGELOG.md`. `CLAUDE.md` § Version Bumping holds the canonical list — follow it there rather than a second copy here, and run `bun run check:version-tag` after tagging.
 
 ---
 

@@ -345,17 +345,18 @@ These work because bun matches filenames containing the given substring.
 
 ## Version Bumping
 
-The version must be updated in five surfaces (tests in `tests/server.test.ts` enforce they stay in sync):
+The version must be updated in six surfaces (tests in `tests/server.test.ts` enforce they stay in sync):
 
 1. `src/server.ts` (`SERVER_VERSION` constant) — canonical source of truth
 2. `package.json` (`version` field)
 3. `.claude-plugin/plugin.json` (`version` field)
-4. `.claude-plugin/marketplace.json` (`plugins[0].version`)
-5. `README.md` version banner (`**Version X.Y.Z**`)
+4. `.codex-plugin/plugin.json` (`version` field)
+5. `.claude-plugin/marketplace.json` (`plugins[0].version`)
+6. `README.md` version banner (`**Version X.Y.Z**`)
 
 Add a `## [X.Y.Z]` section to `CHANGELOG.md` at the same time.
 
-After tagging a release, run `bun run check:version-tag` (also enforced by `tests/agent-assets.test.ts` when tests run on the tagged commit). The five-surface tests only prove the files agree with each other — they all pass when every surface is stale together; the tag check catches that.
+After tagging a release, run `bun run check:version-tag` (also enforced by `tests/agent-assets.test.ts` when tests run on the tagged commit). The six-surface tests only prove the files agree with each other — they all pass when every surface is stale together; the tag check catches that.
 
 ---
 
