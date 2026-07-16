@@ -26,6 +26,8 @@ This file captures the coverage philosophy and testing conventions.
 | Recall | `bun test recall` | Aggregation, filtering, date windows |
 | Handlers | `bun test handlers` | MCP tool handler responses |
 | Server & registry | `bun test server registry` | Server startup, cross-project registry |
+| Hooks | `bun test hooks` | Hook payload content, session-start script, manifest wiring |
+| Agent assets | `bun test agent-assets` | Skill mirror, AGENTS.md, usage-doc freshness, version-tag guard |
 
 These work because bun matches filenames containing the given substring.
 

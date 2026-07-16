@@ -158,6 +158,7 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 | `src/handlers/` | Tool handlers (checkpoint, recall, brief) |
 | `src/tools.ts` | Tool definitions |
 | `src/instructions.ts` | Server behavioral instructions |
+| `src/hook-context.ts` | SessionStart hook payload, composed at runtime from `getInstructions()` |
 | `src/types.ts` | TypeScript interfaces |
 
 ---
@@ -166,18 +167,29 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 
 ```
 goldfish/
-├── .claude-plugin/plugin.json
+├── .claude-plugin/plugin.json   # Claude Code manifest (MCP server + skills + hooks)
+├── .codex-plugin/
+│   ├── plugin.json              # Codex manifest (skills + hooks + mcpServers)
+│   └── mcp.json                 # Codex MCP server map
+├── hooks/
+│   ├── goldfish-hooks.json      # SessionStart map shared by both manifests
+│   └── session-start.ts         # Prints src/hook-context.ts payload to stdout
 ├── skills/
-│   ├── recall/SKILL.md
-│   ├── checkpoint/SKILL.md
 │   ├── brief/SKILL.md
 │   ├── brief-status/SKILL.md
+│   ├── checkpoint/SKILL.md
+│   ├── handoff/SKILL.md
+│   ├── recall/SKILL.md
 │   └── standup/SKILL.md
 ├── src/
 ├── tests/
 ├── CLAUDE.md
 └── README.md
 ```
+
+### SessionStart Hook
+
+Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `SessionStart` event, matcher `startup|clear|compact` (never `resume` — a resumed transcript already contains the prior injection), one `bun` command with a PowerShell `commandWindows` variant. The script is branchless — both harnesses inject a hook's raw stdout as context, so no harness detection is needed. Payload composition lives in `src/hook-context.ts`, embeds `getInstructions()` verbatim, and is capped at 10,000 chars by `tests/hooks.test.ts`. Static content only; the hook makes no tool calls and writes no state.
 
 ---
 
@@ -250,6 +262,7 @@ We achieve this through:
 8. **Claude Code plugin** - Skills, plugin.json
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
+11. **Hooks tier (7.5+)** - SessionStart guidance injection for Claude Code + Codex plugin installs; Codex manifest bundles the MCP server
 
 **Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/sdk`, `@orama/orama`, `yaml`.
 

@@ -25,6 +25,7 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 4. **Goldfish 4.0** - Radical simplicity, markdown storage, evidence-based features
 5. **Goldfish 5.x-6.x** - Claude Code plugin, project-local `.memories/`, cross-project registry, hybrid semantic recall, consolidation, skills & hooks
 6. **Goldfish 7.0** - Subtract sprint: removed semantic stack, hooks, consolidation, and the plan tool in favor of Orama BM25 search and brief-first storage
+7. **Goldfish 7.5+** - Hooks return, narrowly: a SessionStart-only static hook for Claude Code + Codex after harness changes (2k instruction cap, deferred tool loading) gutted the ambient behavioral surface. The 7.0 lesson (no recurring hooks) still stands
 
 **Core principle:** We only add complexity when we have EVIDENCE we need it.
 
@@ -48,12 +49,14 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 
 **Checkpoint and brief markdown in `.memories/` is the source of truth.** Nothing derived is written to disk. The server keeps small in-memory caches (per-day corpus, search index) validated against file stats on every read, so external edits are always picked up.
 
-### Claude Code Plugin
+### Claude Code + Codex Plugin
 
-Goldfish is a **Claude Code plugin** with:
+Goldfish installs as a plugin in both Claude Code and Codex:
 
-- **`.claude-plugin/plugin.json`** - Plugin manifest (auto-discovery + MCP server registration)
-- **`skills/`** - 6 Claude Code skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
+- **`.claude-plugin/plugin.json`** - Claude Code manifest (MCP server registration + skills + hooks)
+- **`.codex-plugin/plugin.json`** - Codex manifest (skills + hooks + `mcp.json` server map)
+- **`skills/`** - 6 skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
+- **`hooks/`** - SessionStart hook shared by both manifests: `goldfish-hooks.json` (one event, one command, matcher `startup|clear|compact`) runs `session-start.ts`, which prints `getHookContext()` (`src/hook-context.ts`) as raw stdout. Static content only, always exit 0, never any other event — the 7.0 hook-spam lesson is enforced by `tests/hooks.test.ts`
 
 ### Core Modules
 
@@ -72,6 +75,7 @@ Goldfish is a **Claude Code plugin** with:
 | `src/logger.ts` | Structured logging | `tests/logger.test.ts` |
 | `src/server.ts` | MCP server | `tests/server.test.ts` |
 | `src/handlers/` | Tool handlers (checkpoint, recall, brief) | `tests/handlers.test.ts` |
+| `src/hook-context.ts` | SessionStart hook payload composition | `tests/hooks.test.ts` |
 | `src/tools.ts` | Tool definitions | - |
 | `src/instructions.ts` | Server instructions | - |
 | `src/types.ts` | Type definitions | - |
@@ -265,6 +269,7 @@ Claude Code enforces a **2,000 character cap** on both server instructions (`get
 - **Tool descriptions** carry usage details, parameter tips, and examples for their specific tool.
 - Don't duplicate content between instructions and tool descriptions. If instructions reference a tool's quality guidance, point to the tool description ("see the checkpoint tool description") rather than repeating it.
 - Deliberate exception: the checkpoint trigger list (including checkpoint-before-commit) appears in both surfaces because non-Claude MCP clients may never show server instructions — the tool description is the only behavioral surface they see.
+- The SessionStart hook has its own cap: **10,000 characters** of injected context (enforced by `tests/hooks.test.ts`). The hook payload embeds `getInstructions()` verbatim plus what the 2k cap and deferred tool loading hide (tool advertisement, quick reference, checkpoint quality format) — extend it in `src/hook-context.ts`, never by forking the instruction text.
 
 ---
 
@@ -336,6 +341,8 @@ Run the group matching your change instead of the full suite. Use the full suite
 | Recall | `bun test recall` | Aggregation, filtering, date windows |
 | Handlers | `bun test handlers` | MCP tool handler responses |
 | Server & registry | `bun test server registry` | Server startup, cross-project registry |
+| Hooks | `bun test hooks` | Hook payload content, session-start script, manifest wiring |
+| Agent assets | `bun test agent-assets` | Skill mirror, AGENTS.md, usage-doc freshness, version-tag guard |
 
 These work because bun matches filenames containing the given substring.
 

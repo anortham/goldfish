@@ -30,7 +30,7 @@ bun install
 
 ### Claude Code
 
-Claude Code is the fullest adapter today. You get MCP tools and slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/handoff`, `/standup`).
+Claude Code is the fullest adapter today. You get MCP tools, slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/handoff`, `/standup`), and a session-start hook that loads Goldfish's memory guidance into each new session.
 
 Install from the marketplace:
 
@@ -56,6 +56,8 @@ For development, load the plugin from the local directory each time:
 ```bash
 claude --plugin-dir /path/to/goldfish
 ```
+
+**The session-start hook.** The plugin registers a SessionStart hook that injects Goldfish's usage guidance (checkpoint triggers, tool reference, brief lifecycle) at the start of each session — this is what keeps agents checkpointing even when tool descriptions are deferred. It fires once at session start (and again after `/clear` or a context compaction), prints static text, makes no tool calls, and writes no state. It needs no setup: sessions started after the plugin is installed (or updated to 7.5+) pick it up automatically. You can inspect it anytime with `/hooks`.
 
 Once the plugin is loaded, Goldfish works through manual invocation and agent-driven calls:
 
@@ -293,7 +295,7 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 6 skills. Claude Code exposes them as slash commands, and Codex Desktop plus OpenCode can discover the same skill content from `.agents/skills/`.
+Goldfish ships 6 skills. Claude Code and Codex plugin installs expose them directly; OpenCode (and Codex without the plugin) discovers the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
@@ -419,7 +421,7 @@ What v7 subtracted, and why:
 | Decision | Rationale |
 |----------|-----------|
 | Orama BM25 over hybrid fuse + embeddings | LLM-issued queries are well-formed; relevance ranking matters more than typo tolerance, and BM25 is a fraction of the runtime weight |
-| No hooks | Behavioral adoption travels with the tool description; hooks tied us to one harness and produced spam |
+| No hooks *(reversed in 7.5, narrowly)* | The spam came from recurring hooks, and those stay banned. When harness changes capped server instructions at 2k and deferred tool descriptions out of sight, a SessionStart-only static hook became the fix, not the disease — see `docs/agent-portability.md` |
 | No consolidation | Token math was net-negative; reading consolidated digests cost more than reading checkpoints directly |
 | Briefs replace plans | Harnesses own session execution planning; Goldfish owns durable strategic context that outlasts a session |
 | 3 tools, not more | Checkpoint, recall, brief cover all use cases without bloat |
@@ -548,6 +550,13 @@ Benchmarked on Apple Silicon (M-series).
 2. Projects are auto-registered on first checkpoint save
 3. Check that listed projects still have `.memories/` directories
 
+### Session-start guidance not appearing
+
+1. The hook fires only in sessions started **after** the plugin was installed or updated -- start a new session
+2. **Claude Code:** check `/hooks` for Goldfish's SessionStart entry; verify the plugin is enabled (`claude plugin list`)
+3. **Codex:** plugin hooks stay silent until trusted -- run `/hooks`, review and trust the Goldfish SessionStart hook, then start a new thread
+4. The hook runs `bun`, so Bun must be on your PATH (already true if the MCP tools work)
+
 ---
 
 ## Documentation
@@ -558,6 +567,7 @@ Benchmarked on Apple Silicon (M-series).
 | `CLAUDE.md` | AI agents (developing Goldfish) | TDD rules, architecture, coding patterns |
 | `CONTRIBUTING.md` | Contributors | Detailed development guide |
 | `docs/IMPLEMENTATION.md` | Contributors | Technical specification |
+| `docs/agent-portability.md` | Contributors | Per-harness support tiers, deliberate non-support, drift guards |
 
 ---
 
