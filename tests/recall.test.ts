@@ -348,6 +348,34 @@ describe('Search functionality', () => {
   });
 });
 
+describe('Default-mode output trimming', () => {
+  let trimDir: string;
+
+  beforeEach(async () => {
+    trimDir = await mkdtemp(join(tmpdir(), 'test-trim-'));
+    await ensureMemoriesDir(trimDir);
+  });
+
+  afterEach(async () => {
+    await rm(trimDir, { recursive: true, force: true });
+  });
+
+  it('truncates long next fields in default mode but not in full mode', async () => {
+    await saveCheckpoint({
+      description: 'Next truncation test',
+      next: 'n'.repeat(300),
+      workspace: trimDir
+    });
+
+    const compact = await recall({ workspace: trimDir, limit: 1 });
+    expect(compact.checkpoints[0]!.next!.length).toBeLessThanOrEqual(140);
+    expect(compact.checkpoints[0]!.next!.endsWith('...')).toBe(true);
+
+    const full = await recall({ workspace: trimDir, limit: 1, full: true });
+    expect(full.checkpoints[0]!.next!).toHaveLength(300);
+  });
+});
+
 describe('Cross-workspace functionality', () => {
   let projectA: string;
   let projectB: string;

@@ -1635,3 +1635,46 @@ describe('Auto-registration', () => {
     expect(registered!.name).toBeTruthy();
   });
 });
+
+describe('Day corpus cache freshness', () => {
+  let cacheDir: string;
+  let restoreCacheDeps: () => void;
+
+  beforeEach(async () => {
+    cacheDir = await require('fs/promises').mkdtemp(join(tmpdir(), 'test-daycache-'));
+    restoreCacheDeps = __setCheckpointDependenciesForTests({
+      getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+    });
+    await ensureMemoriesDir(cacheDir);
+  });
+
+  afterEach(async () => {
+    restoreCacheDeps();
+    await rm(cacheDir, { recursive: true, force: true });
+  });
+
+  it('returns fresh content after a checkpoint file is edited in place', async () => {
+    const saved = await saveCheckpoint({ description: 'Original text', workspace: cacheDir });
+    const date = saved.timestamp.split('T')[0]!;
+
+    const before = await getCheckpointsForDay(cacheDir, date);
+    expect(before[0]!.description).toContain('Original text');
+
+    const content = await readFile(saved.filePath!, 'utf-8');
+    await writeFile(saved.filePath!, content.replace('Original text', 'Edited text, now longer'), 'utf-8');
+
+    const after = await getCheckpointsForDay(cacheDir, date);
+    expect(after[0]!.description).toContain('Edited text, now longer');
+  });
+
+  it('returns fresh results after a new checkpoint is added', async () => {
+    const first = await saveCheckpoint({ description: 'First entry', workspace: cacheDir });
+    const date = first.timestamp.split('T')[0]!;
+    await getCheckpointsForDay(cacheDir, date);
+
+    await saveCheckpoint({ description: 'Second entry', workspace: cacheDir });
+
+    const after = await getCheckpointsForDay(cacheDir, date);
+    expect(after.map(c => c.description)).toContain('Second entry');
+  });
+});

@@ -46,7 +46,7 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
   registry.json            # Cross-project registry (auto-populated)
 ```
 
-**Checkpoint and brief markdown in `.memories/` is the source of truth.** No derived caches or model files; search runs over the markdown corpus on demand.
+**Checkpoint and brief markdown in `.memories/` is the source of truth.** Nothing derived is written to disk. The server keeps small in-memory caches (per-day corpus, search index) validated against file stats on every read, so external edits are always picked up.
 
 ### Claude Code Plugin
 

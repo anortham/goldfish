@@ -9,10 +9,11 @@ import type { Brief, BriefRefreshNotice, Checkpoint, RecallInput, RecallOptions,
 import {
   getCheckpointsForDateRange,
   getAllCheckpoints,
+  getAllCheckpointsWithFingerprint,
   findLatestCheckpointTimestampForBrief,
   hasValidCalendarDate
 } from './checkpoints';
-import { buildCompactSearchDescription } from './digests';
+import { buildCompactSearchDescription, truncate } from './digests';
 import { getActiveBrief } from './briefs';
 import { listRegisteredProjects } from './registry';
 import { searchCheckpoints } from './ranking';
@@ -26,6 +27,18 @@ import { resolveWorkspace } from './workspace';
  */
 const STALE_BRIEF_DAYS = 7;
 const BRIEF_REFRESH_DAYS = 14;
+
+/**
+ * How far back the brief-activity scan looks. Activity older than this cannot
+ * change the stale verdict (anything past STALE_BRIEF_DAYS is stale), so
+ * scanning deeper only burns file reads on every recall — including the
+ * limit:0 session-start path. When nothing is found in the window, the
+ * displayed age falls back to the brief's own updated timestamp.
+ */
+const STALE_SCAN_MAX_DAYS = 28;
+
+/** Default-mode cap for the free-text `next` field — full mode is uncapped. */
+const MAX_DEFAULT_NEXT_LENGTH = 140;
 
 /**
  * First non-heading content line of a brief, truncated for the stale notice —
@@ -60,11 +73,14 @@ async function resolveActiveBrief(
     return { activeBrief: null, staleBrief: null, briefRefresh: null };
   }
 
-  // Bound the scan to dirs at/after the brief's creation date: no checkpoint can
-  // reference a brief that did not yet exist, so this never misses a match but
-  // keeps recall() off a full-history scan when the active brief is fresh.
+  // Bound the scan two ways: no checkpoint can reference a brief that did not
+  // yet exist (creation date), and activity older than STALE_SCAN_MAX_DAYS
+  // cannot change the stale verdict — so neither a fresh brief nor an ancient
+  // one triggers a deep-history scan on every recall.
   const createdDate = typeof brief.created === 'string' ? brief.created.split('T')[0] : undefined;
-  const latestActivity = await findLatestCheckpointTimestampForBrief(workspace, brief.id, createdDate);
+  const scanFloor = new Date(Date.now() - STALE_SCAN_MAX_DAYS * 86_400_000).toISOString().split('T')[0]!;
+  const notBeforeDate = createdDate && createdDate > scanFloor ? createdDate : scanFloor;
+  const latestActivity = await findLatestCheckpointTimestampForBrief(workspace, brief.id, notBeforeDate);
   const updatedAt = brief.updated ?? brief.created;
   let lastActivity = brief.created;
   if (new Date(updatedAt).getTime() > new Date(lastActivity).getTime()) {
@@ -459,6 +475,7 @@ function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Chec
     } = withDescription;
     return {
       ...minimal,
+      ...(minimal.next ? { next: truncate(minimal.next, MAX_DEFAULT_NEXT_LENGTH) } : {}),
       ...(options.file && git ? { git } : {}),
       ...(options.symbol && symbols ? { symbols } : {})
     };
@@ -493,9 +510,16 @@ async function recallFromWorkspace(
 
   // Load checkpoints for display. Only loads all when needed for date filtering or search.
   let checkpoints: Checkpoint[];
+  let searchCacheKey: { scope: string; fingerprint: string } | undefined;
   if (hasDateParams(options)) {
     const { from, to } = getDateRange(options);
     checkpoints = await getCheckpointsForDateRange(workspace, from, to);
+  } else if (options.search && !hasStructuredFilter(options)) {
+    // Whole-corpus search: carry the corpus fingerprint so the Orama index
+    // can be reused across calls until any checkpoint file changes.
+    const { checkpoints: corpus, fingerprint } = await getAllCheckpointsWithFingerprint(workspace);
+    checkpoints = corpus;
+    searchCacheKey = { scope: workspace, fingerprint };
   } else {
     // Load the full corpus when searching or filtering so matches outside the
     // most-recent-N window are not lost before the filter/search runs.
@@ -506,7 +530,7 @@ async function recallFromWorkspace(
   checkpoints = applyStructuredFilters(checkpoints, options);
 
   if (options.search) {
-    checkpoints = await searchCheckpoints(options.search, checkpoints);
+    checkpoints = await searchCheckpoints(options.search, checkpoints, searchCacheKey);
   } else {
     checkpoints = checkpoints.sort((a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()

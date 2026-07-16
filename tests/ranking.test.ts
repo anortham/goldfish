@@ -132,3 +132,58 @@ describe('Checkpoint search (Orama BM25)', () => {
     expect(results[1]!.id).toBe('cp_old')
   });
 });
+
+describe('Search index cache', () => {
+  const corpus: Checkpoint[] = [
+    {
+      id: 'cp_cache_a',
+      timestamp: '2026-01-01T10:00:00.000Z',
+      description: 'Alpha rollout of the payment retry queue',
+      tags: ['payments']
+    },
+    {
+      id: 'cp_cache_b',
+      timestamp: '2026-01-02T10:00:00.000Z',
+      description: 'Beta hardening of webhook signatures',
+      tags: ['webhooks']
+    }
+  ];
+
+  it('reuses the index for an unchanged fingerprint and rebuilds when it changes', async () => {
+    const { __getSearchIndexCacheStatsForTests } = await import('../src/ranking');
+    const key = { scope: '/tmp/ws-cache-test', fingerprint: 'fp-1' };
+
+    const start = __getSearchIndexCacheStatsForTests();
+    await searchCheckpoints('alpha payment', corpus, key);
+    await searchCheckpoints('webhook', corpus, key);
+
+    const afterReuse = __getSearchIndexCacheStatsForTests();
+    expect(afterReuse.misses - start.misses).toBe(1);
+    expect(afterReuse.hits - start.hits).toBe(1);
+
+    const grown = [...corpus, {
+      id: 'cp_cache_c',
+      timestamp: '2026-01-03T10:00:00.000Z',
+      description: 'Gamma release of the payment reconciliation job',
+      tags: ['payments']
+    }];
+    const results = await searchCheckpoints('payment reconciliation', grown, {
+      scope: '/tmp/ws-cache-test',
+      fingerprint: 'fp-2'
+    });
+
+    expect(results[0]!.id).toBe('cp_cache_c');
+    const afterRebuild = __getSearchIndexCacheStatsForTests();
+    expect(afterRebuild.misses - start.misses).toBe(2);
+  });
+
+  it('never returns checkpoints outside the passed set even on a cache hit', async () => {
+    const key = { scope: '/tmp/ws-cache-subset', fingerprint: 'fp-x' };
+    await searchCheckpoints('payment', corpus, key);
+
+    const subset = [corpus[1]!];
+    const results = await searchCheckpoints('payment webhook', subset, key);
+
+    expect(results.every(c => c.id === 'cp_cache_b')).toBe(true);
+  });
+});

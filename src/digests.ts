@@ -9,7 +9,7 @@ function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
 }
 
-function truncate(value: string, maxLength: number): string {
+export function truncate(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
     return value
   }
@@ -116,15 +116,53 @@ export function buildRetrievalDigest(checkpoint: Checkpoint): string {
   return joinParts(parts, MAX_DIGEST_LENGTH)
 }
 
-export function buildCompactSearchDescription(checkpoint: Checkpoint): string {
-  const digest = buildRetrievalDigest(checkpoint)
+/**
+ * Drop parts fully contained in another part (case-insensitive). Headings are
+ * routinely a prefix of the decision text; exact-match dedup lets that
+ * near-duplicate burn compact-budget chars that the distinct signal needs.
+ */
+function dropContainedParts(parts: string[]): string[] {
+  const kept: string[] = []
 
-  return joinParts(
-    uniqueParts([
-      checkpoint.decision,
-      checkpoint.impact,
-      digest
-    ]),
-    MAX_COMPACT_LENGTH
+  for (const part of parts) {
+    const lower = part.toLowerCase()
+
+    if (kept.some(k => k.toLowerCase().includes(lower))) {
+      continue
+    }
+
+    for (let i = kept.length - 1; i >= 0; i--) {
+      if (lower.includes(kept[i]!.toLowerCase())) {
+        kept.splice(i, 1)
+      }
+    }
+
+    kept.push(part)
+  }
+
+  return kept
+}
+
+export function buildCompactSearchDescription(checkpoint: Checkpoint): string {
+  const { heading, lines } = extractDescriptionParts(checkpoint.description)
+  const hasNarrativeStructuredContent = Boolean(
+    checkpoint.context || checkpoint.decision || checkpoint.impact
   )
+  const briefId = checkpoint.briefId ?? checkpoint.planId
+
+  // Composed from atomic parts rather than the pre-joined digest so
+  // containment dedup can see across them.
+  const parts = dropContainedParts(uniqueParts([
+    checkpoint.decision,
+    checkpoint.impact,
+    heading,
+    checkpoint.context,
+    uniqueList(checkpoint.tags)?.join(', '),
+    uniqueList(checkpoint.symbols)?.join(', '),
+    briefId,
+    checkpoint.git?.branch,
+    ...(!hasNarrativeStructuredContent ? lines : [])
+  ]))
+
+  return joinParts(parts, MAX_COMPACT_LENGTH)
 }

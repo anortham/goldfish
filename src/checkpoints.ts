@@ -6,7 +6,7 @@
  */
 
 import { join } from 'path';
-import { readFile, writeFile, readdir, rename, unlink, mkdir } from 'fs/promises';
+import { readFile, writeFile, readdir, rename, unlink, mkdir, stat } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Checkpoint, CheckpointInput } from './types';
 import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
@@ -18,7 +18,7 @@ import { getActiveBrief } from './briefs';
 import { getLogger } from './logger';
 
 interface CheckpointDependencies {
-  getGitContext: (cwd?: string) => import('./types').GitContext;
+  getGitContext: (cwd?: string) => import('./types').GitContext | Promise<import('./types').GitContext>;
 }
 
 const defaultCheckpointDependencies: CheckpointDependencies = {
@@ -383,7 +383,7 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
 
   // Create checkpoint with current timestamp
   const timestamp = new Date().toISOString();
-  const gitContext = checkpointDependencies.getGitContext(projectPath);
+  const gitContext = await checkpointDependencies.getGitContext(projectPath);
 
   // Generate deterministic ID
   const id = generateCheckpointId(timestamp, input.description);
@@ -481,12 +481,42 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
 }
 
 /**
- * Get all checkpoints for a specific day
+ * In-memory per-day corpus cache. Markdown on disk stays the source of truth:
+ * every read re-fingerprints the directory (name + size + mtime of each file)
+ * and only skips the read+parse work on an exact match, so external edits and
+ * new files are always picked up. Nothing derived is ever written to disk.
  */
-export async function getCheckpointsForDay(
-  projectPath: string,
-  date: string
-): Promise<Checkpoint[]> {
+interface DayCacheEntry {
+  fingerprint: string;
+  checkpoints: Checkpoint[];
+}
+
+const dayCache = new Map<string, DayCacheEntry>();
+const DAY_CACHE_MAX_ENTRIES = 4096;
+
+/** Test hook: drop all cached day entries. */
+export function __clearDayCacheForTests(): void {
+  dayCache.clear();
+}
+
+async function fingerprintDayFiles(dateDir: string, files: string[]): Promise<string> {
+  const parts = await Promise.all(files.map(async (file) => {
+    try {
+      const stats = await stat(join(dateDir, file));
+      return `${file}:${stats.size}:${stats.mtimeMs}`;
+    } catch {
+      return `${file}:gone`;
+    }
+  }));
+  return parts.join('|');
+}
+
+interface DayLoadResult {
+  fingerprint: string;
+  checkpoints: Checkpoint[];
+}
+
+async function loadDay(projectPath: string, date: string): Promise<DayLoadResult> {
   const dateDir = join(getMemoriesDir(projectPath), date);
 
   let files: string[];
@@ -494,7 +524,7 @@ export async function getCheckpointsForDay(
     files = await readdir(dateDir);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
-      return [];
+      return { fingerprint: '', checkpoints: [] };
     }
     throw error;
   }
@@ -502,38 +532,61 @@ export async function getCheckpointsForDay(
   const mdFiles = files.filter(f => f.endsWith('.md')).sort();
   const jsonFiles = files.filter(f => f.endsWith('.json')).sort();
 
-  const checkpoints: Checkpoint[] = [];
+  const fingerprint = await fingerprintDayFiles(dateDir, [...mdFiles, ...jsonFiles]);
+  const cached = dayCache.get(dateDir);
+  if (cached && cached.fingerprint === fingerprint) {
+    return { fingerprint, checkpoints: cached.checkpoints };
+  }
 
-  for (const file of mdFiles) {
+  // Read files concurrently; a corrupt file skips itself without failing the batch
+  const mdResults = await Promise.all(mdFiles.map(async (file): Promise<Checkpoint | null> => {
+    const filePath = join(dateDir, file);
     try {
-      const filePath = join(dateDir, file);
       const content = await readFile(filePath, 'utf-8');
       const checkpoint = parseCheckpointFile(content);
       checkpoint.filePath = filePath;
-      checkpoints.push(checkpoint);
+      return checkpoint;
     } catch (err: any) {
-      getLogger().warn(`skipping corrupted checkpoint: ${join(dateDir, file)} (${err?.message ?? 'unknown error'})`);
-      continue;
+      getLogger().warn(`skipping corrupted checkpoint: ${filePath} (${err?.message ?? 'unknown error'})`);
+      return null;
     }
-  }
+  }));
 
   // Legacy: read old Julie JSON checkpoint files
-  for (const file of jsonFiles) {
+  const jsonResults = await Promise.all(jsonFiles.map(async (file): Promise<Checkpoint | null> => {
+    const filePath = join(dateDir, file);
     try {
-      const filePath = join(dateDir, file);
       const content = await readFile(filePath, 'utf-8');
       const checkpoint = parseJsonCheckpoint(content);
       checkpoint.filePath = filePath;
-      checkpoints.push(checkpoint);
+      return checkpoint;
     } catch {
-      continue;
+      return null;
     }
-  }
+  }));
 
-  // Sort by timestamp
-  return checkpoints.sort((a, b) =>
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  const checkpoints = [...mdResults, ...jsonResults]
+    .filter((c): c is Checkpoint => c !== null)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  if (dayCache.size >= DAY_CACHE_MAX_ENTRIES) {
+    dayCache.clear();
+  }
+  dayCache.set(dateDir, { fingerprint, checkpoints });
+
+  return { fingerprint, checkpoints };
+}
+
+/**
+ * Get all checkpoints for a specific day
+ */
+export async function getCheckpointsForDay(
+  projectPath: string,
+  date: string
+): Promise<Checkpoint[]> {
+  const { checkpoints } = await loadDay(projectPath, date);
+  // Callers may sort/splice the result; never hand out the cached array itself
+  return [...checkpoints];
 }
 
 /**
@@ -548,6 +601,26 @@ export async function getAllCheckpoints(
   projectPath: string,
   limit?: number
 ): Promise<Checkpoint[]> {
+  const { checkpoints } = await getAllCheckpointsInternal(projectPath, limit);
+  return checkpoints;
+}
+
+/**
+ * Like getAllCheckpoints (unlimited), but also returns a corpus fingerprint
+ * derived from every date directory's file stats. Callers use it to key
+ * derived in-memory state (the search index) that must invalidate whenever
+ * any checkpoint file changes.
+ */
+export async function getAllCheckpointsWithFingerprint(
+  projectPath: string
+): Promise<{ checkpoints: Checkpoint[]; fingerprint: string }> {
+  return getAllCheckpointsInternal(projectPath);
+}
+
+async function getAllCheckpointsInternal(
+  projectPath: string,
+  limit?: number
+): Promise<{ checkpoints: Checkpoint[]; fingerprint: string }> {
   const memoriesDir = getMemoriesDir(projectPath);
 
   let entries: string[];
@@ -555,7 +628,7 @@ export async function getAllCheckpoints(
     entries = await readdir(memoriesDir);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
-      return [];
+      return { checkpoints: [], fingerprint: '' };
     }
     throw error;
   }
@@ -564,18 +637,24 @@ export async function getAllCheckpoints(
   const dateDirs = entries.filter(e => datePattern.test(e)).sort().reverse();
 
   const allCheckpoints: Checkpoint[] = [];
+  const dayFingerprints: string[] = [];
   for (const dir of dateDirs) {
-    const checkpoints = await getCheckpointsForDay(projectPath, dir);
+    const { checkpoints, fingerprint } = await loadDay(projectPath, dir);
     allCheckpoints.push(...checkpoints);
+    dayFingerprints.push(`${dir}#${fingerprint}`);
     // Early termination: stop scanning older directories once we have enough
     if (limit && allCheckpoints.length >= limit) break;
   }
 
   // Sort newest first, then slice to limit
-  const sorted = allCheckpoints.sort((a, b) =>
+  const sorted = [...allCheckpoints].sort((a, b) =>
     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
-  return limit ? sorted.slice(0, limit) : sorted;
+  const fingerprint = Bun.hash(dayFingerprints.join('\n')).toString(36);
+  return {
+    checkpoints: limit ? sorted.slice(0, limit) : sorted,
+    fingerprint
+  };
 }
 
 /**
@@ -686,12 +765,9 @@ export async function getCheckpointsForDateRange(
     })
     .sort();
 
-  // Load all checkpoints from relevant directories
-  const allCheckpoints: Checkpoint[] = [];
-  for (const dir of relevantDirs) {
-    const checkpoints = await getCheckpointsForDay(projectPath, dir);
-    allCheckpoints.push(...checkpoints);
-  }
+  // Load all relevant directories concurrently
+  const perDay = await Promise.all(relevantDirs.map(dir => getCheckpointsForDay(projectPath, dir)));
+  const allCheckpoints: Checkpoint[] = perDay.flat();
 
   // Filter by actual timestamp (not just directory date)
   const filtered = allCheckpoints.filter(checkpoint => {

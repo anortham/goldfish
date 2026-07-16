@@ -12,87 +12,67 @@ export const MAX_GIT_FILES = 30;
 
 /** Paths to exclude from git file lists */
 const EXCLUDED_PREFIXES = ['.memories/'];
-type SpawnOptions = NonNullable<Parameters<typeof spawnSync>[1]>;
 
-function getSpawnOptions(cwd?: string): SpawnOptions {
-  const stdio: ['ignore', 'pipe', 'ignore'] = ['ignore', 'pipe', 'ignore'];
-
-  return cwd
-    ? { stdio, cwd }
-    : { stdio };
+/** Run one git command asynchronously; null on any failure. */
+async function runGit(args: string[], cwd?: string): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(['git', ...args], {
+      ...(cwd ? { cwd } : {}),
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore'
+    });
+    const [output, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      proc.exited
+    ]);
+    return exitCode === 0 ? output : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Get current git context (branch, commit, changed files)
  * Returns undefined values if not in a git repository
  *
+ * All git commands run concurrently and never block the event loop — git is
+ * the dominant cost of a checkpoint save, and the MCP server must keep
+ * serving other requests while it runs.
+ *
  * @param cwd - Optional working directory for git commands (defaults to process.cwd())
  */
-export function getGitContext(cwd?: string): GitContext {
-  const spawnOpts = getSpawnOptions(cwd);
+export async function getGitContext(cwd?: string): Promise<GitContext> {
+  // Unstaged and staged changes are queried separately so repos with unborn
+  // HEAD still report files.
+  const [branchOut, commitOut, unstagedOut, stagedOut, untrackedOut] = await Promise.all([
+    runGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd),
+    runGit(['rev-parse', '--short', 'HEAD'], cwd),
+    runGit(['diff', '--name-only'], cwd),
+    runGit(['diff', '--cached', '--name-only'], cwd),
+    runGit(['ls-files', '--others', '--exclude-standard'], cwd)
+  ]);
 
-  try {
-    // Get current branch
-    const branchResult = spawnSync(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], spawnOpts);
-    const branch = branchResult.success
-      ? (branchResult.stdout?.toString().trim() || undefined)
-      : undefined;
+  const branch = branchOut?.trim() || undefined;
+  const commit = commitOut?.trim() || undefined;
 
-    // Get current commit (short hash)
-    const commitResult = spawnSync(['git', 'rev-parse', '--short', 'HEAD'], spawnOpts);
-    const commit = commitResult.success
-      ? (commitResult.stdout?.toString().trim() || undefined)
-      : undefined;
-
-    const filesSet = new Set<string>();
-
-    // Query unstaged and staged changes separately so repos with unborn HEAD still report files.
-    for (const result of [
-      spawnSync(['git', 'diff', '--name-only'], spawnOpts),
-      spawnSync(['git', 'diff', '--cached', '--name-only'], spawnOpts)
-    ]) {
-      if (!result.success) {
-        continue;
-      }
-
-      for (const file of (result.stdout?.toString().trim() || '').split('\n')) {
-        if (file) {
-          filesSet.add(file);
-        }
+  const filesSet = new Set<string>();
+  for (const out of [unstagedOut, stagedOut, untrackedOut]) {
+    if (out === null) continue;
+    for (const file of out.trim().split('\n')) {
+      if (file && !EXCLUDED_PREFIXES.some(prefix => file.startsWith(prefix))) {
+        filesSet.add(file);
       }
     }
-
-    // Include untracked files as well
-    const untrackedResult = spawnSync(
-      ['git', 'ls-files', '--others', '--exclude-standard'],
-      spawnOpts
-    );
-    if (untrackedResult.success) {
-      for (const file of (untrackedResult.stdout?.toString().trim() || '').split('\n')) {
-        if (file) {
-          filesSet.add(file);
-        }
-      }
-    }
-
-    // Filter excluded paths and cap file count
-    for (const file of filesSet) {
-      if (EXCLUDED_PREFIXES.some(prefix => file.startsWith(prefix))) {
-        filesSet.delete(file);
-      }
-    }
-    const sorted = Array.from(filesSet).sort();
-    const files = sorted.length > 0 ? sorted.slice(0, MAX_GIT_FILES) : undefined;
-
-    const context: GitContext = {};
-    if (branch) context.branch = branch;
-    if (commit) context.commit = commit;
-    if (files) context.files = files;
-    return context;
-  } catch {
-    // Not in a git repository or git not available
-    return {};
   }
+  const sorted = Array.from(filesSet).sort();
+  const files = sorted.length > 0 ? sorted.slice(0, MAX_GIT_FILES) : undefined;
+
+  const context: GitContext = {};
+  if (branch) context.branch = branch;
+  if (commit) context.commit = commit;
+  if (files) context.files = files;
+  return context;
 }
 
 /**

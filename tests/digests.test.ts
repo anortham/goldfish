@@ -120,4 +120,25 @@ describe('digests', () => {
     expect(compact).toContain('Search results now expose semantic recall intent in far fewer characters')
     expect(compact.length).toBeLessThanOrEqual(220)
   })
+
+  it('drops parts contained in other parts instead of repeating them', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_dedup',
+      timestamp: '2026-04-01T09:00:00.000Z',
+      description: [
+        '## Hide stale active briefs from recall',
+        '',
+        'Briefs went stale and kept surfacing'
+      ].join('\n'),
+      context: 'Briefs went stale and kept surfacing',
+      decision: 'Hide stale active briefs from recall with a non-destructive nudge; never auto-archive',
+      impact: 'Stale brief suppression in recall'
+    }
+
+    const compact = buildCompactSearchDescription(checkpoint)
+    const segments = compact.split(' | ')
+
+    expect(segments.filter(s => s.startsWith('Hide stale active briefs'))).toHaveLength(1)
+    expect(compact).toContain('Briefs went stale and kept surfacing')
+  })
 })

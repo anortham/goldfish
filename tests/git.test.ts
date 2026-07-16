@@ -38,7 +38,7 @@ describe('Git context', () => {
 
     await writeFile('untracked.txt', 'hello');
 
-    const context = getGitContext();
+    const context = await getGitContext();
     expect(context.files).toBeDefined();
     expect(context.files).toContain('untracked.txt');
   });
@@ -49,7 +49,7 @@ describe('Git context', () => {
     process.chdir(repoDir);
 
     // Not a git repo
-    const context = getGitContext();
+    const context = await getGitContext();
     expect(context).toEqual({});
   });
 
@@ -103,7 +103,7 @@ describe('Git context', () => {
     // Create a normal untracked file (should be included)
     await writeFile('real-change.txt', 'hello');
 
-    const context = getGitContext();
+    const context = await getGitContext();
     expect(context.files).toBeDefined();
     expect(context.files).toContain('real-change.txt');
     expect(context.files!.every(f => !f.startsWith('.memories/'))).toBe(true);
@@ -130,7 +130,7 @@ describe('Git context', () => {
       await writeFile(join(targetDir, 'new-in-target.txt'), 'content');
 
       // Call getGitContext with the cwd parameter (NOT changing process.cwd())
-      const context = getGitContext(targetDir);
+      const context = await getGitContext(targetDir);
       expect(context.files).toBeDefined();
       expect(context.files).toContain('new-in-target.txt');
     } finally {
@@ -157,7 +157,7 @@ describe('Git context', () => {
       await writeFile(`file-${String(i).padStart(3, '0')}.txt`, `content ${i}`);
     }
 
-    const context = getGitContext();
+    const context = await getGitContext();
     expect(context.files).toBeDefined();
     expect(context.files!.length).toBe(MAX_GIT_FILES);
   });
@@ -172,7 +172,7 @@ describe('Git context', () => {
     await writeFile('staged-before-first-commit.txt', 'hello');
     await Bun.spawn(['git', 'add', 'staged-before-first-commit.txt']).exited;
 
-    const context = getGitContext();
+    const context = await getGitContext();
     expect(context.commit).toBeUndefined();
     expect(context.files).toContain('staged-before-first-commit.txt');
   });

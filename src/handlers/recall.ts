@@ -9,6 +9,13 @@ import { getFishEmoji } from '../emoji.js';
 import type { Brief, BriefRefreshNotice, Checkpoint, RecallArgs, StaleBriefNotice } from '../types.js';
 
 /**
+ * Char cap for the checkpoints section in full mode (~5k tokens). Full-mode
+ * descriptions are uncapped per checkpoint, so a high limit could otherwise
+ * put tens of thousands of tokens into one tool response.
+ */
+const FULL_MODE_CHAR_BUDGET = 20_000;
+
+/**
  * Safely convert a value to an array for display.
  * Stored data may have arrays serialized as JSON strings.
  */
@@ -216,7 +223,9 @@ export async function handleRecall(args: RecallArgs) {
     }
   }
 
-  // Checkpoints section
+  // Checkpoints section. Full mode is uncapped per checkpoint, so the section
+  // gets a char budget — a single tool response must not flood the caller's
+  // context window. At least one checkpoint always renders.
   if (count > 0) {
     lines.push('');
     lines.push('---');
@@ -224,8 +233,22 @@ export async function handleRecall(args: RecallArgs) {
     lines.push('## Checkpoints');
     lines.push('');
 
+    const fullMode = Boolean(args.full);
+    let used = 0;
+    let shown = 0;
     for (const checkpoint of result.checkpoints) {
-      lines.push(formatCheckpoint(checkpoint));
+      const block = formatCheckpoint(checkpoint);
+      if (fullMode && shown > 0 && used + block.length > FULL_MODE_CHAR_BUDGET) {
+        break;
+      }
+      lines.push(block);
+      lines.push('');
+      used += block.length;
+      shown += 1;
+    }
+
+    if (shown < count) {
+      lines.push(`(output truncated: showing ${shown} of ${count} checkpoints — lower limit or drop full: true)`);
       lines.push('');
     }
   }

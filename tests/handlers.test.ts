@@ -439,6 +439,21 @@ describe('Readable markdown responses', () => {
       expect(text).toContain('---');
     });
 
+    it('caps full-mode output with an explicit truncation note', async () => {
+      for (let i = 0; i < 10; i++) {
+        await saveCheckpoint({
+          description: `## Long checkpoint ${i}\n\n${'x'.repeat(4000)}`,
+          workspace: TEST_DIR
+        });
+      }
+
+      const result = await handleRecall({ workspace: TEST_DIR, limit: 10, full: true });
+      const text = result.content[0]!.text;
+
+      expect(text.length).toBeLessThanOrEqual(24_000);
+      expect(text).toMatch(/output truncated: showing \d+ of 10 checkpoints/);
+    });
+
     it('renders a one-line nudge instead of the body for a stale active brief', async () => {
       // Create the brief at the same time as its referencing checkpoint so the
       // created-date cutoff in recall sees the old activity. (A brief's created
@@ -476,6 +491,36 @@ describe('Readable markdown responses', () => {
 
       // Header signals a brief-related notice surfaced
       expect(text).toContain('+ stale brief notice');
+    });
+
+    it('bounds the stale-activity scan and reports age from brief.updated for deep-history activity', async () => {
+      await withFrozenTime('2026-01-01T12:00:00.000Z', () =>
+        saveBrief({
+          id: 'ancient-brief',
+          title: 'Ancient Brief',
+          content: 'Ancient direction',
+          workspace: TEST_DIR,
+          activate: true
+        })
+      );
+
+      // Referencing checkpoint 40 days before "now" — outside the bounded
+      // activity window, so it cannot change the stale verdict and the
+      // displayed age falls back to the brief's own updated timestamp (99d).
+      const dir = join(getMemoriesDir(TEST_DIR), '2026-03-01');
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, '120000_old.md'),
+        `---\nid: checkpoint_old\ntimestamp: "2026-03-01T12:00:00.000Z"\nbriefId: ancient-brief\n---\n\nOld work\n`,
+        'utf-8'
+      );
+
+      const result = await withFrozenTime('2026-04-10T12:00:00.000Z', () =>
+        handleRecall({ workspace: TEST_DIR })
+      );
+      const text = result.content[0]!.text;
+
+      expect(text).toContain('Active brief "Ancient Brief" untouched 99d');
     });
 
     it('appends the refresh nudge under an active brief that has not been updated in 14+ days', async () => {

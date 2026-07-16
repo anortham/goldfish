@@ -124,6 +124,17 @@ export async function registerProject(projectPath: string, registryDir?: string)
   // Ensure directory exists before acquiring lock (lock file needs the dir)
   await mkdir(dir, { recursive: true });
 
+  // Fast path: already registered — skip the global exclusive lock so saves in
+  // independent projects don't contend on the single registry lock file.
+  try {
+    const existing = await getRegistry(dir);
+    if (existing.projects.some(p => registryPathKey(p.path) === registryPathKey(absolutePath))) {
+      return;
+    }
+  } catch {
+    // Unreadable registry — fall through to the locked path, which heals it
+  }
+
   await withLock(filePath, async () => {
     // Read current registry (inside lock to prevent races). Use the write-path
     // loader so a corrupt file is preserved, not silently overwritten.
@@ -194,25 +205,27 @@ export async function listRegisteredProjects(registryDir?: string): Promise<Regi
   // older versions can hold the same project twice under different casings or
   // separators; collapse those on read (first occurrence wins) so cross-
   // workspace recall never scans a project twice. The file is not rewritten.
-  const validProjects: RegisteredProject[] = [];
+  const dedupedProjects: RegisteredProject[] = [];
   const seenKeys = new Set<string>();
-
   for (const project of registry.projects) {
     const key = registryPathKey(project.path);
     if (seenKeys.has(key)) {
       continue;
     }
     seenKeys.add(key);
+    dedupedProjects.push(project);
+  }
+
+  const checks = await Promise.all(dedupedProjects.map(async (project) => {
     try {
-      const memoriesPath = `${project.path}/.memories`;
-      const stats = await stat(memoriesPath);
-      if (stats.isDirectory()) {
-        validProjects.push(project);
-      }
+      const stats = await stat(`${project.path}/.memories`);
+      return stats.isDirectory() ? project : null;
     } catch {
       // .memories/ doesn't exist or not accessible - skip (stale)
+      return null;
     }
-  }
+  }));
+  const validProjects = checks.filter((p): p is RegisteredProject => p !== null);
 
   // Sort by name
   validProjects.sort((a, b) => a.name.localeCompare(b.name));
