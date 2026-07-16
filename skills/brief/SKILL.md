@@ -1,7 +1,6 @@
 ---
 name: brief
 description: Use when starting multi-session work, capturing approved project direction, updating goals or constraints, or when the user asks for durable strategic context that should persist across sessions
-allowed-tools: mcp__goldfish__brief
 ---
 
 # Brief
@@ -37,7 +36,7 @@ Keep the brief compact and stable:
 ## Save A Brief
 
 ```ts
-mcp__goldfish__brief({
+brief({
   action: "save",
   title: "Brief API surface around strategic context",
   content: "## Goal\n\nRename the forward-looking artifact to brief.\n\n## Why Now\n\nHarnesses now own execution planning.\n\n## Constraints\n\nKeep one-release compatibility for plan callers.\n\n## Success Criteria\n\nRecall, skills, hooks, and docs all present brief as canonical.\n\n## References\n\n- docs/plans/2026-04-16-brief-repositioning-design.md",
@@ -57,9 +56,9 @@ Only one brief should be active per workspace.
 
 ## Retrieval
 
-- `mcp__goldfish__brief({ action: "get" })` gets the active brief.
-- `mcp__goldfish__brief({ action: "list" })` shows saved briefs.
-- `mcp__goldfish__recall({ limit: 0 })` shows the active brief without loading checkpoints.
+- `brief({ action: "get" })` gets the active brief.
+- `brief({ action: "list" })` shows saved briefs.
+- `recall({ limit: 0 })` shows the active brief without loading checkpoints.
 
 ## Rules
 

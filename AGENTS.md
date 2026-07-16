@@ -252,7 +252,7 @@ MCP tool descriptions are **directive about quality, encouraging about frequency
 - **Frequency guidance is positive**: "when in doubt, checkpoint" with concrete triggers (after committing, at stopping points). No "Do NOT" lists.
 - **Recall is invoked manually**: agents call `recall()` at session start or when context is missing; users can also invoke `/recall` for targeted queries.
 - **Intent-blame filters**: `file` and `symbol` params query already-captured frontmatter; encourage `symbols` on checkpoints and checkpoint-before-commit for file coverage.
-- **Brief refresh nudge**: recall surfaces a non-destructive warning when an active brief is 14+ days stale but recent checkpoints keep it active.
+- **Brief lifecycle nudges**: recall suppresses an active brief with no activity for 7+ days (a stale notice appears in its place), and surfaces a refresh warning when the brief text hasn't been updated in 14+ days even though recent checkpoints keep it active.
 - **Briefs keep strong language**: brief persistence genuinely matters and the directive tone is warranted there.
 
 Recalibrated twice (first overuse, then underuse) before landing here. The lesson: positive triggers drive adoption better than prohibitions.

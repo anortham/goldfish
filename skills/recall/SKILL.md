@@ -1,7 +1,6 @@
 ---
 name: recall
 description: Use when starting a new session, after context loss, searching for prior work, or when the user asks what happened previously and needs Goldfish memory restored
-allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief
 ---
 
 # Recall
@@ -11,7 +10,7 @@ allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief
 Call recall at session start, after compaction, or when you need prior work, decisions, or cross-project context.
 
 ```ts
-mcp__goldfish__recall({})
+recall({})
 ```
 
 ## Common Cases
@@ -34,7 +33,8 @@ mcp__goldfish__recall({})
 Recall can surface:
 
 - Active brief, which is the current strategic direction
-- A brief refresh nudge when the active brief has not been updated in 14+ days
+- A stale notice in place of the brief when it has had no activity for 7+ days — review it with `brief({ action: "get" })`, then complete, archive, or update it
+- A refresh nudge when the brief text hasn't been updated in 14+ days even though recent checkpoints keep it active
 - Checkpoints, which are the evidence trail
 - Workspace summaries for cross-project recall
 

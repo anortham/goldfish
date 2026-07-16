@@ -1,7 +1,6 @@
 ---
 name: brief-status
 description: Use when the user asks for progress against current project direction, wants a status check on the active brief, or needs evidence-backed assessment across briefs, checkpoints, and docs/plans
-allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief
 ---
 
 # Brief Status
@@ -19,19 +18,19 @@ Assess status from three sources:
 ### 1. Load the current brief
 
 ```ts
-mcp__goldfish__recall({ limit: 0 })
+recall({ limit: 0 })
 ```
 
 If the user asks about a specific brief, fetch it directly:
 
 ```ts
-mcp__goldfish__brief({ action: "get", id: "brief-id" })
+brief({ action: "get", id: "brief-id" })
 ```
 
 ### 2. Pull recent evidence
 
 ```ts
-mcp__goldfish__recall({ days: 7, limit: 20, full: true })
+recall({ days: 7, limit: 20, full: true })
 ```
 
 Use `full: true` when you need files, git context, or detailed checkpoint metadata.

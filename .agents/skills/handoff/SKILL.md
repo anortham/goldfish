@@ -1,7 +1,6 @@
 ---
 name: handoff
 description: Use when returning to a project after time away, switching harnesses, or handing work off to another agent, to produce a structured session-resumption summary from the active brief, recent checkpoints, and git delta.
-allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief, Bash
 ---
 
 # Handoff
@@ -29,7 +28,7 @@ Four steps. Run them in order, then compose the document.
 ### 1. Load the active brief
 
 ```ts
-mcp__goldfish__recall({ limit: 0 })
+recall({ limit: 0 })
 ```
 
 This returns the active brief without pulling checkpoints. If no brief is active, note that in the output and keep going.
@@ -37,13 +36,13 @@ This returns the active brief without pulling checkpoints. If no brief is active
 ### 2. Load recent checkpoints
 
 ```ts
-mcp__goldfish__recall({ days: 3, limit: 10, full: true })
+recall({ days: 3, limit: 10, full: true })
 ```
 
 Default window is 3 days. If the user passed a time argument (for example `--since 2d` or `--since 4h`), honour it:
 
 ```ts
-mcp__goldfish__recall({ since: "2d", limit: 10, full: true })
+recall({ since: "2d", limit: 10, full: true })
 ```
 
 `full: true` is required so you see `next`, `unknowns`, and git context.

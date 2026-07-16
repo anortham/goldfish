@@ -1,7 +1,6 @@
 ---
 name: standup
 description: Use when the user asks for a standup, daily update, progress summary, or cross-project report built from Goldfish briefs and checkpoints
-allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief
 ---
 
 # Standup
@@ -17,7 +16,7 @@ allowed-tools: mcp__goldfish__recall, mcp__goldfish__brief
 1. Recall cross-project activity:
 
 ```ts
-mcp__goldfish__recall({ workspace: "all", days: 1 })
+recall({ workspace: "all", days: 1 })
 ```
 
 2. For active projects, use `recall({ limit: 0 })` or the brief tool to understand current direction.

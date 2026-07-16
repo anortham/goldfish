@@ -1,7 +1,6 @@
 ---
 name: checkpoint
 description: Save developer context to Goldfish memory — checkpoint at meaningful milestones, not after every action
-allowed-tools: mcp__goldfish__checkpoint
 ---
 
 # Checkpoint — Save Developer Memory
@@ -12,9 +11,9 @@ allowed-tools: mcp__goldfish__checkpoint
 
 - **Completed a deliverable** — feature slice, bug fix, refactor step
 - **Made a key decision** — architecture, tradeoffs, approach choices that future sessions must follow
-- **Committed or pushed work** — natural checkpoint moment after code lands
+- **About to commit** — checkpoint BEFORE the commit so the checkpoint file rides along in it
 - **Reaching a stopping point** — end of a work session or switching tasks
-- **Before context compaction** — preserve active state (PreCompact hook handles this automatically)
+- **Before context compaction** — preserve active state
 - **Found something non-obvious** — blockers, root causes, discoveries worth preserving
 - **User shared requirements/constraints** — preserve what future work must honor
 
@@ -27,7 +26,7 @@ Your description becomes the **markdown body** of a `.md` file. Format it with s
 ### The WHAT/WHY/HOW/IMPACT Formula
 
 ```
-mcp__goldfish__checkpoint({
+checkpoint({
   description: "## Implemented JWT refresh token rotation\n\nThe existing single-token approach was vulnerable to token theft.\n\n- **Approach:** Rotate tokens on each use, limiting the attack window\n- **Added:** `RefreshTokenStore` with atomic file writes and 7-day expiry\n- **Tests:** All 12 auth tests passing\n- **Impact:** Unblocks the session management PR",
   tags: ["feature", "auth", "security", "jwt", "refresh-token", "token-rotation", "session-management"]
 })

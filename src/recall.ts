@@ -400,7 +400,11 @@ function hasDateParams(options: RecallOptions): boolean {
   );
 }
 
-async function loadWorkspaceCheckpoints(workspace: string, options: RecallOptions): Promise<Checkpoint[]> {
+async function loadWorkspaceCheckpoints(
+  workspace: string,
+  options: RecallOptions,
+  loadAll = false
+): Promise<Checkpoint[]> {
   let checkpoints: Checkpoint[];
   if (hasDateParams(options)) {
     const { from, to } = getDateRange(options);
@@ -408,7 +412,7 @@ async function loadWorkspaceCheckpoints(workspace: string, options: RecallOption
   } else {
     // Load the full corpus when searching or filtering so matches outside the
     // most-recent-N window are not lost before the filter/search runs.
-    const earlyLimit = options.search || hasStructuredFilter(options)
+    const earlyLimit = loadAll || options.search || hasStructuredFilter(options)
       ? undefined
       : (options.limit !== undefined ? options.limit : 5);
     checkpoints = await getAllCheckpoints(workspace, earlyLimit);
@@ -623,12 +627,10 @@ export async function recall(options: RecallInput = {}): Promise<RecallResult> {
   }
 
   // Fetch from all registered projects in parallel.
-  // Load without limit so checkpointCount in summaries reflects total matches.
-  const unlimitedOptions: RecallOptions = { ...normalizedOptions };
-  delete unlimitedOptions.limit;
+  // Load everything so checkpointCount in summaries reflects total matches.
   const projectResults = await Promise.all(
     projects.map(async (project) => {
-      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, unlimitedOptions);
+      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, normalizedOptions, true);
       allCheckpoints.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       const presented = allCheckpoints
         .slice(0, globalLimit)
