@@ -46,8 +46,10 @@ const MAX_DEFAULT_NEXT_LENGTH = 140;
  */
 function buildBriefSnippet(content: string, maxLength = 120): string | null {
   for (const rawLine of content.split('\n')) {
-    const line = rawLine.replace(/^#+\s*/, '').trim();
+    const line = rawLine.trim();
     if (!line) continue;
+    // Headings are section labels ("## Goal"), not content — skip them
+    if (/^#{1,6}\s/.test(line) || /^#{1,6}$/.test(line)) continue;
     return line.length > maxLength ? `${line.slice(0, maxLength - 1)}…` : line;
   }
   return null;
@@ -101,6 +103,7 @@ async function resolveActiveBrief(
         title: brief.title,
         lastActivity,
         daysSinceActivity,
+        scanWindowDays: STALE_SCAN_MAX_DAYS,
         ...(snippet ? { snippet } : {})
       },
       briefRefresh: null

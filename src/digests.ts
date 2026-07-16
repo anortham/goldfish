@@ -117,7 +117,27 @@ export function buildRetrievalDigest(checkpoint: Checkpoint): string {
 }
 
 /**
- * Drop parts fully contained in another part (case-insensitive). Headings are
+ * True when `needle` appears inside `haystack` at word boundaries
+ * (case-insensitive). Boundary-aware so a short tag like "api" is not
+ * swallowed by an unrelated word like "Capitalize".
+ */
+function containsAtWordBoundary(haystack: string, needle: string): boolean {
+  const h = haystack.toLowerCase()
+  const n = needle.toLowerCase()
+  const isWordChar = (ch: string | undefined) => ch !== undefined && /[a-z0-9]/i.test(ch)
+
+  let idx = h.indexOf(n)
+  while (idx !== -1) {
+    if (!isWordChar(h[idx - 1]) && !isWordChar(h[idx + n.length])) {
+      return true
+    }
+    idx = h.indexOf(n, idx + 1)
+  }
+  return false
+}
+
+/**
+ * Drop parts fully contained in another part at word boundaries. Headings are
  * routinely a prefix of the decision text; exact-match dedup lets that
  * near-duplicate burn compact-budget chars that the distinct signal needs.
  */
@@ -125,14 +145,12 @@ function dropContainedParts(parts: string[]): string[] {
   const kept: string[] = []
 
   for (const part of parts) {
-    const lower = part.toLowerCase()
-
-    if (kept.some(k => k.toLowerCase().includes(lower))) {
+    if (kept.some(k => containsAtWordBoundary(k, part))) {
       continue
     }
 
     for (let i = kept.length - 1; i >= 0; i--) {
-      if (lower.includes(kept[i]!.toLowerCase())) {
+      if (containsAtWordBoundary(part, kept[i]!)) {
         kept.splice(i, 1)
       }
     }

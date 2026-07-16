@@ -141,4 +141,18 @@ describe('digests', () => {
     expect(segments.filter(s => s.startsWith('Hide stale active briefs'))).toHaveLength(1)
     expect(compact).toContain('Briefs went stale and kept surfacing')
   })
+
+  it('keeps short parts that only match inside other words', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_boundary',
+      timestamp: '2026-04-02T09:00:00.000Z',
+      description: '## Capitalize output labels\n\nLabel casing was inconsistent',
+      tags: ['api']
+    }
+
+    const compact = buildCompactSearchDescription(checkpoint)
+    const segments = compact.split(' | ')
+
+    expect(segments).toContain('api')
+  })
 })

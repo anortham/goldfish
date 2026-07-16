@@ -503,7 +503,9 @@ async function fingerprintDayFiles(dateDir: string, files: string[]): Promise<st
   const parts = await Promise.all(files.map(async (file) => {
     try {
       const stats = await stat(join(dateDir, file));
-      return `${file}:${stats.size}:${stats.mtimeMs}`;
+      // ctime + inode catch edits that preserve size and restore mtime:
+      // ctime can't be set by touch/utimes, and atomic rewrites change the inode
+      return `${file}:${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}:${stats.ino}`;
     } catch {
       return `${file}:gone`;
     }
@@ -535,7 +537,7 @@ async function loadDay(projectPath: string, date: string): Promise<DayLoadResult
   const fingerprint = await fingerprintDayFiles(dateDir, [...mdFiles, ...jsonFiles]);
   const cached = dayCache.get(dateDir);
   if (cached && cached.fingerprint === fingerprint) {
-    return { fingerprint, checkpoints: cached.checkpoints };
+    return { fingerprint, checkpoints: copyCheckpoints(cached.checkpoints) };
   }
 
   // Read files concurrently; a corrupt file skips itself without failing the batch
@@ -574,7 +576,16 @@ async function loadDay(projectPath: string, date: string): Promise<DayLoadResult
   }
   dayCache.set(dateDir, { fingerprint, checkpoints });
 
-  return { fingerprint, checkpoints };
+  return { fingerprint, checkpoints: copyCheckpoints(checkpoints) };
+}
+
+/**
+ * Shallow-copy each checkpoint so callers can't mutate cached entries through
+ * top-level fields. Nested arrays (tags, git.files) stay shared — treat them
+ * as read-only.
+ */
+function copyCheckpoints(checkpoints: Checkpoint[]): Checkpoint[] {
+  return checkpoints.map(checkpoint => ({ ...checkpoint }));
 }
 
 /**
@@ -585,8 +596,7 @@ export async function getCheckpointsForDay(
   date: string
 ): Promise<Checkpoint[]> {
   const { checkpoints } = await loadDay(projectPath, date);
-  // Callers may sort/splice the result; never hand out the cached array itself
-  return [...checkpoints];
+  return checkpoints;
 }
 
 /**

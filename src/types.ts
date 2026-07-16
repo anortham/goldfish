@@ -107,9 +107,10 @@ export interface RecallInput extends Omit<RecallOptions, 'tags'> {
 export interface StaleBriefNotice {
   id: string;
   title: string;
-  lastActivity: string;     // ISO 8601 UTC — newest referencing checkpoint, or brief.created
+  lastActivity: string;     // ISO 8601 UTC — newest referencing checkpoint (within the scan window), or brief.updated/created
   daysSinceActivity: number;
-  snippet?: string;         // First content line, truncated — enough to decide complete vs update
+  scanWindowDays: number;   // Checkpoint activity was only verified this far back — ages beyond it are a lower bound
+  snippet?: string;         // First non-heading content line, truncated — enough to decide complete vs update
 }
 
 export interface BriefRefreshNotice {

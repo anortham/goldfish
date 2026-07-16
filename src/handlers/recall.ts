@@ -150,7 +150,12 @@ function formatBriefRefreshNotice(notice: BriefRefreshNotice): string {
  */
 function formatStaleBriefNotice(notice: StaleBriefNotice): string {
   const gist = notice.snippet ? ` Gist: ${notice.snippet}` : '';
-  return `⚠️ Active brief "${notice.title}" untouched ${notice.daysSinceActivity}d — complete or archive it, or update it if it's still the direction.${gist}`;
+  // Beyond the scan window the exact checkpoint-activity age is unverified —
+  // claim only the lower bound the scan actually proved.
+  const age = notice.daysSinceActivity > notice.scanWindowDays
+    ? `${notice.scanWindowDays}d+`
+    : `${notice.daysSinceActivity}d`;
+  return `⚠️ Active brief "${notice.title}" untouched ${age} — complete or archive it, or update it if it's still the direction.${gist}`;
 }
 
 /**
@@ -237,7 +242,11 @@ export async function handleRecall(args: RecallArgs) {
     let used = 0;
     let shown = 0;
     for (const checkpoint of result.checkpoints) {
-      const block = formatCheckpoint(checkpoint);
+      let block = formatCheckpoint(checkpoint);
+      if (fullMode && shown === 0 && block.length > FULL_MODE_CHAR_BUDGET) {
+        // The guaranteed first checkpoint must not bust the budget by itself
+        block = `${block.slice(0, FULL_MODE_CHAR_BUDGET)}\n… (checkpoint truncated to fit the full-mode budget — read the checkpoint file for the full text)`;
+      }
       if (fullMode && shown > 0 && used + block.length > FULL_MODE_CHAR_BUDGET) {
         break;
       }

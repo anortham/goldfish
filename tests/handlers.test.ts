@@ -439,6 +439,39 @@ describe('Readable markdown responses', () => {
       expect(text).toContain('---');
     });
 
+    it('truncates even a single oversized checkpoint in full mode', async () => {
+      await saveCheckpoint({
+        description: `## Giant checkpoint\n\n${'y'.repeat(60_000)}`,
+        workspace: TEST_DIR
+      });
+
+      const result = await handleRecall({ workspace: TEST_DIR, limit: 1, full: true });
+      const text = result.content[0]!.text;
+
+      expect(text.length).toBeLessThanOrEqual(24_000);
+      expect(text).toContain('truncated');
+    });
+
+    it('stale-brief gist skips headings instead of quoting them', async () => {
+      await withFrozenTime('2026-05-01T12:00:00.000Z', () =>
+        saveBrief({
+          id: 'heading-brief',
+          title: 'Heading Brief',
+          content: '## Goal\n\nShip the v8 memory redesign',
+          workspace: TEST_DIR,
+          activate: true
+        })
+      );
+
+      const result = await withFrozenTime('2026-05-15T12:00:00.000Z', () =>
+        handleRecall({ workspace: TEST_DIR })
+      );
+      const text = result.content[0]!.text;
+
+      expect(text).toContain('Gist: Ship the v8 memory redesign');
+      expect(text).not.toContain('Gist: Goal');
+    });
+
     it('caps full-mode output with an explicit truncation note', async () => {
       for (let i = 0; i < 10; i++) {
         await saveCheckpoint({
@@ -505,8 +538,9 @@ describe('Readable markdown responses', () => {
       );
 
       // Referencing checkpoint 40 days before "now" — outside the bounded
-      // activity window, so it cannot change the stale verdict and the
-      // displayed age falls back to the brief's own updated timestamp (99d).
+      // activity window, so it cannot change the stale verdict. The notice
+      // must not claim an exact age it did not verify; it reports the scan
+      // window as a lower bound instead.
       const dir = join(getMemoriesDir(TEST_DIR), '2026-03-01');
       await mkdir(dir, { recursive: true });
       await writeFile(
@@ -520,7 +554,8 @@ describe('Readable markdown responses', () => {
       );
       const text = result.content[0]!.text;
 
-      expect(text).toContain('Active brief "Ancient Brief" untouched 99d');
+      expect(text).toContain('Active brief "Ancient Brief" untouched 28d+');
+      expect(text).not.toContain('untouched 99d');
     });
 
     it('appends the refresh nudge under an active brief that has not been updated in 14+ days', async () => {

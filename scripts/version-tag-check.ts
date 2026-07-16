@@ -14,36 +14,44 @@ import { spawnSync } from 'bun';
 
 const RELEASE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
 
-export function checkVersionAgainstTag(
-  tag: string | null,
+/**
+ * Every release-shaped tag on HEAD must equal v{version}. All tags are
+ * checked — `git describe` picks a single tag, so a non-release tag on the
+ * same commit could otherwise shadow a mismatched release tag.
+ */
+export function checkVersionAgainstTags(
+  tags: string[],
   version: string
 ): { ok: boolean; message: string } {
-  if (!tag || !RELEASE_TAG_PATTERN.test(tag)) {
-    return { ok: true, message: 'HEAD is not an exact release tag; nothing to check' };
+  const releaseTags = tags.filter(tag => RELEASE_TAG_PATTERN.test(tag));
+
+  if (releaseTags.length === 0) {
+    return { ok: true, message: 'HEAD carries no release tag; nothing to check' };
   }
 
-  if (tag === `v${version}`) {
-    return { ok: true, message: `release tag ${tag} matches SERVER_VERSION ${version}` };
+  const mismatched = releaseTags.filter(tag => tag !== `v${version}`);
+  if (mismatched.length === 0) {
+    return { ok: true, message: `release tag ${releaseTags.join(', ')} matches SERVER_VERSION ${version}` };
   }
 
   return {
     ok: false,
-    message: `release tag ${tag} does not match SERVER_VERSION ${version} — bump all version surfaces before tagging`
+    message: `release tag ${mismatched.join(', ')} does not match SERVER_VERSION ${version} — bump all version surfaces before tagging`
   };
 }
 
-export function getExactTagForHead(cwd?: string): string | null {
-  const result = spawnSync(['git', 'describe', '--exact-match', '--tags', 'HEAD'], {
+export function getTagsForHead(cwd?: string): string[] {
+  const result = spawnSync(['git', 'tag', '--points-at', 'HEAD'], {
     ...(cwd ? { cwd } : {}),
     stdio: ['ignore', 'pipe', 'ignore']
   });
-  if (!result.success) return null;
-  return result.stdout?.toString().trim() || null;
+  if (!result.success) return [];
+  return (result.stdout?.toString().trim() || '').split('\n').filter(Boolean);
 }
 
 if (import.meta.main) {
   const { SERVER_VERSION } = await import('../src/server');
-  const result = checkVersionAgainstTag(getExactTagForHead(), SERVER_VERSION);
+  const result = checkVersionAgainstTags(getTagsForHead(), SERVER_VERSION);
   console.log(result.message);
   if (!result.ok) process.exit(1);
 }

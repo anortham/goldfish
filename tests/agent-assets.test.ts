@@ -3,7 +3,7 @@ import { readdir, readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'bun';
-import { checkVersionAgainstTag } from '../scripts/version-tag-check';
+import { checkVersionAgainstTags } from '../scripts/version-tag-check';
 import { buildUsageDoc } from '../scripts/build-usage-doc';
 import { SERVER_VERSION } from '../src/server';
 import { getInstructions } from '../src/instructions';
@@ -17,28 +17,35 @@ async function listSkillDirs(path: string): Promise<string[]> {
 
 describe('version/tag agreement', () => {
   it('accepts a matching release tag', () => {
-    expect(checkVersionAgainstTag('v7.4.3', '7.4.3').ok).toBe(true);
+    expect(checkVersionAgainstTags(['v7.4.3'], '7.4.3').ok).toBe(true);
   });
 
-  it('rejects a tag that disagrees with the version', () => {
-    const result = checkVersionAgainstTag('v7.4.3', '7.5.0');
+  it('rejects a release tag that disagrees with the version', () => {
+    const result = checkVersionAgainstTags(['v7.4.3'], '7.5.0');
     expect(result.ok).toBe(false);
     expect(result.message).toContain('v7.4.3');
     expect(result.message).toContain('7.5.0');
   });
 
-  it('passes when HEAD is not a release tag', () => {
-    expect(checkVersionAgainstTag(null, '7.5.0').ok).toBe(true);
-    expect(checkVersionAgainstTag('some-other-tag', '7.5.0').ok).toBe(true);
+  it('passes when HEAD carries no release tag', () => {
+    expect(checkVersionAgainstTags([], '7.5.0').ok).toBe(true);
+    expect(checkVersionAgainstTags(['nightly', 'some-other-tag'], '7.5.0').ok).toBe(true);
   });
 
-  it('live repo: an exact release tag on HEAD must equal SERVER_VERSION', () => {
-    const result = spawnSync(['git', 'describe', '--exact-match', '--tags', 'HEAD'], {
+  it('checks every tag on HEAD, not just one', () => {
+    expect(checkVersionAgainstTags(['nightly', 'v7.4.3'], '7.4.3').ok).toBe(true);
+    expect(checkVersionAgainstTags(['v7.4.2', 'v7.4.3'], '7.4.3').ok).toBe(false);
+  });
+
+  it('live repo: release tags on HEAD must equal SERVER_VERSION', () => {
+    const result = spawnSync(['git', 'tag', '--points-at', 'HEAD'], {
       cwd: repoRoot,
       stdio: ['ignore', 'pipe', 'ignore']
     });
-    const tag = result.success ? result.stdout?.toString().trim() || null : null;
-    expect(checkVersionAgainstTag(tag, SERVER_VERSION).ok).toBe(true);
+    const tags = result.success
+      ? (result.stdout?.toString().trim() || '').split('\n').filter(Boolean)
+      : [];
+    expect(checkVersionAgainstTags(tags, SERVER_VERSION).ok).toBe(true);
   });
 });
 

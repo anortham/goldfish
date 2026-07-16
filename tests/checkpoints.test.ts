@@ -17,7 +17,7 @@ import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { listRegisteredProjects, unregisterProject } from '../src/registry';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { rm, readdir, readFile, writeFile, mkdir } from 'fs/promises';
+import { rm, readdir, readFile, writeFile, mkdir, stat, utimes } from 'fs/promises';
 
 let tempDir: string;
 let tempHome: string;
@@ -1665,6 +1665,22 @@ describe('Day corpus cache freshness', () => {
 
     const after = await getCheckpointsForDay(cacheDir, date);
     expect(after[0]!.description).toContain('Edited text, now longer');
+  });
+
+  it('returns fresh content after a same-size edit that restores mtime', async () => {
+    const saved = await saveCheckpoint({ description: 'AAAA text body', workspace: cacheDir });
+    const date = saved.timestamp.split('T')[0]!;
+
+    const before = await getCheckpointsForDay(cacheDir, date);
+    expect(before[0]!.description).toContain('AAAA text body');
+
+    const stats = await stat(saved.filePath!);
+    const content = await readFile(saved.filePath!, 'utf-8');
+    await writeFile(saved.filePath!, content.replace('AAAA text body', 'BBBB text body'), 'utf-8');
+    await utimes(saved.filePath!, stats.atime, stats.mtime);
+
+    const after = await getCheckpointsForDay(cacheDir, date);
+    expect(after[0]!.description).toContain('BBBB text body');
   });
 
   it('returns fresh results after a new checkpoint is added', async () => {
