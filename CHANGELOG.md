@@ -4,6 +4,38 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.5.0] - 2026-07-16
+
+Review-driven release: cross-workspace recall correctness, brief lifecycle adoption nudges at the moments that matter, large performance gains from validated in-memory caches, and wider harness support. Externally reviewed (Codex) with all findings fixed.
+
+### Added
+
+- Checkpoint responses show the saved file path with a commit-inclusion reminder, and nudge when the active brief's text is 7+ days old ("still the direction? Update or complete it.")
+- Server instructions carry brief lifecycle triggers (update when goals shift, complete when the work lands, archive when superseded), not just save guidance
+- Stale-brief notices include a content gist (first non-heading line) so complete-vs-update is decidable without another call, and offer update as a first-class action
+- Generated instruction-tier usage ruleset (`docs/agent-instructions/goldfish-usage.md`, built from the server instructions) for harnesses that read repo instruction files but never surface MCP server instructions
+- `docs/agent-portability.md`: harness support matrix, deliberate non-support decisions, and the uninstall story for `~/.goldfish/registry.json`
+- Release version guard: every release tag on HEAD must equal `SERVER_VERSION` (`bun run check:version-tag`, also enforced by tests on tagged commits) — catches all version surfaces going stale together
+- Drift-guard tests for mirrored agent assets (`.agents/skills` byte-equality, AGENTS.md mirror, generated usage-doc freshness)
+- Committed working client configs: `opencode.json` and `.vscode/mcp.json`
+
+### Fixed
+
+- Cross-workspace recall without date parameters silently capped every workspace at 5 checkpoints and under-reported workspace summary counts; `/standup`-style aggregation now sees the full corpus
+- Skills no longer hardcode `mcp__goldfish__*` tool names (they never match plugin installs, which namespace tools differently); examples now use bare tool names
+- Checkpoint skill no longer instructs checkpointing after commits — contradicting the checkpoint-before-commit rule — and no longer references the PreCompact hook removed in 7.0
+- Stale-brief thresholds documented correctly: 7-day stale suppression and 14-day refresh nudge are distinct
+- Compact search descriptions no longer waste their 220-char budget repeating the heading/decision; containment dedup is word-boundary-aware so short tags are not swallowed by unrelated words
+- Stale-brief notices no longer claim an exact activity age beyond what was verified; past the bounded 28-day scan they report a lower bound ("untouched 28d+")
+
+### Changed
+
+- Search over a 1,000-checkpoint corpus: ~247ms per call → ~11ms warm. A per-day corpus cache (file-stat fingerprints including ctime and inode, validated on every read; nothing derived is written to disk) removes repeated read+parse work, and a corpus-fingerprint-keyed Orama index cache removes per-call index rebuilds
+- Structured recall filters (`type`/`tags`/`file`/`symbol`): ~122ms → ~10ms at the same corpus size
+- Checkpoint saves: git context capture runs its five git queries concurrently with async spawns (~43ms → ~21ms) and no longer blocks the MCP server's event loop
+- `recall({ limit: 0 })` no longer scans deep history for brief activity (bounded 28-day window)
+- Full-mode recall output is budgeted at 20k chars with explicit truncation notes — a single tool call can no longer flood the caller's context window; default-mode `next` fields cap at 140 chars
+
 ## [7.4.3] - 2026-07-07
 
 Patch release for a file-lock mutual exclusion race and Bun 1.3 compatibility on Windows.
