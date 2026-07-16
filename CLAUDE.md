@@ -264,6 +264,7 @@ Claude Code enforces a **2,000 character cap** on both server instructions (`get
 - **Server instructions** carry behavioral framing (when/why to use tools). Detailed "how to use" guidance belongs in tool descriptions.
 - **Tool descriptions** carry usage details, parameter tips, and examples for their specific tool.
 - Don't duplicate content between instructions and tool descriptions. If instructions reference a tool's quality guidance, point to the tool description ("see the checkpoint tool description") rather than repeating it.
+- Deliberate exception: the checkpoint trigger list (including checkpoint-before-commit) appears in both surfaces because non-Claude MCP clients may never show server instructions — the tool description is the only behavioral surface they see.
 
 ---
 

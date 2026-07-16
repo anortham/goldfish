@@ -441,6 +441,7 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
   await mkdir(dateDir, { recursive: true });
 
   // Use file lock on the date directory to prevent name collisions
+  let savedFilePath: string | undefined;
   await withLock(dateDir, async () => {
     const { filePath, suffix } = await getAvailableCheckpointPath(dateDir, checkpoint);
     if (suffix > 0) {
@@ -461,7 +462,12 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
         throw error;
       }
     }
+    savedFilePath = filePath;
   });
+
+  if (savedFilePath) {
+    checkpoint.filePath = savedFilePath;
+  }
 
   // Auto-register project in cross-project registry before returning so
   // immediate cross-workspace recall can see the saved checkpoint.

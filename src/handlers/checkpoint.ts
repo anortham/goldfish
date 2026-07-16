@@ -2,10 +2,20 @@
  * Checkpoint tool handler
  */
 
+import { relative, sep } from 'path';
+import { getBrief } from '../briefs.js';
 import { saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
 import type { CheckpointArgs, CheckpointInput } from '../types.js';
 import { assertProjectWorkspace, resolveWorkspace } from '../workspace.js';
+
+/**
+ * Nudge threshold: days without a brief text update before the checkpoint
+ * response asks whether the active brief is still the direction. Half of
+ * recall's BRIEF_REFRESH_DAYS so drift is caught at the engaged moment
+ * (saving work) before recall ever has to warn about it.
+ */
+const BRIEF_UPDATE_NUDGE_DAYS = 7;
 
 /**
  * Coerce a value that may be a JSON string into an array.
@@ -83,6 +93,10 @@ export async function handleCheckpoint(args: CheckpointArgs) {
   const lines: string[] = [];
 
   lines.push(`${getFishEmoji()} Checkpoint saved: ${checkpoint.id}`);
+  if (checkpoint.filePath) {
+    const relPath = relative(ws, checkpoint.filePath).split(sep).join('/');
+    lines.push(`Saved: ${relPath} — include this file in your git commit.`);
+  }
   lines.push(`Time: ${checkpoint.timestamp}`);
 
   if (git?.branch || git?.commit) {
@@ -102,6 +116,23 @@ export async function handleCheckpoint(args: CheckpointArgs) {
 
   // Quality nudges based on checkpoint type
   const nudges: string[] = [];
+
+  if (briefId) {
+    try {
+      const brief = await getBrief(ws, briefId);
+      if (brief) {
+        const updatedAt = brief.updated ?? brief.created;
+        const daysSinceUpdated = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86_400_000);
+        if (daysSinceUpdated >= BRIEF_UPDATE_NUDGE_DAYS) {
+          nudges.push(
+            `💡 Active brief "${brief.title}" not updated in ${daysSinceUpdated}d — still the direction? Update or complete it.`
+          );
+        }
+      }
+    } catch {
+      // Best-effort — a missing or unreadable brief never blocks the save response
+    }
+  }
   if (type === 'decision') {
     const missing: string[] = [];
     if (!decision) missing.push('decision');

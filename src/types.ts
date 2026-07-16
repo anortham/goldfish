@@ -109,6 +109,7 @@ export interface StaleBriefNotice {
   title: string;
   lastActivity: string;     // ISO 8601 UTC — newest referencing checkpoint, or brief.created
   daysSinceActivity: number;
+  snippet?: string;         // First content line, truncated — enough to decide complete vs update
 }
 
 export interface BriefRefreshNotice {

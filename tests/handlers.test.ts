@@ -316,6 +316,58 @@ describe('Readable markdown responses', () => {
       expect(checkpoints).toHaveLength(1);
       expect(checkpoints[0]!.unknowns).toEqual(['Whether the rollout needs a flag']);
     });
+
+    it('shows the saved file path with a commit reminder', async () => {
+      const result = await handleCheckpoint({
+        description: 'Path test',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).toMatch(/Saved: \.memories\/\d{4}-\d{2}-\d{2}\/\d{6}_[0-9a-f]+\.md/);
+      expect(text).toContain('include this file in your git commit');
+    });
+
+    it('nudges when the active brief text has not been updated in 7+ days', async () => {
+      await withFrozenTime('2026-05-01T12:00:00.000Z', () =>
+        saveBrief({
+          id: 'aging-brief',
+          title: 'Aging Brief',
+          content: 'Original direction',
+          workspace: TEST_DIR,
+          activate: true
+        })
+      );
+
+      const result = await withFrozenTime('2026-05-15T12:00:00.000Z', () =>
+        handleCheckpoint({
+          description: 'Work under an aging brief',
+          workspace: TEST_DIR
+        })
+      );
+
+      const text = result.content[0]!.text;
+      expect(text).toContain('Active brief "Aging Brief" not updated in 14d');
+      expect(text).toContain('still the direction?');
+    });
+
+    it('does not nudge when the active brief was updated recently', async () => {
+      await saveBrief({
+        id: 'fresh-brief',
+        title: 'Fresh Brief',
+        content: 'Current direction',
+        workspace: TEST_DIR,
+        activate: true
+      });
+
+      const result = await handleCheckpoint({
+        description: 'Work under a fresh brief',
+        workspace: TEST_DIR
+      });
+
+      const text = result.content[0]!.text;
+      expect(text).not.toContain('still the direction?');
+    });
   });
 
   describe('recall handler', () => {
@@ -415,12 +467,12 @@ describe('Readable markdown responses', () => {
       );
       const text = result.content[0]!.text;
 
-      // Action-oriented nudge line, no brief body
+      // Action-oriented nudge line with a short gist, no full brief section
       expect(text).toContain('⚠️');
       expect(text).toContain('Active brief "Stale Plan" untouched 14d');
       expect(text).toContain('complete or archive');
+      expect(text).toContain('Gist: Plan content here');
       expect(text).not.toContain('## Active Brief:');
-      expect(text).not.toContain('Plan content here');
 
       // Header signals a brief-related notice surfaced
       expect(text).toContain('+ stale brief notice');

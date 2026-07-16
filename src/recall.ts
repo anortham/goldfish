@@ -28,6 +28,19 @@ const STALE_BRIEF_DAYS = 7;
 const BRIEF_REFRESH_DAYS = 14;
 
 /**
+ * First non-heading content line of a brief, truncated for the stale notice —
+ * enough context to decide complete-vs-update without another tool call.
+ */
+function buildBriefSnippet(content: string, maxLength = 120): string | null {
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.replace(/^#+\s*/, '').trim();
+    if (!line) continue;
+    return line.length > maxLength ? `${line.slice(0, maxLength - 1)}…` : line;
+  }
+  return null;
+}
+
+/**
  * Resolve the active brief for a workspace, applying staleness suppression.
  *
  * Non-destructive: when the active brief's newest activity is older than
@@ -64,13 +77,15 @@ async function resolveActiveBrief(
   const daysSinceActivity = Math.floor(ageMs / 86_400_000);
 
   if (daysSinceActivity > STALE_BRIEF_DAYS) {
+    const snippet = buildBriefSnippet(brief.content);
     return {
       activeBrief: null,
       staleBrief: {
         id: brief.id,
         title: brief.title,
         lastActivity,
-        daysSinceActivity
+        daysSinceActivity,
+        ...(snippet ? { snippet } : {})
       },
       briefRefresh: null
     };

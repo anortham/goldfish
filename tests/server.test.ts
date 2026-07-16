@@ -344,6 +344,16 @@ describe('Server instructions', () => {
     expect(instructions).toContain('activate: true');
   });
 
+  it('includes brief lifecycle triggers, not just save guidance', async () => {
+    const { getInstructions } = await import('../src/server');
+
+    const instructions = getInstructions();
+
+    expect(instructions).toContain('update it when goals or constraints shift');
+    expect(instructions).toContain('complete it when the work lands');
+    expect(instructions).toContain('archive it when superseded');
+  });
+
   it('defers recall parameter tips to tool description', async () => {
     const { getInstructions } = await import('../src/server');
     const { getTools } = await import('../src/tools');

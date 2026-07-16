@@ -142,7 +142,8 @@ function formatBriefRefreshNotice(notice: BriefRefreshNotice): string {
  * Format the one-line, action-oriented nudge shown in place of a stale brief.
  */
 function formatStaleBriefNotice(notice: StaleBriefNotice): string {
-  return `⚠️ Active brief "${notice.title}" untouched ${notice.daysSinceActivity}d — complete or archive it, or it'll keep surfacing stale.`;
+  const gist = notice.snippet ? ` Gist: ${notice.snippet}` : '';
+  return `⚠️ Active brief "${notice.title}" untouched ${notice.daysSinceActivity}d — complete or archive it, or update it if it's still the direction.${gist}`;
 }
 
 /**
