@@ -8,6 +8,7 @@
   "repository": "https://github.com/anortham/goldfish",
   "license": "MIT",
   "keywords": ["memory", "checkpoints", "recall", "standup", "developer-tools"],
+  "hooks": "./hooks/goldfish-hooks.json",
   "mcpServers": {
     "goldfish": {
       "command": "bun",

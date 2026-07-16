@@ -10,6 +10,7 @@
  */
 
 import { getInstructions } from '../src/instructions';
+import { TOOL_QUICK_REFERENCE } from '../src/hook-context';
 
 export function buildUsageDoc(): string {
   return `# Goldfish Memory — Usage Rules for Agents
@@ -24,13 +25,7 @@ ${getInstructions()}
 
 ---
 
-## Tool Quick Reference
-
-- \`checkpoint({ description, type?, tags?, symbols?, next?, ... })\` — save a progress checkpoint. Write the description as structured markdown covering WHAT, WHY, HOW, and IMPACT.
-- \`recall({ search?, days?, since?, limit?, full?, workspace?, type?, tags?, file?, symbol? })\` — restore prior context. Call at session start and after context loss.
-- \`brief({ action: "save" | "get" | "list" | "activate" | "update" | "complete" | "delete", title?, content?, ... })\` — durable strategic direction for the workspace.
-
-Exact tool names vary by client install: a direct MCP registration typically exposes \`checkpoint\`/\`recall\`/\`brief\` under an \`mcp__goldfish__\` prefix, while plugin installs may use a longer namespace. Use whichever goldfish tools your session lists.
+${TOOL_QUICK_REFERENCE}
 `;
 }
 

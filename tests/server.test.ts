@@ -429,8 +429,13 @@ describe('Server exports', () => {
       await Bun.file(new URL('../.claude-plugin/plugin.json', import.meta.url)).text()
     ) as { version: string };
 
+    const codexPluginJson = JSON.parse(
+      await Bun.file(new URL('../.codex-plugin/plugin.json', import.meta.url)).text()
+    ) as { version: string };
+
     expect(SERVER_VERSION).toBe(packageJson.version);
     expect(SERVER_VERSION).toBe(pluginJson.version);
+    expect(SERVER_VERSION).toBe(codexPluginJson.version);
   });
 
   it('keeps marketplace metadata and README inventory aligned with the current release', async () => {
