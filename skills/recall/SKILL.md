@@ -7,7 +7,7 @@ description: Use when starting a new session, after context loss, searching for 
 
 ## When To Use
 
-Call recall at session start, after compaction, or when you need prior work, decisions, or cross-project context.
+Call recall when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions and cross-project context are relevant.
 
 ```ts
 recall({})
@@ -15,7 +15,7 @@ recall({})
 
 ## Common Cases
 
-- New session: `recall()`
+- Resuming prior work: `recall()`
 - Recent work only: `recall({ since: "2h" })`
 - Wider history: `recall({ days: 7, limit: 20 })`
 - Search: `recall({ search: "auth refactor", full: true })`

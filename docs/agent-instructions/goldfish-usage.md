@@ -32,9 +32,9 @@ Use briefs for compact forward-looking context, not copied execution plans. Save
 
 ## Recall
 
-Recall restores context from previous sessions. Call recall() at session start or when you need to remember earlier work.
+Recall restores context from previous sessions. Call recall() when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant.
 
-Trust recalled context, don't re-verify information from checkpoints.
+Treat recalled context as historical evidence. Preserve its decisions and reasoning, but verify current or drift-prone facts against live sources before relying on them.
 
 ## Source Control
 
@@ -45,7 +45,7 @@ ALWAYS commit `.memories/` to source control. These are project artifacts, not e
 ## Tool Quick Reference
 
 - `checkpoint({ description, type?, tags?, symbols?, next?, ... })` — save a progress checkpoint. Write the description as structured markdown covering WHAT, WHY, HOW, and IMPACT.
-- `recall({ search?, days?, since?, limit?, full?, workspace?, type?, tags?, file?, symbol? })` — restore prior context. Call at session start and after context loss.
+- `recall({ search?, days?, since?, limit?, full?, workspace?, type?, tags?, file?, symbol? })` — restore prior context when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant.
 - `brief({ action: "save" | "get" | "list" | "activate" | "update" | "complete" | "delete", title?, content?, ... })` — durable strategic direction for the workspace.
 
 Exact tool names vary by client install: a direct MCP registration typically exposes `checkpoint`/`recall`/`brief` under an `mcp__goldfish__` prefix, while plugin installs may use a longer namespace. Use whichever goldfish tools your session lists.

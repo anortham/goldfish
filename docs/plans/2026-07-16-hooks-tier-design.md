@@ -1,7 +1,7 @@
 # Goldfish Hooks Tier — SessionStart Instruction Delivery (Design)
 
 **Date:** 2026-07-16
-**Status:** Approved design, pre-implementation (revised after external Codex review; findings verified against official Codex docs)
+**Status:** Implemented and corrected after Codex compatibility review
 **Approach:** Multi-harness from day one (Claude Code + Codex CLI), per user decision
 
 ## Problem
@@ -11,7 +11,7 @@ Two harness changes gutted Goldfish's ambient behavioral surface:
 1. **Server instructions cap:** Claude Code truncates MCP server instructions at 2,000 chars. Goldfish's instructions (1,763 chars) fit, but there is no headroom for the guidance that matters most (checkpoint quality format, tool parameter reference).
 2. **Deferred tool loading (now default):** MCP tool descriptions are invisible until the model searches for them. The checkpoint tool's quality guidance (WHAT/WHY/HOW/IMPACT), recall's usage patterns, and even the tools' existence are hidden at session start. Observed result: sessions ignore the goldfish tools entirely.
 
-Goldfish 7.0 removed all hooks after the "hook spam disaster" — a **frequency** problem (per-prompt re-triggering), not a SessionStart-injection problem. SessionStart hooks allow up to 10,000 chars of injected context, fire once per session start, and are the mechanism ponytail uses successfully across four harnesses.
+Goldfish 7.0 removed all hooks after the "hook spam disaster" — a **frequency** problem (per-prompt re-triggering), not a SessionStart-injection problem. SessionStart hooks fire once per session start, and Goldfish keeps their static payload within a **Goldfish safety budget** of 10,000 characters.
 
 ## Locked Decisions (user-confirmed)
 
@@ -24,7 +24,7 @@ Goldfish 7.0 removed all hooks after the "hook spam disaster" — a **frequency*
 
 These four facts shape the design; each was verified against the official docs, not assumed:
 
-1. Codex SessionStart hooks accept **plain stdout as developer context** — same as Claude Code. JSON output is optional, and SessionStart JSON has **no `systemMessage` field**.
+1. Codex SessionStart hooks accept **plain stdout as developer context** — same as Claude Code. JSON output is optional; common JSON output fields include `systemMessage`. Goldfish uses raw stdout because it is the smallest shared format both harnesses accept.
 2. Codex plugin manifests support **`mcpServers`** pointing at an `.mcp.json` server-map file — the Codex tier can bundle tool registration, not just hooks + skills.
 3. Codex sets **`CLAUDE_PLUGIN_ROOT` as a compatibility alias** for `PLUGIN_ROOT` in hook commands — one shared hooks map works verbatim in both harnesses (this is why ponytail's shared map works).
 4. Plugin-bundled hooks are **skipped until the user reviews and trusts them** (`Installing or enabling a plugin doesn't automatically trust its hooks`) — install docs must include the trust step.
@@ -39,7 +39,7 @@ src/
   hook-context.ts          # getHookContext() — composes hook payload at runtime
 .claude-plugin/plugin.json # + "hooks": "./hooks/goldfish-hooks.json"
 .codex-plugin/plugin.json  # NEW manifest: metadata, skills, hooks, mcpServers
-.codex-plugin/mcp.json     # NEW Codex MCP server map (bun run src/server.ts)
+.mcp.json                  # Codex MCP server map (bun run src/server.ts)
 ```
 
 Delivery pattern (shared hooks map consumed by two manifests) is copied from ponytail. Ponytail's per-harness output adapter is **deliberately not copied**: verified fact 1 makes it unnecessary — both harnesses accept the same raw stdout, so one branchless script replaces it.
@@ -76,21 +76,21 @@ Delivery pattern (shared hooks map consumed by two manifests) is copied from pon
 Branchless — no harness detection, no output adapter:
 
 1. Install a stdout `error` handler first: suppress `EPIPE` (async stdout errors escape try/catch), write anything else to stderr. Broken installs must be visible on stderr, not silently hidden — but the hook always exits 0 so session start is never blocked.
-2. `import { getHookContext } from '../src/hook-context'` — Bun executes TypeScript natively, and the plugin ships `src/` already (the MCP server runs from it).
+2. Dynamically import `getHookContext` inside a guarded block — Bun executes TypeScript natively, and the plugin ships `src/` already (the MCP server runs from it). Import, composition, and synchronous write failures are reported to stderr and contained.
 3. Write `getHookContext()` to stdout. Raw text is injected as context by both Claude Code and Codex (verified fact 1).
 
 ### src/hook-context.ts
 
 `getHookContext(): string`, composed **at runtime** — no generated payload file, so payload-vs-source drift is impossible by construction. Composition:
 
-1. **`getInstructions()` verbatim** (single source of truth for behavioral rules: checkpoint triggers incl. checkpoint-BEFORE-commit, brief lifecycle, recall-at-session-start, `.memories/` source control). Codex review suggested a curated recomposition instead; rejected — curation reintroduces the drift surface that verbatim composition eliminates, and the recall-at-session-start guidance is unchanged advice goldfish has always shipped (the static-only decision was about the hook's *mechanism*, not this advice).
+1. **`getInstructions()` verbatim** (single source of truth for behavioral rules: checkpoint triggers incl. checkpoint-BEFORE-commit, brief lifecycle, conditional recall, `.memories/` source control). Recall is prompted when prior context is relevant — resuming work, context loss or compaction, a user request, or an earlier decision — not for every fresh session.
 2. **Tool-existence advertisement** (the deferred-loading counterweight): the session has goldfish MCP tools — `checkpoint`, `recall`, `brief`; they may be deferred/hidden at session start; load/search them rather than assuming they are absent; exact names vary by install (`mcp__goldfish__*` for direct MCP, longer namespace for plugin installs).
 3. **Tool quick reference** — the same parameter-shape block `scripts/build-usage-doc.ts` embeds today. Extract it to a shared exported constant in `src/hook-context.ts` and import it from `build-usage-doc.ts`, so the two surfaces cannot drift.
 4. **Checkpoint quality format** — descriptions are structured markdown covering WHAT/WHY/HOW/IMPACT (today this lives only in the checkpoint tool description, which deferred loading hides).
 
-Size target ~4–5k chars (guidance, not a test); hard cap **10,000** enforced by test (harness truncation limit).
+Size target ~4–5k chars (guidance, not a test); the **Goldfish safety budget** of 10,000 characters is enforced by test. This is a project budget, not a documented Codex truncation threshold.
 
-### .codex-plugin/plugin.json + .codex-plugin/mcp.json
+### .codex-plugin/plugin.json + .mcp.json
 
 New manifest making the Codex tier genuinely first-class — one plugin install delivers tools + skills + hooks (verified fact 2). This replaces the earlier hooks-and-skills-only draft, which would have let the hook advertise tools a skills-only install didn't have (Codex review finding, accepted — it violated `docs/agent-portability.md`'s instruction-tier honesty rule).
 
@@ -101,21 +101,23 @@ New manifest making the Codex tier genuinely first-class — one plugin install 
   "description": "Cross-client MCP memory with checkpoints, recall, briefs, and standups for AI-assisted development",
   "skills": "./skills/",
   "hooks": "./hooks/goldfish-hooks.json",
-  "mcpServers": "./.codex-plugin/mcp.json"
+  "mcpServers": "./.mcp.json"
 }
 ```
 
 ```json
 {
-  "goldfish": {
-    "command": "bun",
-    "args": ["run", "${PLUGIN_ROOT}/src/server.ts"]
+  "mcpServers": {
+    "goldfish": {
+      "command": "bun",
+      "args": ["run", "./src/server.ts"],
+      "cwd": "."
+    }
   }
 }
 ```
 
-- Manifest-relative paths resolve from the plugin root (repo root), matching ponytail's `.codex-plugin` conventions.
-- The MCP map deliberately does **not** live at repo root as `.mcp.json`: Claude Code reads root-level `.mcp.json` as project-scoped MCP config, and a `${PLUGIN_ROOT}` path would break for anyone opening the goldfish repo itself in Claude Code.
+- The root `.mcp.json` wrapper is the canonical Codex plugin companion format. Relative command paths and `cwd: "."` work from the plugin root and when the Goldfish repo is opened directly.
 - The existing `.codex/config.toml` path in README remains documented for non-plugin Codex users; the plugin becomes the recommended route. README gains the **hook trust step** (verified fact 4).
 - The manifest `version` becomes the **sixth synced version surface**; `tests/server.test.ts` and the CLAUDE.md/CONTRIBUTING version-bump documentation are updated from five to six.
 
@@ -130,7 +132,7 @@ New `tests/hooks.test.ts`:
 **Content invariants (via `getHookContext()` import):**
 - **Contains `getInstructions()` verbatim** (stronger than a length floor — proves composition, catches accidental emptiness)
 - Includes checkpoint-before-commit guidance, all three tool names, the deferred-loading warning, brief lifecycle guidance, and WHAT/WHY/HOW/IMPACT
-- Length ≤ 10,000
+- Length stays within the 10,000-character Goldfish safety budget
 
 **Subprocess test (the exact interface both harnesses consume):**
 - `bun hooks/session-start.ts` → stdout equals `getHookContext()` exactly (raw text, not JSON), exit code 0
@@ -138,7 +140,7 @@ New `tests/hooks.test.ts`:
 **Manifest/wiring tests:**
 - `.claude-plugin/plugin.json` `hooks` path and `.codex-plugin/plugin.json` `hooks` path both resolve to the same existing file
 - `goldfish-hooks.json` is valid JSON; exactly one event (SessionStart) with exactly one command; matcher is `startup|clear|compact` (no `resume`); `command` references `session-start.ts`; `commandWindows` variant and timeout present
-- `.codex-plugin/mcp.json` is valid JSON; its `command`/`args` reference bun and `src/server.ts`; the manifest's `mcpServers` path resolves to it
+- `.mcp.json` is valid JSON with a top-level `mcpServers` wrapper; its `command`/`args` reference bun and `src/server.ts`; the manifest's `mcpServers` path resolves to it
 
 **Version surface:** extend the existing sync test to include `.codex-plugin/plugin.json` (six surfaces).
 
@@ -173,10 +175,10 @@ Subprocess tests prove output shape, not plugin discovery or trust flow (Codex r
 
 - [x] `bun hooks/session-start.ts` emits the full static guidance as raw stdout, exit 0 (same shape consumed by both harnesses)
 - [x] Hook content contains `getInstructions()` verbatim plus: checkpoint-before-commit, all three tool names, deferred-tools warning, WHAT/WHY/HOW/IMPACT, brief lifecycle
-- [x] Hook content ≤ 10,000 chars (test-enforced), composed at runtime — no generated payload file
+- [x] Hook content stays within the 10,000-character Goldfish safety budget (test-enforced), composed at runtime — no generated payload file
 - [x] Hooks map: exactly one event, one command, matcher `startup|clear|compact` (test-enforced)
 - [x] Both plugin manifests reference the same hooks map; all referenced paths exist (test-enforced)
-- [x] `.codex-plugin/mcp.json` registers the goldfish server via bun (test-enforced)
+- [x] `.mcp.json` registers the goldfish server via bun using the canonical wrapper (test-enforced)
 - [x] Six version surfaces in sync (test-enforced); docs updated to say six
 - [x] `scripts/build-usage-doc.ts` imports the shared tool quick reference (no duplicated block)
 - [x] Hook script: stdout EPIPE suppressed, other errors to stderr, always exit 0

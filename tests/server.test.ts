@@ -361,9 +361,9 @@ describe('Server instructions', () => {
     const instructions = getInstructions();
     const recallTool = getTools().find(t => t.name === 'recall')!;
 
-    // Instructions keep behavioral guidance
-    expect(instructions).toContain('Trust recalled context');
-    // Parameter details live in the tool description
+    expect(instructions).toContain('Treat recalled context as historical evidence');
+    expect(instructions).toContain('verify current or drift-prone facts against live sources');
+    expect(recallTool.description).toContain('verify current or drift-prone facts against live sources');
     expect(recallTool.description).toContain('full:');
     expect(recallTool.description).toContain('workspace:');
     expect(recallTool.description).toContain('search:');

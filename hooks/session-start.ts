@@ -8,13 +8,26 @@
  * session start.
  */
 
-import { getHookContext } from '../src/hook-context';
+function reportError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+
+  try {
+    process.stderr.write(`goldfish session-start hook: ${message}\n`);
+  } catch {
+    return;
+  }
+}
 
 process.stdout.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EPIPE') {
     return;
   }
-  process.stderr.write(`goldfish session-start hook: ${error.message}\n`);
+  reportError(error);
 });
 
-process.stdout.write(getHookContext());
+try {
+  const { getHookContext } = await import('../src/hook-context');
+  process.stdout.write(getHookContext());
+} catch (error) {
+  reportError(error);
+}

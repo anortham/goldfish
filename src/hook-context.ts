@@ -17,7 +17,7 @@ import { getInstructions } from './instructions';
 export const TOOL_QUICK_REFERENCE = `## Tool Quick Reference
 
 - \`checkpoint({ description, type?, tags?, symbols?, next?, ... })\` — save a progress checkpoint. Write the description as structured markdown covering WHAT, WHY, HOW, and IMPACT.
-- \`recall({ search?, days?, since?, limit?, full?, workspace?, type?, tags?, file?, symbol? })\` — restore prior context. Call at session start and after context loss.
+- \`recall({ search?, days?, since?, limit?, full?, workspace?, type?, tags?, file?, symbol? })\` — restore prior context when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant.
 - \`brief({ action: "save" | "get" | "list" | "activate" | "update" | "complete" | "delete", title?, content?, ... })\` — durable strategic direction for the workspace.
 
 Exact tool names vary by client install: a direct MCP registration typically exposes \`checkpoint\`/\`recall\`/\`brief\` under an \`mcp__goldfish__\` prefix, while plugin installs may use a longer namespace. Use whichever goldfish tools your session lists.`;
@@ -41,7 +41,7 @@ A future session reads only these words. "Fixed the bug" is a lost checkpoint; t
  * Build the static guidance injected at session start.
  *
  * Raw text — both Claude Code and Codex accept plain stdout as developer
- * context. Kept under the harness truncation limit of 10,000 chars.
+ * context. Kept under Goldfish's 10,000-character safety budget.
  */
 export function getHookContext(): string {
   return `# Goldfish Memory

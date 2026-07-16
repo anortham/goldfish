@@ -7,7 +7,7 @@ How Goldfish reaches each harness, what was deliberately not done, and where the
 | Harness | Tier | Mechanism | Key files |
 |---|---|---|---|
 | Claude Code | Full (tools + skills + instructions + hooks) | Plugin manifest registering the MCP server, 6 skills, and the SessionStart hook | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `skills/`, `hooks/goldfish-hooks.json` |
-| Codex CLI / Desktop | Full (tools + skills + hooks) | Plugin manifest bundling the MCP server, skills, and the same SessionStart hook; project-local `.codex/config.toml` remains the manual alternative | `.codex-plugin/plugin.json`, `.codex-plugin/mcp.json`, `hooks/goldfish-hooks.json`, `README.md` Codex section |
+| Codex CLI / Desktop | Full (tools + skills + hooks) | Plugin manifest bundling the MCP server, skills, and the same SessionStart hook; project-local `.codex/config.toml` remains the manual alternative | `.codex-plugin/plugin.json`, `.mcp.json`, `hooks/goldfish-hooks.json`, `README.md` Codex section |
 | OpenCode | Tools + skills | `opencode.json` MCP entry + `.agents/skills` auto-discovery | `opencode.json` (committed, works in this repo as-is) |
 | VS Code + Copilot | Tools + instructions file | `.vscode/mcp.json` + optional repo instructions | `.vscode/mcp.json` (committed), `docs/goldfish-checkpoint.instructions-vs-code.md` |
 | Cursor | Tools + skills (with quirk) | Plugin, plus per-project `mcp.json` escape hatch for the roots gap | `README.md` Cursor section, `src/workspace-recovery.ts` |
@@ -38,7 +38,7 @@ Recorded so these decisions stop being re-litigated. Revisit any of them when re
 
 - `tests/agent-assets.test.ts` — `.agents/skills` mirror byte-equality, AGENTS.md contributor mirror, generated usage-doc freshness, and version-vs-git-tag agreement on release commits.
 - `tests/server.test.ts` — six version surfaces agree with `SERVER_VERSION`; instruction/description caps.
-- `tests/hooks.test.ts` — hook content contains `getInstructions()` verbatim and stays under the 10k injection cap; the hook script's stdout matches `getHookContext()` exactly at exit 0; the hooks map keeps one event/one command with no `resume`; both plugin manifests resolve to the same map, and the Codex MCP map registers the server.
+- `tests/hooks.test.ts` — hook content contains `getInstructions()` verbatim and stays within Goldfish's 10,000-character safety budget; the hook script's stdout matches `getHookContext()` exactly at exit 0 and setup failures are contained; the hooks map keeps one event/one command with no `resume`; both plugin manifests resolve to the same map, and the canonical Codex MCP map registers the server.
 - `scripts/version-tag-check.ts` — standalone release guard (`bun scripts/version-tag-check.ts`); catches the all-surfaces-stale-together failure that mutual-agreement tests cannot.
 - `scripts/sync-agent-skills.ts` — regenerates every mirrored/generated asset; run after editing `skills/`, `CLAUDE.md`, or `src/instructions.ts`.
 

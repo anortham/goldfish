@@ -439,7 +439,7 @@ goldfish/
     plugin.json           # Claude Code plugin manifest
   .codex-plugin/
     plugin.json           # Codex plugin manifest (tools + skills + hooks)
-    mcp.json              # Codex MCP server map
+  .mcp.json               # Canonical Codex MCP server map
   hooks/
     goldfish-hooks.json   # SessionStart hook map, shared by both manifests
     session-start.ts      # Prints the session guidance to stdout

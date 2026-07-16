@@ -125,7 +125,7 @@ When to use:
 - Searching for past decisions, discoveries, or related work
 - Cross-project standup reports
 
-After recall, trust the returned context and continue working, don't re-verify recalled information.
+Treat recalled context as historical evidence: preserve its decisions and reasoning, but verify current or drift-prone facts against live sources.
 
 Key parameters (all optional):
 - limit: Max checkpoints to return (default: 5)

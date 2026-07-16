@@ -1,6 +1,0 @@
-{
-  "goldfish": {
-    "command": "bun",
-    "args": ["run", "${PLUGIN_ROOT}/src/server.ts"]
-  }
-}

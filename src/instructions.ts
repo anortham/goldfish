@@ -35,9 +35,9 @@ Use briefs for compact forward-looking context, not copied execution plans. Save
 
 ## Recall
 
-Recall restores context from previous sessions. Call recall() at session start or when you need to remember earlier work.
+Recall restores context from previous sessions. Call recall() when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant.
 
-Trust recalled context, don't re-verify information from checkpoints.
+Treat recalled context as historical evidence. Preserve its decisions and reasoning, but verify current or drift-prone facts against live sources before relying on them.
 
 ## Source Control
 

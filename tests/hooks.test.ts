@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { readFile } from 'fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm } from 'fs/promises';
+import { tmpdir } from 'os';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'bun';
@@ -8,7 +9,7 @@ import { getInstructions } from '../src/instructions';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-const HOOK_CONTEXT_CHAR_CAP = 10_000;
+const HOOK_CONTEXT_CHAR_BUDGET = 10_000;
 
 async function readJson<T>(...segments: string[]): Promise<T> {
   return JSON.parse(await readFile(join(repoRoot, ...segments), 'utf-8')) as T;
@@ -64,8 +65,24 @@ describe('hook context content', () => {
     expect(context).toContain('IMPACT');
   });
 
-  it('stays within the harness injection cap', () => {
-    expect(getHookContext().length).toBeLessThanOrEqual(HOOK_CONTEXT_CHAR_CAP);
+  it('recalls only when prior context is relevant', () => {
+    const context = getHookContext();
+
+    expect(context).not.toContain('Call recall() at session start');
+    expect(context).not.toContain('Call at session start and after context loss');
+    expect(context).toContain('when resuming prior work');
+  });
+
+  it('verifies current or drift-prone recalled facts against live sources', () => {
+    const context = getHookContext();
+
+    expect(context).not.toContain("don't re-verify");
+    expect(context).toContain('drift-prone');
+    expect(context).toContain('live sources');
+  });
+
+  it('stays within the Goldfish hook-context safety budget', () => {
+    expect(getHookContext().length).toBeLessThanOrEqual(HOOK_CONTEXT_CHAR_BUDGET);
   });
 });
 
@@ -78,6 +95,28 @@ describe('session-start hook script', () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toBe(getHookContext());
+  });
+
+  it('reports setup failures and still exits 0', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'goldfish-hook-failure-'));
+
+    try {
+      const hooksDir = join(tempRoot, 'hooks');
+      const scriptPath = join(hooksDir, 'session-start.ts');
+      await mkdir(hooksDir);
+      await copyFile(join(repoRoot, 'hooks', 'session-start.ts'), scriptPath);
+
+      const result = spawnSync(['bun', scriptPath], {
+        cwd: tempRoot,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toBe('');
+      expect(result.stderr.toString()).toContain('goldfish session-start hook:');
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 });
 
@@ -123,17 +162,20 @@ describe('plugin manifests', () => {
 
   it('registers the goldfish server for codex via bun', async () => {
     const codexPlugin = await readJson<{ mcpServers: string; skills: string }>('.codex-plugin', 'plugin.json');
+    expect(codexPlugin.mcpServers).toBe('./.mcp.json');
+
     const mcpPath = resolve(repoRoot, codexPlugin.mcpServers);
 
     expect(await Bun.file(mcpPath).exists()).toBe(true);
 
-    const servers = JSON.parse(await readFile(mcpPath, 'utf-8')) as Record<
-      string,
-      { command: string; args: string[] }
-    >;
+    const payload = JSON.parse(await readFile(mcpPath, 'utf-8')) as {
+      mcpServers: Record<string, { command: string; args: string[]; cwd?: string }>;
+    };
+    const server = payload.mcpServers.goldfish!;
 
-    expect(servers.goldfish!.command).toBe('bun');
-    expect(servers.goldfish!.args.join(' ')).toContain('src/server.ts');
+    expect(server.command).toBe('bun');
+    expect(server.args.join(' ')).toContain('src/server.ts');
+    expect(server.cwd).toBe('.');
     expect(resolve(repoRoot, codexPlugin.skills)).toBe(join(repoRoot, 'skills'));
   });
 });

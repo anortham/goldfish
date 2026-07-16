@@ -54,7 +54,7 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 Goldfish installs as a plugin in both Claude Code and Codex:
 
 - **`.claude-plugin/plugin.json`** - Claude Code manifest (MCP server registration + skills + hooks)
-- **`.codex-plugin/plugin.json`** - Codex manifest (skills + hooks + `mcp.json` server map)
+- **`.codex-plugin/plugin.json`** - Codex manifest (skills + hooks + root `.mcp.json` server map)
 - **`skills/`** - 6 skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
 - **`hooks/`** - SessionStart hook shared by both manifests: `goldfish-hooks.json` (one event, one command, matcher `startup|clear|compact`) runs `session-start.ts`, which prints `getHookContext()` (`src/hook-context.ts`) as raw stdout. Static content only, always exit 0, never any other event — the 7.0 hook-spam lesson is enforced by `tests/hooks.test.ts`
 
@@ -254,7 +254,7 @@ MCP tool descriptions are **directive about quality, encouraging about frequency
 
 - **Quality guidance stays strong**: checkpoint descriptions must be structured markdown with WHAT/WHY/HOW/IMPACT. Lazy descriptions are unacceptable.
 - **Frequency guidance is positive**: "when in doubt, checkpoint" with concrete triggers (after committing, at stopping points). No "Do NOT" lists.
-- **Recall is invoked manually**: agents call `recall()` at session start or when context is missing; users can also invoke `/recall` for targeted queries.
+- **Recall is invoked manually and conditionally**: agents call `recall()` when resuming prior work, after context loss or compaction, or when earlier decisions are relevant — not reflexively at every session start; users can also invoke `/recall` for targeted queries. Recalled context is historical evidence: preserve its decisions, verify drift-prone facts.
 - **Intent-blame filters**: `file` and `symbol` params query already-captured frontmatter; encourage `symbols` on checkpoints and checkpoint-before-commit for file coverage.
 - **Brief lifecycle nudges**: recall suppresses an active brief with no activity for 7+ days (a stale notice appears in its place), and surfaces a refresh warning when the brief text hasn't been updated in 14+ days even though recent checkpoints keep it active.
 - **Briefs keep strong language**: brief persistence genuinely matters and the directive tone is warranted there.
@@ -269,7 +269,7 @@ Claude Code enforces a **2,000 character cap** on both server instructions (`get
 - **Tool descriptions** carry usage details, parameter tips, and examples for their specific tool.
 - Don't duplicate content between instructions and tool descriptions. If instructions reference a tool's quality guidance, point to the tool description ("see the checkpoint tool description") rather than repeating it.
 - Deliberate exception: the checkpoint trigger list (including checkpoint-before-commit) appears in both surfaces because non-Claude MCP clients may never show server instructions — the tool description is the only behavioral surface they see.
-- The SessionStart hook has its own cap: **10,000 characters** of injected context (enforced by `tests/hooks.test.ts`). The hook payload embeds `getInstructions()` verbatim plus what the 2k cap and deferred tool loading hide (tool advertisement, quick reference, checkpoint quality format) — extend it in `src/hook-context.ts`, never by forking the instruction text.
+- The SessionStart hook uses a Goldfish safety budget of **10,000 characters** (enforced by `tests/hooks.test.ts`). The hook payload embeds `getInstructions()` verbatim plus what the 2k cap and deferred tool loading hide (tool advertisement, quick reference, checkpoint quality format) — extend it in `src/hook-context.ts`, never by forking the instruction text.
 
 ---
 

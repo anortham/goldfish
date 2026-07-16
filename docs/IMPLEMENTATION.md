@@ -168,9 +168,8 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 ```
 goldfish/
 ├── .claude-plugin/plugin.json   # Claude Code manifest (MCP server + skills + hooks)
-├── .codex-plugin/
-│   ├── plugin.json              # Codex manifest (skills + hooks + mcpServers)
-│   └── mcp.json                 # Codex MCP server map
+├── .codex-plugin/plugin.json    # Codex manifest (skills + hooks + mcpServers)
+├── .mcp.json                    # Canonical Codex MCP server map
 ├── hooks/
 │   ├── goldfish-hooks.json      # SessionStart map shared by both manifests
 │   └── session-start.ts         # Prints src/hook-context.ts payload to stdout
@@ -189,7 +188,7 @@ goldfish/
 
 ### SessionStart Hook
 
-Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `SessionStart` event, matcher `startup|clear|compact` (never `resume` — a resumed transcript already contains the prior injection), one `bun` command with a PowerShell `commandWindows` variant. The script is branchless — both harnesses inject a hook's raw stdout as context, so no harness detection is needed. Payload composition lives in `src/hook-context.ts`, embeds `getInstructions()` verbatim, and is capped at 10,000 chars by `tests/hooks.test.ts`. Static content only; the hook makes no tool calls and writes no state.
+Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `SessionStart` event, matcher `startup|clear|compact` (never `resume` — a resumed transcript already contains the prior injection), one `bun` command with a PowerShell `commandWindows` variant. The script is branchless — both harnesses inject a hook's raw stdout as context, so no harness detection is needed. Payload composition lives in `src/hook-context.ts`, embeds `getInstructions()` verbatim, and stays within Goldfish's 10,000-character safety budget enforced by `tests/hooks.test.ts`. Static content only; the hook makes no tool calls and writes no state.
 
 ---
 
