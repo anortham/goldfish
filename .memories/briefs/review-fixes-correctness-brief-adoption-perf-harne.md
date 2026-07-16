@@ -1,9 +1,9 @@
 ---
 id: review-fixes-correctness-brief-adoption-perf-harne
 title: "Review fixes: correctness, brief adoption, perf, harness tier-1"
-status: active
+status: completed
 created: 2026-07-16T12:26:57.112Z
-updated: 2026-07-16T12:57:21.780Z
+updated: 2026-07-16T13:32:07.348Z
 tags:
   - review-fixes
   - recall
