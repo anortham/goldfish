@@ -171,17 +171,17 @@ Subprocess tests prove output shape, not plugin discovery or trust flow (Codex r
 
 ## Acceptance Criteria
 
-- [ ] `bun hooks/session-start.ts` emits the full static guidance as raw stdout, exit 0 (same shape consumed by both harnesses)
-- [ ] Hook content contains `getInstructions()` verbatim plus: checkpoint-before-commit, all three tool names, deferred-tools warning, WHAT/WHY/HOW/IMPACT, brief lifecycle
-- [ ] Hook content ≤ 10,000 chars (test-enforced), composed at runtime — no generated payload file
-- [ ] Hooks map: exactly one event, one command, matcher `startup|clear|compact` (test-enforced)
-- [ ] Both plugin manifests reference the same hooks map; all referenced paths exist (test-enforced)
-- [ ] `.codex-plugin/mcp.json` registers the goldfish server via bun (test-enforced)
-- [ ] Six version surfaces in sync (test-enforced); docs updated to say six
-- [ ] `scripts/build-usage-doc.ts` imports the shared tool quick reference (no duplicated block)
-- [ ] Hook script: stdout EPIPE suppressed, other errors to stderr, always exit 0
-- [ ] `docs/agent-portability.md`, `README.md`, `CLAUDE.md`, `CONTRIBUTING.md` updated
-- [ ] Full suite green: `bun test` and `tsc --noEmit`
+- [x] `bun hooks/session-start.ts` emits the full static guidance as raw stdout, exit 0 (same shape consumed by both harnesses)
+- [x] Hook content contains `getInstructions()` verbatim plus: checkpoint-before-commit, all three tool names, deferred-tools warning, WHAT/WHY/HOW/IMPACT, brief lifecycle
+- [x] Hook content ≤ 10,000 chars (test-enforced), composed at runtime — no generated payload file
+- [x] Hooks map: exactly one event, one command, matcher `startup|clear|compact` (test-enforced)
+- [x] Both plugin manifests reference the same hooks map; all referenced paths exist (test-enforced)
+- [x] `.codex-plugin/mcp.json` registers the goldfish server via bun (test-enforced)
+- [x] Six version surfaces in sync (test-enforced); docs updated to say six
+- [x] `scripts/build-usage-doc.ts` imports the shared tool quick reference (no duplicated block)
+- [x] Hook script: stdout EPIPE suppressed, other errors to stderr, always exit 0
+- [x] `docs/agent-portability.md`, `README.md`, `CLAUDE.md`, `CONTRIBUTING.md` updated
+- [x] Full suite green: `bun test` and `tsc --noEmit`
 
 ## Implementation Route
 
