@@ -63,3 +63,9 @@ const agentsMdPath = join(repoRoot, 'AGENTS.md');
 const claudeMdContent = await readFile(claudeMdPath, 'utf-8');
 await writeAtomically(agentsMdPath, claudeMdContent);
 console.log('Synced AGENTS.md from CLAUDE.md');
+
+const { buildUsageDoc } = await import('./build-usage-doc');
+const usageDocDir = join(repoRoot, 'docs', 'agent-instructions');
+await mkdir(usageDocDir, { recursive: true });
+await writeAtomically(join(usageDocDir, 'goldfish-usage.md'), buildUsageDoc());
+console.log('Generated docs/agent-instructions/goldfish-usage.md from src/instructions.ts');

@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "Goldfish": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["run", "${workspaceFolder}/src/server.ts"]
+    }
+  }
+}

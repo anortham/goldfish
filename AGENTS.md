@@ -355,6 +355,8 @@ The version must be updated in five surfaces (tests in `tests/server.test.ts` en
 
 Add a `## [X.Y.Z]` section to `CHANGELOG.md` at the same time.
 
+After tagging a release, run `bun run check:version-tag` (also enforced by `tests/agent-assets.test.ts` when tests run on the tagged commit). The five-surface tests only prove the files agree with each other — they all pass when every surface is stale together; the tag check catches that.
+
 ---
 
 ## Tech Stack

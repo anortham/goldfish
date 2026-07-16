@@ -36,7 +36,7 @@ Measured baselines: save 43ms (git 40.5ms of it, 5 serial spawnSync — blocks e
 
 Strategy: port ponytail's discipline (generators, drift guards), not its 22-harness breadth — Goldfish ships a stateful MCP server, not prose.
 
-1. **AGENTS.md split.** Stop mirroring CLAUDE.md (contributor guide) into AGENTS.md; generate AGENTS.md as a usage ruleset from `src/instructions.ts` + tool reference. Unlocks the zero-setup instruction tier (Zed, Amp, Jules, etc.).
+1. **Instruction-tier usage ruleset.** (Revised from "AGENTS.md split": the goldfish repo's AGENTS.md correctly serves contributors working on goldfish itself, so the CLAUDE.md mirror stays. What the instruction tier needs is a usage ruleset users copy into THEIR repos.) Generate `docs/agent-instructions/goldfish-usage.md` from `src/instructions.ts` + a tool quick reference; document wiring for AGENTS.md-reading harnesses (Zed, Amp, Jules, Codex) and rules-file harnesses (Cursor, Windsurf, Cline, Kiro).
 2. **Tag-equality version check.** Mutual-agreement version tests pass when all surfaces are stale together; assert version == git tag at release (ponytail shipped this exact bug in its v4.8.0).
 3. **Mirror freshness test.** `.agents/skills` sync is unguarded; add a test that re-runs the sync in-memory and fails on diff.
 4. **Commit client config files** the README currently dictates as prose (`opencode.json`, `.vscode/mcp.json` example).

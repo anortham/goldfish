@@ -125,9 +125,13 @@ Add Goldfish to your `opencode.json`:
 
 OpenCode walks up the repository and loads matching `.agents/skills/*/SKILL.md`, so the checked-in Goldfish skills are available without extra copying.
 
+This repository ships a working `opencode.json` (paths relative to the repo root) you can copy as a starting point.
+
 ### VS Code with GitHub Copilot
 
 VS Code supports project-level MCP config in `.vscode/mcp.json`, supports the full MCP feature set, and can pair Goldfish with repo instructions for better memory habits.
+
+This repository ships a working `.vscode/mcp.json` you can copy. To create your own:
 
 ```bash
 mkdir -p .vscode
@@ -183,6 +187,14 @@ What varies by client:
 
 - **Skills** depend on whether the harness reads repo-local skill files such as `.agents/skills`
 - **Workspace binding** depends on roots support, explicit cwd, or `GOLDFISH_WORKSPACE`
+
+### Instruction-Only Harnesses (Zed, Amp, Jules, Cursor rules, Windsurf, Cline, Kiro, ...)
+
+Many harnesses read a repo instruction file (`AGENTS.md`, `.cursor/rules/`, `.windsurf/rules/`, `.clinerules/`, `.kiro/steering/`) but never surface MCP server instructions. For those, copy the generated usage ruleset [`docs/agent-instructions/goldfish-usage.md`](docs/agent-instructions/goldfish-usage.md) into your repo's instruction surface.
+
+Honest caveat: this gives the agent Goldfish *behavior rules only*. The `checkpoint`/`recall`/`brief` tools still need the MCP server registered in that harness (see the sections above); without it the rules have nothing to call.
+
+The full support matrix, including what was deliberately not built and why, lives in [`docs/agent-portability.md`](docs/agent-portability.md).
 
 ---
 
