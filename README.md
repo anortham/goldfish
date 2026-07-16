@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code and Codex both install as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 7.5.0** -- Review-driven release: cross-workspace recall no longer silently caps results, brief lifecycle nudges land where work happens (checkpoint responses), search is ~20x faster at large corpora via in-memory caches, and instruction-only harnesses get a generated usage ruleset. See CHANGELOG.md for details.
+**Version 7.6.0** -- Hooks return, narrowly: Claude Code and Codex plugin installs get a SessionStart hook that loads Goldfish's guidance into each new session, Codex becomes a one-install plugin (tools + skills + hooks), and recall guidance is now conditional rather than reflexive. See CHANGELOG.md for details.
 
 ---
 

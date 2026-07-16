@@ -4,6 +4,27 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.0] - 2026-07-16
+
+Hooks return, narrowly. Harness changes (the 2k server-instruction cap plus deferred tool loading that hides tool descriptions until searched) removed the ambient surfaces Goldfish relied on for behavioral adoption — sessions were ignoring the tools entirely. This release answers that evidence with a SessionStart-only static hook; the 7.0 lesson (no recurring hooks) still stands. Codex integration was validated against a real plugin install.
+
+### Added
+
+- **SessionStart hooks tier** for Claude Code and Codex plugin installs: one shared hooks map (`hooks/goldfish-hooks.json`, matcher `startup|clear|compact` — never `resume`), one branchless `bun` script printing static guidance as raw stdout. The payload (`src/hook-context.ts`) embeds the server instructions verbatim plus what the caps hide: a tool-existence advertisement for deferred loading, the shared tool quick reference, and the WHAT/WHY/HOW/IMPACT checkpoint quality format. Kept within a 10,000-character safety budget, test-enforced
+- **Codex plugin manifest** (`.codex-plugin/plugin.json`) bundling the MCP server (canonical root `.mcp.json`), the 6 skills, and the SessionStart hook — Codex setup is now one marketplace install plus a one-time `/hooks` trust review (documented in README); `.codex/config.toml` remains the manual alternative
+- `.codex-plugin/plugin.json` becomes the sixth synced version surface; `tests/hooks.test.ts` guards hook content invariants, the subprocess stdout contract, failure containment, manifest wiring, and the hooks-map shape (exactly one event, one command)
+
+### Changed
+
+- **Recall guidance is conditional, not reflexive**: call `recall()` when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant — replaces "call recall() at session start" across instructions, tool description, recall skill, and the hook payload
+- **Recalled context is historical evidence**: preserve its decisions and reasoning, but verify current or drift-prone facts against live sources — replaces "trust recalled context, don't re-verify"
+- Hook script hardened after Codex install validation: guarded dynamic import, stderr failure reporting that cannot itself throw, always exit 0 so a broken install degrades to pre-hook behavior instead of blocking session start
+- Tool quick reference extracted to a shared constant (`src/hook-context.ts`) imported by the usage-doc generator, so the two surfaces cannot drift
+
+### Docs
+
+- Every surface now teaches the hooks tier: README install/trust instructions for both harnesses plus a "session-start guidance not appearing" troubleshooting entry, `docs/agent-portability.md` hooks rows and the recorded reversal of the "no hooks" decision, CLAUDE.md/IMPLEMENTATION.md/TEST_COVERAGE.md module, budget, and test-group updates
+
 ## [7.5.0] - 2026-07-16
 
 Review-driven release: cross-workspace recall correctness, brief lifecycle adoption nudges at the moments that matter, large performance gains from validated in-memory caches, and wider harness support. Externally reviewed (Codex) with all findings fixed.
