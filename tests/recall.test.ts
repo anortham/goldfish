@@ -1012,6 +1012,26 @@ describe('parseSince - human-friendly time span parser', () => {
     expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
   });
 
+  it('parses weeks (1w)', () => {
+    const now = new Date();
+    const result = parseSince('1w');
+
+    const expectedMs = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+    const tolerance = 100;
+
+    expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
+  });
+
+  it('parses multi-week spans (2w)', () => {
+    const now = new Date();
+    const result = parseSince('2w');
+
+    const expectedMs = now.getTime() - (14 * 24 * 60 * 60 * 1000);
+    const tolerance = 100;
+
+    expect(Math.abs(result.getTime() - expectedMs)).toBeLessThan(tolerance);
+  });
+
   it('parses ISO 8601 timestamps', () => {
     const timestamp = '2025-10-14T15:30:00.000Z';
     const result = parseSince(timestamp);

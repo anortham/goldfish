@@ -128,7 +128,7 @@ interface RecallOptions {
   days?: number;          // Look back N days (enables date-window mode)
   from?: string;          // ISO 8601 UTC
   to?: string;            // ISO 8601 UTC
-  since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
+  since?: string;         // Human-friendly ("2h", "30m", "3d", "1w") or ISO 8601 UTC
   search?: string;        // BM25 search query (Orama)
   full?: boolean;         // Include full descriptions + git metadata (default: false)
   briefId?: string;       // Filter to checkpoints associated with this brief

@@ -129,7 +129,7 @@ Treat recalled context as historical evidence: preserve its decisions and reason
 
 Key parameters (all optional):
 - limit: Max checkpoints to return (default: 5)
-- since: Human-friendly time span ("2h", "30m", "3d") or ISO timestamp
+- since: Human-friendly time span ("2h", "30m", "3d", "1w") or ISO timestamp
 - days: How far back to look in days
 - from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
 - search: Search query (matches descriptions, tags, branches, files)
@@ -162,7 +162,7 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
           },
           since: {
             type: 'string',
-            description: 'Human-friendly time span or ISO timestamp. Examples: "2h" (last 2 hours), "30m" (last 30 minutes), "3d" (last 3 days), or "2025-10-14T15:30:00Z" (since specific time). Takes priority over days parameter.'
+            description: 'Human-friendly time span or ISO timestamp. Examples: "2h" (last 2 hours), "30m" (last 30 minutes), "3d" (last 3 days), "1w" (last week), or "2025-10-14T15:30:00Z" (since specific time). Takes priority over days parameter.'
           },
           days: {
             type: 'number',

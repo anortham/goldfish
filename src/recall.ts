@@ -327,6 +327,7 @@ function normalizeRecallOptions(options: RecallInput): RecallOptions {
  * - "2h" → 2 hours ago
  * - "30m" → 30 minutes ago
  * - "3d" → 3 days ago
+ * - "1w" → 1 week ago
  * - "2025-10-14T15:30:00Z" → ISO timestamp (passthrough)
  * - "2025-10-14" → Date string (passthrough)
  */
@@ -340,10 +341,10 @@ export function parseSince(since: string): Date {
     return date;
   }
 
-  // Human-friendly: "2h", "30m", "3d"
-  const match = since.match(/^(\d+)([mhd])$/);
+  // Human-friendly: "2h", "30m", "3d", "1w"
+  const match = since.match(/^(\d+)([mhdw])$/);
   if (!match) {
-    throw new Error(`Invalid since format: ${since} (expected: "2h", "30m", "3d", or ISO timestamp)`);
+    throw new Error(`Invalid since format: ${since} (expected: "2h", "30m", "3d", "1w", or ISO timestamp)`);
   }
 
   const [, amount, unit] = match;
@@ -351,10 +352,11 @@ export function parseSince(since: string): Date {
   const milliseconds = {
     m: 60 * 1000,
     h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000
+    d: 24 * 60 * 60 * 1000,
+    w: 7 * 24 * 60 * 60 * 1000
   };
 
-  const unitValue = unit as 'm' | 'h' | 'd';
+  const unitValue = unit as 'm' | 'h' | 'd' | 'w';
   return new Date(now.getTime() - parseInt(amount!) * milliseconds[unitValue]);
 }
 

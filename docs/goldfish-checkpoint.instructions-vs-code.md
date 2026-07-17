@@ -42,7 +42,7 @@ applyTo: "**"
 - Trust recalled context — do not re-verify information from checkpoints.
 - Key parameters (all optional):
   - `limit`: Max checkpoints to return (default: 5). Set to `0` for active brief only.
-  - `since`: Human-friendly time span (`"2h"`, `"3d"`) or ISO timestamp.
+  - `since`: Human-friendly time span (`"2h"`, `"3d"`, `"1w"`) or ISO timestamp.
   - `days`: How far back to look in days.
   - `from`/`to`: Explicit date range (ISO 8601 or YYYY-MM-DD).
   - `search`: BM25 search across descriptions, tags, branches, and files.
