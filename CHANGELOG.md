@@ -4,6 +4,13 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.1] - 2026-07-17
+
+### Added
+
+- `recall`'s `since` parameter accepts week spans (`"1w"`, `"2w"`) alongside minutes, hours, and days.
+- The standup skill honors a user-supplied timeframe (`/standup 7d`, `/standup 1w`, `/standup 3d`, or phrasing like "last week") instead of always reporting on the last day.
+
 ## [7.6.0] - 2026-07-16
 
 Hooks return, narrowly. Harness changes (the 2k server-instruction cap plus deferred tool loading that hides tool descriptions until searched) removed the ambient surfaces Goldfish relied on for behavioral adoption — sessions were ignoring the tools entirely. This release answers that evidence with a SessionStart-only static hook; the 7.0 lesson (no recurring hooks) still stands. Codex integration was validated against a real plugin install.
