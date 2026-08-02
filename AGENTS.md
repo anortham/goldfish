@@ -367,12 +367,14 @@ Add a `## [X.Y.Z]` section to `CHANGELOG.md` at the same time.
 
 After tagging a release, run `bun run check:version-tag` (also enforced by `tests/agent-assets.test.ts` when tests run on the tagged commit). The six-surface tests only prove the files agree with each other — they all pass when every surface is stale together; the tag check catches that.
 
+Push the branch and the tag in **separate** `git push` commands: pushing both in one command can coalesce the events on GitHub's side so the tag never triggers CI's `version-tag` job (observed on the 7.6.2 release).
+
 ---
 
 ## Tech Stack
 
 - **Runtime:** Bun (for speed + built-in test runner)
-- **MCP SDK:** `@modelcontextprotocol/sdk` (^1.26.0)
+- **MCP SDK:** `@modelcontextprotocol/sdk` (^1.30.0)
 - **Search:** `@orama/orama` (BM25 ranking over checkpoint markdown)
 - **YAML:** `yaml` package (for brief frontmatter)
 - **Language:** TypeScript
