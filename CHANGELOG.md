@@ -4,6 +4,21 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.2] - 2026-08-02
+
+### Added
+
+- GitHub Actions CI: frozen-lockfile install, typecheck, and the full test suite on pushes and PRs; the `check:version-tag` release guard runs on pushed `v*` tags
+
+### Changed
+
+- Dependencies: `@modelcontextprotocol/sdk` 1.26.0 → 1.30.0, `yaml` 2.8.2 → 2.9.0, `@types/bun` pinned at `^1.3.14` instead of floating `latest`
+
+### Fixed
+
+- The test suite no longer writes temp test workspaces into the real `~/.goldfish/registry.json`: `tests/preload.ts` (wired via `bunfig.toml`) points `GOLDFISH_HOME` at a per-run temp directory before any test file loads, with `tests/test-isolation.test.ts` as the regression guard
+- Two `limit: 1` handler tests raced their `beforeEach` saves — same-millisecond checkpoint timestamps tie in recall's sort, letting the filename hash pick the winner. Their saves are now frozen one minute ahead
+
 ## [7.6.1] - 2026-07-17
 
 ### Added
