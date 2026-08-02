@@ -393,12 +393,19 @@ describe('Goldfish home directory', () => {
   });
 
   it('uses the goldfish home directory from HOME or USERPROFILE', () => {
-    process.env.HOME = '/test/home';
-    process.env.USERPROFILE = '/test/profile';
-    expect(getGoldfishHomeDir()).toBe(join('/test/home', '.goldfish'));
+    const originalGoldfishHome = process.env.GOLDFISH_HOME;
+    delete process.env.GOLDFISH_HOME;
+    try {
+      process.env.HOME = '/test/home';
+      process.env.USERPROFILE = '/test/profile';
+      expect(getGoldfishHomeDir()).toBe(join('/test/home', '.goldfish'));
 
-    delete process.env.HOME;
-    expect(getGoldfishHomeDir()).toBe(join('/test/profile', '.goldfish'));
+      delete process.env.HOME;
+      expect(getGoldfishHomeDir()).toBe(join('/test/profile', '.goldfish'));
+    } finally {
+      if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
+      else process.env.GOLDFISH_HOME = originalGoldfishHome;
+    }
   });
 
   it('uses GOLDFISH_HOME when set, ignoring HOME and USERPROFILE', () => {

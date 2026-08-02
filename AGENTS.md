@@ -328,6 +328,8 @@ bun test tests/workspace.test.ts -t "normalizes full path"
 bun test --coverage
 ```
 
+Every test run is isolated from the real `~/.goldfish`: `tests/preload.ts` (wired via `bunfig.toml`) points `GOLDFISH_HOME` at a per-run temp dir before any test file loads, and `tests/test-isolation.test.ts` fails if that stops working. Tests that save checkpoints register their temp workspaces in that isolated registry, never the user's.
+
 ### Targeted Test Groups
 
 Run the group matching your change instead of the full suite. Use the full suite as a final check.

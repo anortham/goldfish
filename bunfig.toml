@@ -1,0 +1,3 @@
+[test]
+# Isolate every test run from the real ~/.goldfish (see tests/preload.ts).
+preload = ["./tests/preload.ts"]

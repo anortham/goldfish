@@ -33,10 +33,17 @@ afterEach(async () => {
 
 describe('Registry path', () => {
   it('returns ~/.goldfish/registry.json', () => {
-    const path = getRegistryPath();
-    expect(path).toMatch(/\.goldfish[/\\]registry\.json$/);
-    // Should be an absolute path starting from home
-    expect(isAbsolute(path)).toBe(true);
+    const savedHome = process.env.GOLDFISH_HOME;
+    delete process.env.GOLDFISH_HOME;
+    try {
+      const path = getRegistryPath();
+      expect(path).toMatch(/\.goldfish[/\\]registry\.json$/);
+      // Should be an absolute path starting from home
+      expect(isAbsolute(path)).toBe(true);
+    } finally {
+      if (savedHome === undefined) delete process.env.GOLDFISH_HOME;
+      else process.env.GOLDFISH_HOME = savedHome;
+    }
   });
 
   it('respects GOLDFISH_HOME env var', () => {

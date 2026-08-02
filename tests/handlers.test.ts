@@ -440,10 +440,15 @@ describe('Readable markdown responses', () => {
     });
 
     it('truncates even a single oversized checkpoint in full mode', async () => {
-      await saveCheckpoint({
-        description: `## Giant checkpoint\n\n${'y'.repeat(60_000)}`,
-        workspace: TEST_DIR
-      });
+      // Frozen 1min ahead: a real-time save can tie with the beforeEach
+      // checkpoints on the same millisecond, letting limit:1 pick the wrong one
+      const future = new Date(Date.now() + 60_000).toISOString();
+      await withFrozenTime(future, () =>
+        saveCheckpoint({
+          description: `## Giant checkpoint\n\n${'y'.repeat(60_000)}`,
+          workspace: TEST_DIR
+        })
+      );
 
       const result = await handleRecall({ workspace: TEST_DIR, limit: 1, full: true });
       const text = result.content[0]!.text;
@@ -660,10 +665,15 @@ describe('Readable markdown responses', () => {
         activate: true
       });
 
-      await saveCheckpoint({
-        description: 'Checkpoint with plan',
-        workspace: TEST_DIR
-      });
+      // Frozen 1min ahead: a real-time save can tie with the beforeEach
+      // checkpoints on the same millisecond, letting limit:1 pick the wrong one
+      const future = new Date(Date.now() + 60_000).toISOString();
+      await withFrozenTime(future, () =>
+        saveCheckpoint({
+          description: 'Checkpoint with plan',
+          workspace: TEST_DIR
+        })
+      );
 
       const result = await handleRecall({
         workspace: TEST_DIR,
