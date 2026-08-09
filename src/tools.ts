@@ -4,7 +4,7 @@
  * Contains the core tools: checkpoint, recall, and brief.
  */
 
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { Tool } from '@modelcontextprotocol/server';
 
 /**
  * Get tool definitions

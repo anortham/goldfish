@@ -8,15 +8,8 @@
  * - brief: Manage durable strategic context
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListRootsResultSchema,
-  ListToolsRequestSchema,
-  RootsListChangedNotificationSchema,
-  type Root
-} from '@modelcontextprotocol/sdk/types.js';
+import { Server, type Root } from '@modelcontextprotocol/server';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js';
@@ -52,13 +45,8 @@ function asObject(value: unknown): Record<string, unknown> {
 async function getCachedRoots(
   cache: Map<string, Root[] | null | undefined>,
   sessionId: string,
-  sendRequest: (request: { method: 'roots/list' }, resultSchema: typeof ListRootsResultSchema) => Promise<{ roots: Root[] }>
+  sendRequest: (request: { method: 'roots/list' }) => Promise<{ roots: Root[] }>
 ): Promise<Root[] | undefined> {
-  // Only a non-empty successful result is worth caching. An empty list or a
-  // failed lookup is treated as "no roots yet" rather than a permanent answer:
-  // desktop MCP clients (Cursor) often populate roots late or after a transient
-  // failure, and caching the empty/failed state would lock every later tool
-  // call out of the workspace for the whole session.
   if (cache.has(sessionId)) {
     return cache.get(sessionId) ?? undefined;
   }
@@ -66,7 +54,7 @@ async function getCachedRoots(
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
-      sendRequest({ method: 'roots/list' }, ListRootsResultSchema),
+      sendRequest({ method: 'roots/list' }),
       new Promise<undefined>(resolve => {
         timeout = setTimeout(() => resolve(undefined), ROOTS_LIST_TIMEOUT_MS);
       })
@@ -74,7 +62,7 @@ async function getCachedRoots(
     if (!result) {
       return undefined;
     }
-    if (result.roots && result.roots.length > 0) {
+    if (result.roots.length > 0) {
       cache.set(sessionId, result.roots);
     }
     return result.roots;
@@ -92,7 +80,7 @@ async function hydrateWorkspaceArguments(
   rawArgs: unknown,
   cache: Map<string, Root[] | null | undefined>,
   sessionId: string,
-  sendRequest: (request: { method: 'roots/list' }, resultSchema: typeof ListRootsResultSchema) => Promise<{ roots: Root[] }>
+  sendRequest: (request: { method: 'roots/list' }) => Promise<{ roots: Root[] }>
 ): Promise<{ args: Record<string, unknown>; recovered?: RecoveredWorkspace }> {
   const args = asObject(rawArgs);
 
@@ -198,15 +186,15 @@ export function createServer() {
   );
   const rootsCache = new Map<string, Root[] | null | undefined>();
 
-  server.setNotificationHandler(RootsListChangedNotificationSchema, () => {
+  server.setNotificationHandler('notifications/roots/list_changed', () => {
     rootsCache.clear();
   });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
+  server.setRequestHandler('tools/list', async () => {
     return { tools: getTools() };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+  server.setRequestHandler('tools/call', async (request, ctx) => {
     const { name, arguments: args } = request.params;
     const log = getLogger();
     const start = performance.now();
@@ -216,8 +204,8 @@ export function createServer() {
         name,
         args,
         rootsCache,
-        getSessionKey(extra.sessionId),
-        extra.sendRequest
+        getSessionKey(ctx.sessionId),
+        request => ctx.mcpReq.send(request)
       );
       let result;
       switch (name) {

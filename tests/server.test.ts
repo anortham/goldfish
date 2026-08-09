@@ -7,9 +7,7 @@ import { rm, mkdtemp, mkdir, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { ListRootsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 
 // We'll test the server module functions directly since running a full MCP server
 // in tests is complex. We'll validate tool handlers work correctly.
@@ -596,11 +594,14 @@ describe('Request-time workspace hydration', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      rootsCapability ? { capabilities: { roots: { listChanged: true } } } : {}
+      {
+        ...(rootsCapability ? { capabilities: { roots: { listChanged: true } } } : {}),
+        versionNegotiation: { mode: 'legacy' }
+      }
     );
     let rootsCalls = 0;
 
-    client.setRequestHandler(ListRootsRequestSchema, async () => {
+    client.setRequestHandler('roots/list', async () => {
       rootsCalls += 1;
       return { roots: getRoots() };
     });
@@ -783,10 +784,13 @@ describe('Request-time workspace hydration', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      { capabilities: { roots: { listChanged: true } } }
+      {
+        capabilities: { roots: { listChanged: true } },
+        versionNegotiation: { mode: 'legacy' }
+      }
     );
     let rootsCalls = 0;
-    client.setRequestHandler(ListRootsRequestSchema, async () => {
+    client.setRequestHandler('roots/list', async () => {
       rootsCalls += 1;
       if (roots === 'throw') {
         throw new Error('roots/list temporarily unavailable');
@@ -843,7 +847,7 @@ describe('Request-time workspace hydration', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      {}
+      { versionNegotiation: { mode: 'legacy' } }
     );
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -882,10 +886,13 @@ describe('Request-time workspace hydration', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      { capabilities: { roots: { listChanged: true } } }
+      {
+        capabilities: { roots: { listChanged: true } },
+        versionNegotiation: { mode: 'legacy' }
+      }
     );
     let rootsCalls = 0;
-    client.setRequestHandler(ListRootsRequestSchema, async () => {
+    client.setRequestHandler('roots/list', async () => {
       rootsCalls += 1;
       return await new Promise<never>(() => {});
     });
@@ -934,7 +941,7 @@ describe('Request-time workspace hydration', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      {}
+      { versionNegotiation: { mode: 'legacy' } }
     );
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -970,7 +977,7 @@ describe('Request-time workspace hydration', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      {}
+      { versionNegotiation: { mode: 'legacy' } }
     );
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -1006,7 +1013,7 @@ describe('Request-time workspace hydration', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      {}
+      { versionNegotiation: { mode: 'legacy' } }
     );
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -1097,7 +1104,7 @@ describe('Workspace recovery (registry + parent walk)', () => {
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
       // No roots capability — simulates Cursor plugin installs.
-      {}
+      { versionNegotiation: { mode: 'legacy' } }
     );
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([
@@ -1414,11 +1421,14 @@ describe('Workspace recovery (registry + parent walk)', () => {
     const server = createServer();
     const client = new Client(
       { name: 'goldfish-test-client', version: '1.0.0' },
-      { capabilities: { roots: { listChanged: true } } }
+      {
+        capabilities: { roots: { listChanged: true } },
+        versionNegotiation: { mode: 'legacy' }
+      }
     );
     let roots: Array<{ uri: string }> = [];
     let rootsCalls = 0;
-    client.setRequestHandler(ListRootsRequestSchema, async () => {
+    client.setRequestHandler('roots/list', async () => {
       rootsCalls += 1;
       return { roots };
     });
