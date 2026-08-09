@@ -66,6 +66,39 @@ async function connectModernServer(options: {
   }
 }
 
+async function connectLegacyServer(options: {
+  cwd: string;
+  home: string;
+  goldfishHome: string;
+}): Promise<Client> {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ['run', SERVER_PATH],
+    cwd: options.cwd,
+    env: {
+      HOME: options.home,
+      GOLDFISH_HOME: options.goldfishHome
+    },
+    stderr: 'pipe'
+  });
+  let stderr = '';
+  transport.stderr?.on('data', chunk => {
+    stderr += String(chunk);
+  });
+  const client = new Client(
+    { name: 'goldfish-legacy-test-client', version: '1.0.0' },
+    { versionNegotiation: { mode: 'legacy' } }
+  );
+
+  try {
+    await client.connect(transport);
+    return client;
+  } catch (error) {
+    await transport.close();
+    throw new Error(`Legacy stdio connection failed:\n${stderr}`, { cause: error });
+  }
+}
+
 describe('MCP 2026-07-28 stdio compatibility', () => {
   it('lists tools and honors env and explicit workspace precedence', async () => {
     const root = await mkdtemp(join(tmpdir(), 'goldfish-modern-tools-'));
@@ -139,6 +172,31 @@ describe('MCP 2026-07-28 stdio compatibility', () => {
       expect(result.isError).toBe(true);
       expect(getFirstTextContent(result).toLowerCase()).toContain('home directory');
       expect(await pathExists(join(home, '.memories'))).toBe(false);
+    } finally {
+      await client?.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('MCP legacy stdio compatibility', () => {
+  it('serves legacy clients over the real stdio entry point', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'goldfish-legacy-tools-'));
+    const home = join(root, 'home');
+    const goldfishHome = join(root, 'goldfish-home');
+    await Promise.all([mkdir(home), mkdir(goldfishHome)]);
+
+    let client: Client | undefined;
+    try {
+      client = await connectLegacyServer({ cwd: home, home, goldfishHome });
+
+      expect(client.getProtocolEra()).toBe('legacy');
+      const tools = await client.listTools();
+      expect(tools.tools.map(tool => tool.name).sort()).toEqual([
+        'brief',
+        'checkpoint',
+        'recall'
+      ]);
     } finally {
       await client?.close();
       await rm(root, { recursive: true, force: true });
