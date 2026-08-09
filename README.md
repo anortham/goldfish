@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code and Codex both install as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 7.6.2** -- Maintenance: test runs are fully isolated from the real `~/.goldfish`, GitHub Actions CI guards every push and release tag, and dependencies are current (MCP SDK 1.30). See CHANGELOG.md for details.
+**Version 7.7.0** -- MCP SDK v2: Goldfish serves legacy 2025-era and modern 2026-07-28 clients over the same stdio command while preserving legacy roots compatibility. See CHANGELOG.md for details.
 
 ---
 
@@ -498,7 +498,8 @@ bun run typecheck
 ### Stats
 
 - **Storage:** markdown source of truth in `.memories/`; cross-project registry at `~/.goldfish/registry.json`
-- **Runtime dependencies:** `@modelcontextprotocol/sdk`, `@orama/orama`, `yaml`
+- **Runtime dependencies:** `@modelcontextprotocol/server`, `@orama/orama`, `yaml`
+- **Protocol-test dependency:** `@modelcontextprotocol/client`
 
 ### TDD Workflow
 

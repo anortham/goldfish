@@ -4,6 +4,22 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.7.0] - 2026-08-08
+
+### Added
+
+- Modern MCP 2026-07-28 compatibility over the existing stdio command, verified by a pinned v2 client spawning the real Bun server with isolated filesystem state
+
+### Changed
+
+- Migrated from the monolithic `@modelcontextprotocol/sdk` 1.30.0 package to `@modelcontextprotocol/server` 2.0.0 at runtime and `@modelcontextprotocol/client` 2.0.0 for protocol tests
+- Replaced schema-based low-level handler registration with v2 method strings and request context APIs
+- Replaced direct `StdioServerTransport` startup with the dual-era `serveStdio` factory while retaining legacy client support
+
+### Preserved
+
+- Legacy roots discovery, cache invalidation, retry, timeout, and late-roots behavior remain unchanged; modern clients skip push roots and use explicit workspace, `GOLDFISH_WORKSPACE`, cwd recovery, or safe refusal
+
 ## [7.6.2] - 2026-08-02
 
 ### Added

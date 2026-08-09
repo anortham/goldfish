@@ -317,6 +317,8 @@ bun src/server.ts
 npx @modelcontextprotocol/inspector bun src/server.ts
 ```
 
+Goldfish uses `@modelcontextprotocol/server` v2. Its `serveStdio` entry accepts both legacy 2025-era and modern 2026-07-28 clients. `tests/server.test.ts` owns legacy in-memory coverage; `tests/protocol-compatibility.test.ts` spawns the real Bun stdio command for modern coverage.
+
 ---
 
 ## Performance Expectations

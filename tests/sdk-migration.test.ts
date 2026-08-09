@@ -19,3 +19,21 @@ describe('MCP SDK dependencies', () => {
     expect(packageJson.dependencies).not.toHaveProperty('@modelcontextprotocol/sdk');
   });
 });
+
+describe('MCP SDK documentation', () => {
+  it('documents the MCP v2 server package in maintained technical docs', async () => {
+    const maintainedDocs = [
+      'AGENTS.md',
+      'CLAUDE.md',
+      'README.md',
+      'CONTRIBUTING.md',
+      join('docs', 'IMPLEMENTATION.md')
+    ];
+
+    for (const path of maintainedDocs) {
+      const content = await readFile(join(repoRoot, path), 'utf-8');
+      expect(content).toContain('@modelcontextprotocol/server');
+      expect(content).not.toContain('@modelcontextprotocol/sdk');
+    }
+  });
+});

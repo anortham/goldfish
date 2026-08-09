@@ -374,7 +374,7 @@ Push the branch and the tag in **separate** `git push` commands: pushing both in
 ## Tech Stack
 
 - **Runtime:** Bun (for speed + built-in test runner)
-- **MCP SDK:** `@modelcontextprotocol/sdk` (^1.30.0)
+- **MCP SDK:** `@modelcontextprotocol/server` (^2.0.0); `@modelcontextprotocol/client` (^2.0.0) for protocol tests
 - **Search:** `@orama/orama` (BM25 ranking over checkpoint markdown)
 - **YAML:** `yaml` package (for brief frontmatter)
 - **Language:** TypeScript

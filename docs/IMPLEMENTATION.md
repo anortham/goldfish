@@ -263,7 +263,7 @@ We achieve this through:
 10. **File locking** - Concurrent write safety
 11. **Hooks tier (7.5+)** - SessionStart guidance injection for Claude Code + Codex plugin installs; Codex manifest bundles the MCP server
 
-**Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/sdk`, `@orama/orama`, `yaml`.
+**Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/server`, `@orama/orama`, and `yaml`. The stdio entry serves legacy 2025-era and modern 2026-07-28 clients; legacy roots discovery is preserved, while modern clients use explicit/env/cwd recovery and safe refusal.
 
 ---
 
