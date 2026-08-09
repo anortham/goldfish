@@ -198,6 +198,11 @@ Use `.vscode/mcp.json` when you only want the MCP tools. Use the plugin path whe
 
 Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server, so any client that can launch a local stdio server can use the three core tools (`checkpoint`, `recall`, `brief`) and the server instructions.
 
+Goldfish 7.7.0 uses the split MCP TypeScript SDK v2 and serves both protocol eras through the same stdio command:
+
+- **Legacy 2025-era clients** keep working, including roots discovery for clients that still provide it.
+- **Modern stateless 2026-07-28 clients** do not rely on roots discovery. Pass the `workspace` tool argument or set `GOLDFISH_WORKSPACE` when the client cannot provide a trustworthy project root; the process working directory remains the fallback.
+
 What varies by client:
 
 - **Skills** depend on whether the harness reads repo-local skill files such as `.agents/skills`
