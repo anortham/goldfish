@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>MCP SDK v2 Migration Implementation Plan</title>
+  <style>
+  :root {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --ink:       #0b0b0b;
+    --ink-2:     #52514e;
+    --muted:     #898781;
+    --hairline:  #e1e0d9;
+    --border:    rgba(11,11,11,0.10);
+    --accent:    #2a78d6;
+    --accent-track: #cde2fb;
+    --good:      #0ca30c;
+    --good-text: #006300;
+    --warning:   #fab219;
+    --serious:   #ec835a;
+    --critical:  #d03b3b;
+    --good-wash:    rgba(12,163,12,0.09);
+    --warn-wash:    rgba(250,178,25,0.14);
+    --accent-wash:  rgba(42,120,214,0.10);
+    --muted-wash:   rgba(137,135,129,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface:   #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --hairline:  #2c2c2a;
+      --border:    rgba(255,255,255,0.10);
+      --accent:    #3987e5;
+      --accent-track: #104281;
+      --good-text: #0ca30c;
+      --good-wash:    rgba(12,163,12,0.16);
+      --warn-wash:    rgba(250,178,25,0.14);
+      --accent-wash:  rgba(57,135,229,0.16);
+      --muted-wash:   rgba(137,135,129,0.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --hairline:  #2c2c2a;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #3987e5;
+    --accent-track: #104281;
+    --good-text: #0ca30c;
+    --good-wash:    rgba(12,163,12,0.16);
+    --warn-wash:    rgba(250,178,25,0.14);
+    --accent-wash:  rgba(57,135,229,0.16);
+    --muted-wash:   rgba(137,135,129,0.14);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .digest { max-width: 860px; margin: 0 auto; padding: 28px 24px; }
+
+  /* Status chips: icon + label, never color alone */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 600; line-height: 1;
+    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .chip .ico { font-size: 11px; }
+  .chip.done       { background: var(--good-wash);   color: var(--good-text); }
+  .chip.inprogress { background: var(--accent-wash); color: var(--accent); }
+  .chip.queued     { background: var(--muted-wash);  color: var(--ink-2); }
+  .chip.revised    { background: var(--warn-wash);   color: var(--ink); }
+
+  /* Meter: track is a lighter step of the fill's own ramp; 4px rounded data end */
+  .meter { height: 10px; border-radius: 0 4px 4px 0; background: var(--accent-track); position: relative; overflow: hidden; }
+  .meter > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 0 4px 4px 0; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .digest header { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; margin-bottom: 8px; }
+  .digest h1 { font-size: 20px; font-weight: 650; }
+  .digest .goal { color: var(--ink-2); font-size: 14px; margin-top: 3px; max-width: 62ch; }
+  /* Hero figure / stat tile */
+  .digest .hprog { text-align: right; }
+  .digest .hprog .n { font-size: 26px; font-weight: 600; }
+  .digest .hprog .n small { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .digest .hprog .meter { width: 180px; margin-top: 6px; }
+
+  .digest .spine { position: relative; margin-top: 22px; padding-left: 30px; }
+  .digest .spine::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 2px; background: var(--hairline); }
+  .digest .stage { position: relative; margin-bottom: 26px; }
+  .digest .stage::before {
+    content: ""; position: absolute; left: -27px; top: 4px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--muted);
+  }
+  .digest .stage.done::before { background: var(--good); border-color: var(--good); }
+  .digest .stage.now::before  { background: var(--accent); border-color: var(--accent); }
+  .digest .stage h2 { font-size: 15px; font-weight: 650; display: flex; align-items: baseline; gap: 10px; }
+  .digest .stage h2 .chip { position: relative; top: -1px; }
+  .digest .stage .why { font-size: 13px; color: var(--muted); margin: 1px 0 8px; }
+  .digest .trow {
+    display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: baseline;
+    padding: 6px 0; border-top: 1px solid var(--hairline); font-size: 13.5px;
+  }
+  .digest .trow:first-of-type { border-top: 0; }
+  .digest .trow .st { font-size: 12px; font-weight: 600; }
+  .digest .trow .st.done { color: var(--good-text); }
+  .digest .trow .st.inprogress { color: var(--accent); }
+  .digest .trow .st.queued { color: var(--muted); }
+  .digest .trow .what b { color: var(--muted); margin-right: 4px; }
+  .digest .trow .what span { color: var(--ink-2); }
+  .digest .flag {
+    border-left: 3px solid var(--warning); background: var(--warn-wash);
+    border-radius: 0 8px 8px 0; padding: 9px 12px; margin: 8px 0; font-size: 13px;
+  }
+  .digest .flag b { font-weight: 650; }
+  .digest .flag p { color: var(--ink-2); margin-top: 2px; }
+  .digest .here {
+    display: inline-flex; gap: 8px; align-items: center; margin: 2px 0 8px;
+    font-size: 12.5px; font-weight: 650; color: var(--accent);
+  }
+  .digest .here::before { content: "▶"; font-size: 10px; }
+  .digest .remains { margin-top: 4px; padding: 12px 16px; font-size: 13.5px; color: var(--ink-2); }
+  .digest .remains b { color: var(--ink); }
+  .digest footer { margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .digest .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--hairline); margin-top: 16px; }
+  .digest .tabs button {
+    appearance: none; border: 0; background: none; cursor: pointer;
+    font: 600 13.5px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink-2); padding: 10px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .digest .tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .digest .pane { display: none; }
+  .digest .pane.on { display: block; }
+  .digest .dec { padding: 14px 16px; margin: 12px 0 10px; }
+  .digest .dec h3 { font-size: 14px; font-weight: 650; display: flex; gap: 8px; align-items: baseline; }
+  .digest .dec .where { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .digest .dec p { font-size: 13.5px; color: var(--ink-2); margin-top: 4px; }
+  .digest .dec p b { color: var(--ink); }
+  .digest .rail h3 { font-size: 13px; font-weight: 650; margin: 14px 0 6px; }
+  .digest .rail li { margin: 0 0 7px 18px; font-size: 13.5px; color: var(--ink-2); }
+  .digest .rail li strong { color: var(--ink); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <section class="digest">
+    <header>
+      <div>
+        <h1>MCP SDK v2 Migration Plan</h1>
+        <p class="goal">A three-commit TDD migration to dual-era stdio, preserved legacy roots, isolated modern tests, and 7.7.0 release preparation.</p>
+      </div>
+      <div class="hprog">
+        <div class="n">2<small> / 6 stages</small></div>
+        <div class="meter" aria-label="33% complete"><i style="width:33%"></i></div>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Digest sections">
+      <button class="on" data-pane="timeline">Timeline</button>
+      <button data-pane="decisions">Decisions</button>
+      <button data-pane="rails">Guardrails</button>
+    </nav>
+
+    <div class="pane on" id="timeline">
+      <div class="spine">
+        <div class="stage done">
+          <h2>Research + design <span class="chip revised"><span class="ico">⚠</span>Done, revised</span></h2>
+          <p class="why">Map the SDK migration and challenge the highest-risk compatibility assumptions.</p>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>1</b>Verify v2 API <span>&mdash; split packages, method strings, context, and protocol negotiation.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>2</b>Revise roots scope <span>&mdash; preserve legacy roots and defer modern MRTR.</span></span></div>
+          <div class="flag"><b>⚠ Criterion revised &mdash; no modern roots state machine.</b><p>Modern calls use explicit workspace, environment, cwd recovery, or safe refusal. This avoids retry-state and duplicate-write risk.</p></div>
+        </div>
+
+        <div class="stage done">
+          <h2>Full implementation plan <span class="chip done"><span class="ico">✓</span>Done</span></h2>
+          <p class="why">Leave a complete async handoff with exact TDD steps, code, commands, and gates.</p>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>3</b>Map exact files <span>&mdash; runtime, protocol tests, maintained docs, and version surfaces.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>4</b>Define verification <span>&mdash; worker, affected-change, and branch gates.</span></span></div>
+        </div>
+
+        <div class="stage now">
+          <h2>Execution approval <span class="chip inprogress"><span class="ico">◐</span>Deferred</span></h2>
+          <p class="why">The user requested planning only today; no worktree or implementation has started.</p>
+          <div class="here">You are here &mdash; paused until a later explicit approval</div>
+          <div class="trow"><span class="st inprogress">◐ Waiting</span><span class="what"><b>5</b>Create worktree later <span>&mdash; then install and verify a clean baseline.</span></span></div>
+        </div>
+
+        <div class="stage">
+          <h2>Task 1 &mdash; v2 legacy baseline <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+          <p class="why">Move package and handler APIs first while keeping all legacy behavior green.</p>
+          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>6</b>Split dependencies <span>&mdash; server runtime, client tests, remove monolith.</span></span></div>
+          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>7</b>Migrate legacy wire tests <span>&mdash; retain every roots regression.</span></span></div>
+        </div>
+
+        <div class="stage">
+          <h2>Task 2 &mdash; modern stdio <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+          <p class="why">Enable the new era only after the v2 legacy baseline is stable.</p>
+          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>8</b>Use dual-era factory <span>&mdash; serveStdio with default legacy support.</span></span></div>
+          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>9</b>Spawn pinned client <span>&mdash; prove tools, precedence, refusal, and isolation.</span></span></div>
+        </div>
+
+        <div class="stage">
+          <h2>Task 3 &mdash; docs + 7.7.0 <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+          <p class="why">Describe only verified behavior, then synchronize release metadata.</p>
+          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>10</b>Update maintained docs <span>&mdash; current package and dual-era behavior.</span></span></div>
+          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>11</b>Prepare 7.7.0 <span>&mdash; six surfaces and changelog, no release.</span></span></div>
+          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>12</b>Run branch gate <span>&mdash; typecheck, full suite, tag guard, worktree audit.</span></span></div>
+        </div>
+      </div>
+      <div class="card remains"><b>Remaining:</b> nothing starts until a later explicit approval. Execution begins in a fresh worktree and remains local through all verification.</div>
+    </div>
+
+    <div class="pane" id="decisions">
+      <div class="card dec"><h3>Three serialized commits <span class="where">Tasks 1&ndash;3</span></h3><p>Runtime and documentation files overlap. <b>Landed:</b> v2 legacy baseline, modern stdio, then docs/version; each commit remains green and rollback-friendly.</p></div>
+      <div class="card dec"><h3>Real stdio is the modern gate <span class="where">Task 2</span></h3><p>In-memory transport is legacy-only and Goldfish does not ship HTTP. <b>Landed:</b> a v2 client spawns the Bun command and pins 2026-07-28.</p></div>
+      <div class="card dec"><h3>Protocol era stays at the boundary <span class="where">Task 2</span></h3><p>Workspace recovery must remain SDK-agnostic. <b>Landed:</b> the adapter passes a boolean roots permission; no MCP context enters storage or recovery.</p></div>
+      <div class="card dec"><h3>Release preparation only <span class="where">Task 3</span></h3><p>The migration prepares 7.7.0 locally. <b>Landed:</b> no tag, push, publish, deploy, or release without a separate approval.</p></div>
+    </div>
+
+    <div class="pane" id="rails">
+      <div class="rail">
+        <h3>Never touch</h3>
+        <ul>
+          <li><strong>Tool and storage contracts</strong> &mdash; names, schemas, markdown, UTC, atomic writes, and locks remain unchanged.</li>
+          <li><strong>Modern MRTR roots</strong> &mdash; explicitly outside this migration.</li>
+          <li><strong>Real user state</strong> &mdash; spawned tests use temporary cwd, HOME, and GOLDFISH_HOME.</li>
+        </ul>
+        <h3>Held constant</h3>
+        <ul>
+          <li><strong>Legacy clients</strong> &mdash; default serve posture and full roots regression suite.</li>
+          <li><strong>Launch command</strong> &mdash; hosts still run the same Bun server path.</li>
+          <li><strong>Workspace safety</strong> &mdash; explicit, environment, recovery, then refusal.</li>
+        </ul>
+        <h3>Verification gates</h3>
+        <ul>
+          <li><strong>Worker</strong> &mdash; exact red/green tests, typecheck, and build where required.</li>
+          <li><strong>Modern protocol</strong> &mdash; negotiated era, tool list/calls, isolation, and safe refusal.</li>
+          <li><strong>Branch</strong> &mdash; full suite, tag guard, SDK-reference audit, and clean worktree inventory.</li>
+          <li><strong>Security</strong> &mdash; none declared; official packages and absence of credentials still reviewed.</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>Digest of <a href="2026-08-08-mcp-sdk-v2-stateless-migration-plan.md">the full implementation plan</a></footer>
+  </section>
+  <script>
+  document.querySelectorAll(".tabs button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("on"));
+      document.querySelectorAll(".pane").forEach(p => p.classList.remove("on"));
+      btn.classList.add("on");
+      document.getElementById(btn.dataset.pane).classList.add("on");
+    });
+  });
+  </script>
+</body>
+</html>
