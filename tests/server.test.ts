@@ -621,6 +621,34 @@ describe('Request-time workspace hydration', () => {
     };
   }
 
+  it('does not invoke roots when the protocol adapter disables it', async () => {
+    const cwdFallback = await mkdtemp(join(tmpdir(), 'test-server-modern-cwd-'));
+    process.chdir(cwdFallback);
+    delete process.env.GOLDFISH_WORKSPACE;
+    const { hydrateWorkspaceArguments } = await import('../src/server');
+    let rootsCalls = 0;
+
+    try {
+      const hydrated = await hydrateWorkspaceArguments(
+        'recall',
+        { limit: 1 },
+        new Map(),
+        'modern',
+        false,
+        async () => {
+          rootsCalls += 1;
+          return { roots: [{ uri: pathToFileURL(TEST_DIR).href }] };
+        }
+      );
+
+      expect(rootsCalls).toBe(0);
+      expect(hydrated.args.workspace).toBe(cwdFallback);
+    } finally {
+      process.chdir(ORIGINAL_CWD);
+      await rm(cwdFallback, { recursive: true, force: true });
+    }
+  });
+
   it('does not request roots until a tool call needs a default workspace', async () => {
     const connection = await connectServerWithRoots(() => [{ uri: pathToFileURL(TEST_DIR).href }]);
 

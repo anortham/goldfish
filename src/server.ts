@@ -9,7 +9,7 @@
  */
 
 import { Server, type Root } from '@modelcontextprotocol/server';
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js';
@@ -75,11 +75,12 @@ async function getCachedRoots(
   }
 }
 
-async function hydrateWorkspaceArguments(
+export async function hydrateWorkspaceArguments(
   name: string,
   rawArgs: unknown,
   cache: Map<string, Root[] | null | undefined>,
   sessionId: string,
+  canRequestRoots: boolean,
   sendRequest: (request: { method: 'roots/list' }) => Promise<{ roots: Root[] }>
 ): Promise<{ args: Record<string, unknown>; recovered?: RecoveredWorkspace }> {
   const args = asObject(rawArgs);
@@ -98,7 +99,7 @@ async function hydrateWorkspaceArguments(
     return { args };
   }
 
-  const roots = process.env.GOLDFISH_WORKSPACE
+  const roots = process.env.GOLDFISH_WORKSPACE || !canRequestRoots
     ? undefined
     : await getCachedRoots(cache, sessionId, sendRequest);
 
@@ -205,6 +206,7 @@ export function createServer() {
         args,
         rootsCache,
         getSessionKey(ctx.sessionId),
+        ctx.mcpReq.envelope === undefined,
         request => ctx.mcpReq.send(request)
       );
       let result;
@@ -254,14 +256,11 @@ export function createServer() {
  * Start MCP server (when run directly)
  */
 export async function startServer() {
-  const server = createServer();
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  void serveStdio(() => createServer());
 
   const log = getLogger();
   log.info(`server.start version=${SERVER_VERSION} workspace=${process.cwd()}`);
-  log.cleanup(); // Fire-and-forget old log cleanup
+  log.cleanup();
 
   console.error('Goldfish MCP Server started');
   console.error('Tools: checkpoint, recall, brief');
