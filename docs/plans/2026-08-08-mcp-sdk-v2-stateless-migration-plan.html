@@ -169,8 +169,8 @@
         <p class="goal">A three-commit TDD migration to dual-era stdio, preserved legacy roots, isolated modern tests, and 7.7.0 release preparation.</p>
       </div>
       <div class="hprog">
-        <div class="n">2<small> / 6 stages</small></div>
-        <div class="meter" aria-label="33% complete"><i style="width:33%"></i></div>
+        <div class="n">6<small> / 6 stages</small></div>
+        <div class="meter" aria-label="100% complete"><i style="width:100%"></i></div>
       </div>
     </header>
 
@@ -197,36 +197,35 @@
           <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>4</b>Define verification <span>&mdash; worker, affected-change, and branch gates.</span></span></div>
         </div>
 
-        <div class="stage now">
-          <h2>Execution approval <span class="chip inprogress"><span class="ico">◐</span>Deferred</span></h2>
-          <p class="why">The user requested planning only today; no worktree or implementation has started.</p>
-          <div class="here">You are here &mdash; paused until a later explicit approval</div>
-          <div class="trow"><span class="st inprogress">◐ Waiting</span><span class="what"><b>5</b>Create worktree later <span>&mdash; then install and verify a clean baseline.</span></span></div>
+        <div class="stage done">
+          <h2>Execution approval <span class="chip done"><span class="ico">✓</span>Complete</span></h2>
+          <p class="why">Implementation was approved, executed, and verified locally; release actions remain separately gated.</p>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>5</b>Create worktree <span>&mdash; install dependencies and verify a clean baseline.</span></span></div>
         </div>
 
-        <div class="stage">
-          <h2>Task 1 &mdash; v2 legacy baseline <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+        <div class="stage done">
+          <h2>Task 1 &mdash; v2 legacy baseline <span class="chip done"><span class="ico">✓</span>Complete</span></h2>
           <p class="why">Move package and handler APIs first while keeping all legacy behavior green.</p>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>6</b>Split dependencies <span>&mdash; server runtime, client tests, remove monolith.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>7</b>Migrate legacy wire tests <span>&mdash; retain every roots regression.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>6</b>Split dependencies <span>&mdash; server runtime, client tests, remove monolith.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>7</b>Migrate legacy wire tests <span>&mdash; retain every roots regression.</span></span></div>
         </div>
 
-        <div class="stage">
-          <h2>Task 2 &mdash; modern stdio <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+        <div class="stage done">
+          <h2>Task 2 &mdash; modern stdio <span class="chip done"><span class="ico">✓</span>Complete</span></h2>
           <p class="why">Enable the new era only after the v2 legacy baseline is stable.</p>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>8</b>Use dual-era factory <span>&mdash; serveStdio with default legacy support.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>9</b>Spawn pinned client <span>&mdash; prove tools, precedence, refusal, and isolation.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>8</b>Use dual-era factory <span>&mdash; serveStdio with default legacy support.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>9</b>Spawn pinned client <span>&mdash; prove tools, precedence, refusal, and isolation.</span></span></div>
         </div>
 
-        <div class="stage">
-          <h2>Task 3 &mdash; docs + 7.7.0 <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+        <div class="stage done">
+          <h2>Task 3 &mdash; docs + 7.7.0 <span class="chip done"><span class="ico">✓</span>Complete</span></h2>
           <p class="why">Describe only verified behavior, then synchronize release metadata.</p>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>10</b>Update maintained docs <span>&mdash; current package and dual-era behavior.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>11</b>Prepare 7.7.0 <span>&mdash; six surfaces and changelog, no release.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>12</b>Run branch gate <span>&mdash; typecheck, full suite, tag guard, worktree audit.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>10</b>Update maintained docs <span>&mdash; current package and dual-era behavior.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>11</b>Prepare 7.7.0 <span>&mdash; six surfaces and changelog, no release.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>12</b>Run branch gate <span>&mdash; typecheck, full suite, tag guard, worktree audit.</span></span></div>
         </div>
       </div>
-      <div class="card remains"><b>Remaining:</b> nothing starts until a later explicit approval. Execution begins in a fresh worktree and remains local through all verification.</div>
+      <div class="card remains"><b>Remaining:</b> implementation is complete and verified locally. Push, tag, publish, deploy, and release actions require separate approval.</div>
     </div>
 
     <div class="pane" id="decisions">

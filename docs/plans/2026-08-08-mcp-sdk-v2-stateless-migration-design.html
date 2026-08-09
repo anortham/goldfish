@@ -169,8 +169,8 @@
         <p class="goal">Serve legacy and 2026-07-28 MCP clients over Goldfish&rsquo;s existing stdio path without changing tools or storage.</p>
       </div>
       <div class="hprog">
-        <div class="n">2<small> / 5 stages</small></div>
-        <div class="meter" aria-label="40% complete"><i style="width:40%"></i></div>
+        <div class="n">5<small> / 5 stages</small></div>
+        <div class="meter" aria-label="100% complete"><i style="width:100%"></i></div>
       </div>
     </header>
 
@@ -193,35 +193,35 @@
 
         <div class="stage done">
           <h2>Specification review <span class="chip done"><span class="ico">✓</span>Done</span></h2>
-          <p class="why">The compatibility boundary is approved; implementation is intentionally deferred.</p>
+          <p class="why">The compatibility boundary was approved, implemented, and verified locally.</p>
           <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>4</b>Confirm scope <span>&mdash; dual-era stdio, legacy roots only, no HTTP.</span></span></div>
         </div>
 
-        <div class="stage">
-          <h2>Bun compatibility gate <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+        <div class="stage done">
+          <h2>Bun compatibility gate <span class="chip done"><span class="ico">✓</span>Complete</span></h2>
           <p class="why">Prove the v2 stdio entry works in Goldfish&rsquo;s actual runtime before broader edits.</p>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>5</b>Spawn modern client <span>&mdash; pin 2026-07-28 against the Bun server.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>6</b>Isolate child state <span>&mdash; temporary cwd and GOLDFISH_HOME only.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>5</b>Spawn modern client <span>&mdash; pin 2026-07-28 against the Bun server.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>6</b>Isolate child state <span>&mdash; temporary cwd and GOLDFISH_HOME only.</span></span></div>
         </div>
 
-        <div class="stage">
-          <h2>SDK + protocol migration <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+        <div class="stage done">
+          <h2>SDK + protocol migration <span class="chip done"><span class="ico">✓</span>Complete</span></h2>
           <p class="why">Move the adapter and tests to v2 while keeping every user-facing contract stable.</p>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>7</b>Split dependencies <span>&mdash; server at runtime, client for tests.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>8</b>Migrate handlers <span>&mdash; method strings and request context.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>9</b>Serve both eras <span>&mdash; use the server factory stdio entry.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>10</b>Preserve regressions <span>&mdash; legacy roots and modern no-roots coverage.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>7</b>Split dependencies <span>&mdash; server at runtime, client for tests.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>8</b>Migrate handlers <span>&mdash; method strings and request context.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>9</b>Serve both eras <span>&mdash; use the server factory stdio entry.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>10</b>Preserve regressions <span>&mdash; legacy roots and modern no-roots coverage.</span></span></div>
         </div>
 
-        <div class="stage">
-          <h2>Docs + release preparation <span class="chip queued"><span class="ico">○</span>Queued</span></h2>
+        <div class="stage done">
+          <h2>Docs + release preparation <span class="chip done"><span class="ico">✓</span>Complete</span></h2>
           <p class="why">Make current guidance and version surfaces match the shipped compatibility.</p>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>11</b>Update current docs <span>&mdash; dependency names and protocol behavior.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>12</b>Prepare 7.7.0 <span>&mdash; six version surfaces and changelog.</span></span></div>
-          <div class="trow"><span class="st queued">○ Queued</span><span class="what"><b>13</b>Verify <span>&mdash; typecheck, focused tests, full suite, reference audit.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>11</b>Update current docs <span>&mdash; dependency names and protocol behavior.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>12</b>Prepare 7.7.0 <span>&mdash; six version surfaces and changelog.</span></span></div>
+          <div class="trow"><span class="st done">✓ Done</span><span class="what"><b>13</b>Verify <span>&mdash; typecheck, focused tests, full suite, reference audit.</span></span></div>
         </div>
       </div>
-      <div class="card remains"><b>Remaining:</b> review the executable TDD plan, then start later only after explicit approval. No implementation, commit, push, or release has started.</div>
+      <div class="card remains"><b>Remaining:</b> implementation is complete and locally verified. Push, tag, publish, deploy, and release actions require separate approval.</div>
     </div>
 
     <div class="pane" id="decisions">

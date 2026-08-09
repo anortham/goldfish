@@ -3,12 +3,13 @@ id: mcp-sdk-v2-stateless-migration
 title: MCP SDK v2 stateless migration
 status: active
 created: 2026-08-08T21:41:50.085Z
-updated: 2026-08-09T01:05:51.471Z
+updated: 2026-08-09T01:09:31.010Z
 tags:
   - mcp
   - sdk-v2
   - stateless
   - migration
+  - complete
   - verification
 ---
 
@@ -26,7 +27,7 @@ Migrate Goldfish from `@modelcontextprotocol/sdk` v1 to the split MCP SDK v2 pac
 
 ## Constraints
 
-Implementation is complete in the isolated worktree `/home/murphy/source/goldfish/.worktrees/mcp-sdk-v2-stateless-migration`; only lead-owned branch-gate verification and source-control reconciliation remain. Follow TDD, Miller-first exploration, inline review, and repository worktree checks. Do not broaden the migration into modern roots MRTR or release actions.
+Implementation is complete in `/home/murphy/source/goldfish/.worktrees/mcp-sdk-v2-stateless-migration` on branch `mcp-sdk-v2-stateless-migration`. The original planning checkout remains separate and untouched by implementation. No push, tag, publish, deploy, or release action has been authorized. Do not broaden the migration into modern roots MRTR.
 
 ## References
 
@@ -39,4 +40,4 @@ Legacy clients retain current behavior, modern stateless clients work over stdio
 
 ## Status
 
-Tasks 1–3 are committed and reviewed. Running the final branch gate; no release actions are authorized in this run.
+Implementation complete and locally verified. Awaiting separate user direction for integration and release handling.

@@ -10,7 +10,7 @@
 
 **Architecture Quality:** Medium risk. The approved shape keeps protocol-era knowledge at the server boundary, preserves plain-data handler/storage interfaces, and tests both protocol eras through their real supported transports.
 
-**Status:** Ready for review; implementation explicitly deferred to a later session.
+**Status:** Implementation complete and locally verified; push, tag, publish, deploy, and release actions remain separately gated.
 
 **Approved design:** [MCP SDK v2 + Stateless Protocol Migration](2026-08-08-mcp-sdk-v2-stateless-migration-design.md)
 
@@ -477,13 +477,13 @@ Expected: PASS, proving Bun resolves the v2 server and stdio subpaths.
 - Suggested commit: `Migrate MCP server and legacy tests to SDK v2`
 
 **Acceptance criteria:**
-- [ ] `package.json` contains only the split v2 MCP dependencies with the exact requested ranges.
-- [ ] `bun.lock` resolves the v2 graph and no executable TypeScript import uses the monolithic SDK.
-- [ ] All SDK handler registrations use method strings and v2 context access.
-- [ ] The v2 client runs in explicit legacy mode with linked transport halves from one package.
-- [ ] Every existing legacy roots regression remains unchanged and passing.
-- [ ] Typecheck, build, server tests, and dependency contract test pass.
-- [ ] The slice is checkpointed and committed per `serial-worker-commit`.
+- [x] `package.json` contains only the split v2 MCP dependencies with the exact requested ranges.
+- [x] `bun.lock` resolves the v2 graph and no executable TypeScript import uses the monolithic SDK.
+- [x] All SDK handler registrations use method strings and v2 context access.
+- [x] The v2 client runs in explicit legacy mode with linked transport halves from one package.
+- [x] Every existing legacy roots regression remains unchanged and passing.
+- [x] Typecheck, build, server tests, and dependency contract test pass.
+- [x] The slice is checkpointed and committed per `serial-worker-commit`.
 
 ---
 
@@ -829,15 +829,15 @@ Expected: PASS.
 - Suggested commit: `Serve legacy and modern MCP clients over stdio`
 
 **Acceptance criteria:**
-- [ ] `startServer()` uses `serveStdio(() => createServer())` without rejecting legacy clients.
-- [ ] A spawned Bun child negotiates the modern era through the real stdio command.
-- [ ] The modern client lists exactly `brief`, `checkpoint`, and `recall`.
-- [ ] Modern env and explicit workspace precedence produce checkpoint files only in the expected temp directories.
-- [ ] A modern request without a trustworthy workspace skips push roots and returns the existing safe-refusal result.
-- [ ] The focused plain-data test proves the disabled path never invokes the roots callback.
-- [ ] Every spawned client closes in `finally`; no real home or repository memory path is used.
-- [ ] Modern tests, legacy server tests, typecheck, and build pass.
-- [ ] The slice is checkpointed and committed per `serial-worker-commit`.
+- [x] `startServer()` uses `serveStdio(() => createServer())` without rejecting legacy clients.
+- [x] A spawned Bun child negotiates the modern era through the real stdio command.
+- [x] The modern client lists exactly `brief`, `checkpoint`, and `recall`.
+- [x] Modern env and explicit workspace precedence produce checkpoint files only in the expected temp directories.
+- [x] A modern request without a trustworthy workspace skips push roots and returns the existing safe-refusal result.
+- [x] The focused plain-data test proves the disabled path never invokes the roots callback.
+- [x] Every spawned client closes in `finally`; no real home or repository memory path is used.
+- [x] Modern tests, legacy server tests, typecheck, and build pass.
+- [x] The slice is checkpointed and committed per `serial-worker-commit`.
 
 ---
 
@@ -1042,14 +1042,14 @@ Expected: PASS because the implementation HEAD is untagged. Do not create a tag.
 - Suggested commit: `Document MCP v2 compatibility and prepare 7.7.0`
 
 **Acceptance criteria:**
-- [ ] All maintained technical docs name `@modelcontextprotocol/server` and no longer describe the monolithic SDK as current.
-- [ ] `AGENTS.md` and `CLAUDE.md` remain byte-for-byte identical.
-- [ ] README and implementation docs describe dual-era stdio and the modern roots limitation accurately.
-- [ ] `SERVER_VERSION`, package, both plugin manifests, marketplace metadata, and README all say 7.7.0.
-- [ ] `CHANGELOG.md` documents the migration without changing historical entries.
-- [ ] Server tests, agent-assets tests, typecheck, and tag guard pass.
-- [ ] No tag, push, publish, deploy, or release occurs.
-- [ ] The slice is checkpointed and committed per `serial-worker-commit`.
+- [x] All maintained technical docs name `@modelcontextprotocol/server` and no longer describe the monolithic SDK as current.
+- [x] `AGENTS.md` and `CLAUDE.md` remain byte-for-byte identical.
+- [x] README and implementation docs describe dual-era stdio and the modern roots limitation accurately.
+- [x] `SERVER_VERSION`, package, both plugin manifests, marketplace metadata, and README all say 7.7.0.
+- [x] `CHANGELOG.md` documents the migration without changing historical entries.
+- [x] Server tests, agent-assets tests, typecheck, and tag guard pass.
+- [x] No tag, push, publish, deploy, or release occurs.
+- [x] The slice is checkpointed and committed per `serial-worker-commit`.
 
 ---
 
