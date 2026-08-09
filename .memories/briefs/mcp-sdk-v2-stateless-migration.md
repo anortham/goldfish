@@ -3,7 +3,7 @@ id: mcp-sdk-v2-stateless-migration
 title: MCP SDK v2 stateless migration
 status: active
 created: 2026-08-08T21:41:50.085Z
-updated: 2026-08-09T00:56:08.852Z
+updated: 2026-08-09T01:01:08.382Z
 tags:
   - mcp
   - sdk-v2
@@ -39,4 +39,4 @@ Legacy clients retain current behavior, modern stateless clients work over stdio
 
 ## Status
 
-Task 1 is committed and reviewed. Executing Task 2: modern stdio compatibility.
+Tasks 1 and 2 are committed and reviewed. Executing Task 3: compatibility documentation and 7.7.0 metadata.
