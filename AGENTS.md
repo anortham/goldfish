@@ -49,14 +49,20 @@ This is the **fifth iteration** of a developer memory system. We've learned hard
 
 **Checkpoint and brief markdown in `.memories/` is the source of truth.** Nothing derived is written to disk. The server keeps small in-memory caches (per-day corpus, search index) validated against file stats on every read, so external edits are always picked up.
 
-### Claude Code + Codex Plugin
+### Claude Code, Codex, and Cursor Plugins
 
-Goldfish installs as a plugin in both Claude Code and Codex:
+Goldfish ships plugin packaging for Claude Code, Codex, and Cursor:
 
 - **`.claude-plugin/plugin.json`** - Claude Code manifest (MCP server registration + skills + hooks)
 - **`.codex-plugin/plugin.json`** - Codex manifest (skills + hooks + root `.mcp.json` server map)
 - **`skills/`** - 6 skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
 - **`hooks/`** - SessionStart hook shared by both manifests: `goldfish-hooks.json` (one event, one command, matcher `startup|clear|compact`) runs `session-start.ts`, which prints `getHookContext()` (`src/hook-context.ts`) as raw stdout. Static content only, always exit 0, never any other event — the 7.0 hook-spam lesson is enforced by `tests/hooks.test.ts`
+
+### Cursor Native Plugin
+
+Cursor uses `.cursor-plugin/plugin.json`, `mcp.json`, and `hooks/cursor-hooks.json` as a native plugin bundle. The manifest exposes the same six skills, the stdio Bun server through `${PLUGIN_ROOT}/src/server.ts`, and one version-1 lowercase `sessionStart` hook with a 5-second timeout. `hooks/cursor-session-start.ts` returns JSON `{ additional_context: getHookContext() }` and reports failures without blocking startup.
+
+Cursor discovers repo-local skills from `.agents/skills/` as well as plugin skills, so slash invocation can use `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, and `/standup`. Its native hook injects static context on new conversations. If a mutating tool refuses because no workspace signal is available, registry recovery may help recall known projects but never establishes write binding; use a project `.cursor/mcp.json` entry with `type: "stdio"`, Bun plus an absolute `src/server.ts`, and `GOLDFISH_WORKSPACE=${workspaceFolder}`.
 
 ### Core Modules
 
@@ -343,7 +349,7 @@ Run the group matching your change instead of the full suite. Use the full suite
 | Recall | `bun test recall` | Aggregation, filtering, date windows |
 | Handlers | `bun test handlers` | MCP tool handler responses |
 | Server & registry | `bun test server registry` | Server startup, cross-project registry |
-| Hooks | `bun test hooks` | Hook payload content, session-start script, manifest wiring |
+| Hooks | `bun test hooks` | Shared and Cursor hook payloads, session-start scripts, manifest wiring |
 | Agent assets | `bun test agent-assets` | Skill mirror, AGENTS.md, usage-doc freshness, version-tag guard |
 
 These work because bun matches filenames containing the given substring.
@@ -354,18 +360,19 @@ These work because bun matches filenames containing the given substring.
 
 ## Version Bumping
 
-The version must be updated in six surfaces (tests in `tests/server.test.ts` enforce they stay in sync):
+The version must be updated in seven surfaces (tests in `tests/server.test.ts` enforce they stay in sync):
 
 1. `src/server.ts` (`SERVER_VERSION` constant) — canonical source of truth
 2. `package.json` (`version` field)
 3. `.claude-plugin/plugin.json` (`version` field)
 4. `.codex-plugin/plugin.json` (`version` field)
 5. `.claude-plugin/marketplace.json` (`plugins[0].version`)
-6. `README.md` version banner (`**Version X.Y.Z**`)
+6. `.cursor-plugin/plugin.json` (`version` field)
+7. `README.md` version banner (`**Version X.Y.Z**`)
 
 Add a `## [X.Y.Z]` section to `CHANGELOG.md` at the same time.
 
-After tagging a release, run `bun run check:version-tag` (also enforced by `tests/agent-assets.test.ts` when tests run on the tagged commit). The six-surface tests only prove the files agree with each other — they all pass when every surface is stale together; the tag check catches that.
+After tagging a release, run `bun run check:version-tag` (also enforced by `tests/agent-assets.test.ts` when tests run on the tagged commit). The seven-surface tests only prove the files agree with each other — they all pass when every surface is stale together; the tag check catches that.
 
 Push the branch and the tag in **separate** `git push` commands: pushing both in one command can coalesce the events on GitHub's side so the tag never triggers CI's `version-tag` job (observed on the 7.6.2 release).
 
@@ -386,7 +393,7 @@ Push the branch and the tag in **separate** `git push` commands: pushing both in
 - **`README.md`** - User-facing documentation (humans using Goldfish)
 - **`CONTRIBUTING.md`** - Detailed development guide (comprehensive patterns)
 - **`docs/IMPLEMENTATION.md`** - Technical specification
-- **`skills/`** - Claude Code plugin skills (slash commands): `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
+- **`skills/`** - Canonical plugin skills for Claude Code, Codex, and Cursor (slash commands): `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
 
 ---
 

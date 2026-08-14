@@ -31,7 +31,7 @@ This is **iteration #5** of a developer memory system. We've learned hard lesson
 ### What We're Building Now
 **Radical simplicity**: Markdown storage, BM25 search via Orama, quality-focused behavioral guidance. No database, no derived caches.
 
-**Goldfish is a cross-client MCP memory system.** Claude Code currently has the fullest adapter, with plugin packaging and skills on top of the shared MCP server.
+**Goldfish is a cross-client MCP memory system.** Claude Code, Codex, and Cursor have plugin packaging and skills on top of the shared MCP server; Cursor also has a native `sessionStart` hook and an explicit `.cursor/mcp.json` write-binding fallback.
 
 **We only add complexity when we have EVIDENCE we need it.**
 
@@ -391,7 +391,7 @@ git merge feature/checkpoint-storage
 ## Documentation
 
 Keep these docs updated:
-- `README.md` - User-facing documentation (humans)
+- `README.md` - User-facing documentation (humans, including Codex and Cursor setup)
 - `CLAUDE.md` - AI agent usage guide (how to use Goldfish)
 - `AGENTS.md` - Pointer to CLAUDE.md for AI agents
 - `CONTRIBUTING.md` - This file (development guide for contributors)
@@ -401,7 +401,7 @@ Keep these docs updated:
 
 ### Version Bumping
 
-A release updates the version in six surfaces plus `CHANGELOG.md`. `CLAUDE.md` § Version Bumping holds the canonical list — follow it there rather than a second copy here, and run `bun run check:version-tag` after tagging.
+A release updates the version in seven surfaces plus `CHANGELOG.md`, including `.cursor-plugin/plugin.json`. `CLAUDE.md` § Version Bumping holds the canonical list — follow it there rather than a second copy here, and run `bun run check:version-tag` after tagging.
 
 ---
 

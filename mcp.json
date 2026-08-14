@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "goldfish": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["run", "${PLUGIN_ROOT}/src/server.ts"]
+    }
+  }
+}

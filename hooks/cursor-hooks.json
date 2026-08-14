@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "bun \"./hooks/cursor-session-start.ts\"",
+        "timeout": 5
+      }
+    ]
+  }
+}

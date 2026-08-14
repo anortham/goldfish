@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { copyFile, mkdir, mkdtemp, readFile, rm } from 'fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -15,6 +15,10 @@ async function readJson<T>(...segments: string[]): Promise<T> {
   return JSON.parse(await readFile(join(repoRoot, ...segments), 'utf-8')) as T;
 }
 
+async function readJsonPath<T>(relativePath: string): Promise<T> {
+  return JSON.parse(await readFile(resolve(repoRoot, relativePath), 'utf-8')) as T;
+}
+
 interface HooksMap {
   hooks: Record<string, Array<{
     matcher?: string;
@@ -26,6 +30,30 @@ interface HooksMap {
       statusMessage?: string;
     }>;
   }>>;
+}
+
+interface CursorPluginManifest {
+  version: string;
+  skills: string;
+  hooks: string;
+  mcpServers: string;
+}
+
+interface CursorHook {
+  command: string;
+  timeout: number;
+}
+
+interface CursorHooksMap {
+  version: number;
+  hooks: {
+    sessionStart: CursorHook[];
+    [event: string]: unknown;
+  };
+}
+
+interface CursorMcpConfig {
+  mcpServers: Record<string, { type: string; command: string; args: string[] }>;
 }
 
 describe('hook context content', () => {
@@ -117,6 +145,75 @@ describe('session-start hook script', () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe('Cursor plugin assets', () => {
+  it('emits Cursor hook JSON with the Goldfish context and exits 0', () => {
+    const result = spawnSync(['bun', join(repoRoot, 'hooks', 'cursor-session-start.ts')], {
+      cwd: repoRoot,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout.toString())).toEqual({
+      additional_context: getHookContext()
+    });
+  });
+
+  it('keeps Cursor hook failures non-blocking', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'goldfish-cursor-hook-failure-'));
+    const scriptPath = join(tempRoot, 'cursor-session-start.ts');
+
+    try {
+      await copyFile(join(repoRoot, 'hooks', 'cursor-session-start.ts'), scriptPath);
+
+      const result = spawnSync(['bun', scriptPath], {
+        cwd: tempRoot,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toBe('');
+      expect(result.stderr.toString()).toContain('goldfish cursor session-start hook:');
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('declares only one versioned sessionStart command with a five-second timeout', async () => {
+    const map = await readJson<CursorHooksMap>('hooks', 'cursor-hooks.json');
+
+    expect(map.version).toBe(1);
+    expect(Object.keys(map.hooks)).toEqual(['sessionStart']);
+    expect(map.hooks.sessionStart).toHaveLength(1);
+    expect(map.hooks.sessionStart[0]).toEqual({
+      command: expect.stringContaining('cursor-session-start.ts'),
+      timeout: 5
+    });
+  });
+
+  it('registers a Cursor plugin manifest with current assets', async () => {
+    const { SERVER_VERSION } = await import('../src/server');
+    const manifest = await readJson<CursorPluginManifest>('.cursor-plugin', 'plugin.json');
+
+    expect(manifest.version).toBe(SERVER_VERSION);
+    expect(manifest.skills).toBe('./skills/');
+    expect(manifest.hooks).toBe('./hooks/cursor-hooks.json');
+    expect(manifest.mcpServers).toBe('./mcp.json');
+    expect((await stat(resolve(repoRoot, manifest.skills))).isDirectory()).toBe(true);
+    expect(await Bun.file(resolve(repoRoot, manifest.hooks)).exists()).toBe(true);
+    expect(await Bun.file(resolve(repoRoot, manifest.mcpServers)).exists()).toBe(true);
+  });
+
+  it('launches the Cursor MCP server through Bun and the plugin root', async () => {
+    const manifest = await readJson<CursorPluginManifest>('.cursor-plugin', 'plugin.json');
+    const config = await readJsonPath<CursorMcpConfig>(manifest.mcpServers);
+    const server = config.mcpServers.goldfish!;
+
+    expect(server.type).toBe('stdio');
+    expect(server.command).toBe('bun');
+    expect(server.args.join(' ')).toContain('${PLUGIN_ROOT}/src/server.ts');
   });
 });
 

@@ -431,9 +431,14 @@ describe('Server exports', () => {
       await Bun.file(new URL('../.codex-plugin/plugin.json', import.meta.url)).text()
     ) as { version: string };
 
+    const cursorPluginJson = JSON.parse(
+      await Bun.file(new URL('../.cursor-plugin/plugin.json', import.meta.url)).text()
+    ) as { version: string };
+
     expect(SERVER_VERSION).toBe(packageJson.version);
     expect(SERVER_VERSION).toBe(pluginJson.version);
     expect(SERVER_VERSION).toBe(codexPluginJson.version);
+    expect(SERVER_VERSION).toBe(cursorPluginJson.version);
   });
 
   it('keeps marketplace metadata and README inventory aligned with the current release', async () => {
@@ -525,15 +530,42 @@ describe('Server exports', () => {
     }
   });
 
+  it('keeps the Codex plugin skill inventory explicit and complete', async () => {
+    const { readdir } = await import('fs/promises');
+    const codexPlugin = JSON.parse(
+      await Bun.file(new URL('../.codex-plugin/plugin.json', import.meta.url)).text()
+    ) as { skills: string };
+    const skillDirs = (await readdir(new URL('../skills/', import.meta.url), { withFileTypes: true }))
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name)
+      .sort();
+
+    expect(codexPlugin.skills).toBe('./skills/');
+    expect(skillDirs).toEqual([
+      'brief',
+      'brief-status',
+      'checkpoint',
+      'handoff',
+      'recall',
+      'standup'
+    ]);
+  });
+
   it('documents Goldfish as a cross-client memory system with first-class client setup guides', async () => {
     const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
 
     expect(readme).toContain('cross-client MCP memory system');
     expect(readme).toContain('### Claude Code');
     expect(readme).toContain('### Codex');
-    expect(readme).toContain('Codex Desktop does not send MCP roots');
-    expect(readme).toContain('project-local `.codex/config.toml`');
-    expect(readme).toContain('env = { GOLDFISH_WORKSPACE = "/absolute/path/to/your/project" }');
+    expect(readme).toContain('codex plugin marketplace add');
+    expect(readme).toContain('trust Goldfish');
+    expect(readme).toContain('`.agents/skills`');
+    expect(readme).toContain('Manual alternative');
+    expect(readme).toContain('### Cursor');
+    expect(readme).toContain('local plugin');
+    expect(readme).toContain('reload');
+    expect(readme).toContain('native hook');
+    expect(readme).toContain('project `.cursor/mcp.json`');
     expect(readme).toContain('### OpenCode');
     expect(readme).toContain('### VS Code with GitHub Copilot');
   });

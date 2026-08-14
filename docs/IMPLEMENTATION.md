@@ -170,9 +170,14 @@ goldfish/
 ├── .claude-plugin/plugin.json   # Claude Code manifest (MCP server + skills + hooks)
 ├── .codex-plugin/plugin.json    # Codex manifest (skills + hooks + mcpServers)
 ├── .mcp.json                    # Canonical Codex MCP server map
+├── .cursor-plugin/plugin.json   # Native Cursor Plugin manifest
+├── mcp.json                     # Cursor stdio MCP server map
 ├── hooks/
 │   ├── goldfish-hooks.json      # SessionStart map shared by both manifests
-│   └── session-start.ts         # Prints src/hook-context.ts payload to stdout
+│   ├── session-start.ts         # Prints src/hook-context.ts payload to stdout
+│   ├── cursor-hooks.json        # Native Cursor version-1 sessionStart map
+│   └── cursor-session-start.ts  # Prints Cursor additional_context JSON
+├── .agents/skills/              # Repo-local skill mirror for Codex/OpenCode/Cursor
 ├── skills/
 │   ├── brief/SKILL.md
 │   ├── brief-status/SKILL.md
@@ -189,6 +194,12 @@ goldfish/
 ### SessionStart Hook
 
 Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `SessionStart` event, matcher `startup|clear|compact` (never `resume` — a resumed transcript already contains the prior injection), one `bun` command with a PowerShell `commandWindows` variant. The script is branchless — both harnesses inject a hook's raw stdout as context, so no harness detection is needed. Payload composition lives in `src/hook-context.ts`, embeds `getInstructions()` verbatim, and stays within Goldfish's 10,000-character safety budget enforced by `tests/hooks.test.ts`. Static content only; the hook makes no tool calls and writes no state.
+
+### Cursor Native Hook
+
+Cursor uses a separate native hook map rather than the Claude/Codex compatibility map. `hooks/cursor-hooks.json` declares top-level `version: 1` and exactly one lowercase `sessionStart` command with a 5-second timeout. `hooks/cursor-session-start.ts` wraps `getHookContext()` as JSON `{ "additional_context": "..." }`, reports import or setup failures to stderr, and exits successfully so startup is never blocked.
+
+The Cursor Plugin manifest (`.cursor-plugin/plugin.json`) points to `skills/`, `hooks/cursor-hooks.json`, and `mcp.json`. The MCP map is stdio: Bun launches `${PLUGIN_ROOT}/src/server.ts`. If a Cursor mutating tool has no workspace signal, registry recovery remains useful for recall but never binds writes; a project `.cursor/mcp.json` entry with an absolute server path and `GOLDFISH_WORKSPACE=${workspaceFolder}` is the write-safe fallback.
 
 ---
 
@@ -262,6 +273,7 @@ We achieve this through:
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
 11. **Hooks tier (7.5+)** - SessionStart guidance injection for Claude Code + Codex plugin installs; Codex manifest bundles the MCP server
+12. **Cursor Plugin** - Native Cursor manifest, stdio MCP map, 6 bundled skills, and version-1 `sessionStart` hook with explicit project write fallback
 
 **Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/server`, `@orama/orama`, and `yaml`. The stdio entry serves legacy 2025-era and modern 2026-07-28 clients; legacy roots discovery is preserved, while modern clients use explicit/env/cwd recovery and safe refusal.
 

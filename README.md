@@ -2,7 +2,7 @@
 
 An evidence ledger for AI coding sessions. Checkpoints capture what changed and why; briefs hold durable strategic direction; recall pulls both back when the next session needs context. Everything lives as markdown in your repo, so it travels with the code, diffs in PRs, and outlasts any single harness.
 
-Goldfish is a cross-client MCP memory system. Claude Code and Codex both install as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
+Goldfish is a cross-client MCP memory system. Claude Code, Codex, and Cursor can install it as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
 **Version 7.7.0** -- MCP SDK v2: Goldfish serves legacy 2025-era and modern 2026-07-28 clients over the same stdio command while preserving legacy roots compatibility. See CHANGELOG.md for details.
 
@@ -68,23 +68,48 @@ Once the plugin is loaded, Goldfish works through manual invocation and agent-dr
 
 ### Cursor
 
-Cursor runs Goldfish as a plugin. Note a client quirk that affects workspace binding: Cursor advertises MCP `roots` to **user-config** MCP servers (registered in `~/.cursor/mcp.json`) but **not** to plugin-launched servers, and it spawns plugin servers with `cwd` set to your home directory rather than the open project. That means a freshly-installed Goldfish plugin in a brand-new project — before any checkpoint has registered it — has no project path signal and will refuse mutating tools with guidance rather than guess.
+Cursor runs Goldfish as a native Cursor Plugin. The bundle includes the MCP server, all 6 skills, and a native hook (`sessionStart`). Cursor discovers the repo-local `.agents/skills/` mirror too, so the skills can be invoked with `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, and `/standup` when the client is using repo-local skill discovery.
 
-Goldfish 7.3+ recovers automatically once a project is known: if `cwd` or an ancestor is in the cross-project registry, or a parent directory has `.memories/` or `.git/`, recovery resolves the project root without roots. Until that first checkpoint lands, the reliable escape hatch is the same as Codex Desktop — register Goldfish per-project with an explicit `GOLDFISH_WORKSPACE`:
+To test the local plugin, place the repository at `~/.cursor/plugins/local/goldfish` with a symlink on macOS/Linux, a junction on Windows, or a full copy on either platform.
+
+On macOS/Linux, create a symlink from the absolute Goldfish checkout:
+
+```bash
+mkdir -p ~/.cursor/plugins/local
+ln -s /absolute/path/to/goldfish ~/.cursor/plugins/local/goldfish
+```
+
+On Windows PowerShell, create a junction:
+
+```powershell
+$cursorLocal = Join-Path $env:USERPROFILE ".cursor\plugins\local"
+$pluginPath = Join-Path $cursorLocal "goldfish"
+New-Item -ItemType Directory -Force -Path $cursorLocal | Out-Null
+New-Item -ItemType Junction -Path $pluginPath -Target "C:\path\to\goldfish"
+# Or copy instead of creating the junction:
+# Copy-Item -Recurse -Force "C:\path\to\goldfish" $pluginPath
+```
+
+Restart Cursor or run **Developer: Reload Window**, then open **Customize** and verify that Goldfish appears as an installed plugin. The native assets are `.cursor-plugin/plugin.json`, `mcp.json`, `skills/`, and `hooks/cursor-hooks.json`.
+
+Workspace binding depends on the client and configuration. If Goldfish refuses a mutating tool because no workspace signal is available, use the project `.cursor/mcp.json` fallback below. Registry recovery can identify a known project for recall, but it is recall-only and never authorizes writes; do not treat one checkpoint as enabling writes for a newly opened project.
+
+For reliable writes, use the project `.cursor/mcp.json` fallback with an explicit workspace:
 
 ```json
 {
   "mcpServers": {
     "goldfish": {
+      "type": "stdio",
       "command": "bun",
       "args": ["run", "/absolute/path/to/goldfish/src/server.ts"],
-      "env": { "GOLDFISH_WORKSPACE": "/absolute/path/to/your/project" }
+      "env": { "GOLDFISH_WORKSPACE": "${workspaceFolder}" }
     }
   }
 }
 ```
 
-Add that to the project's `.cursor/mcp.json` (or your user config scoped to the project) for first use. Once you've checkpointed there once, the plugin's recovery takes over and the override is no longer needed.
+Add that to the project `.cursor/mcp.json` (or user config scoped to the project) before using mutating tools. Keep the absolute path to `src/server.ts`; `${workspaceFolder}` binds the server to the open project.
 
 ### Codex CLI / Desktop
 
@@ -117,7 +142,7 @@ env = { GOLDFISH_WORKSPACE = "/absolute/path/to/your/project" }
 
 You can put Goldfish in `~/.codex/config.toml` too, but that pins `GOLDFISH_WORKSPACE` to one repo. For Codex Desktop across multiple repos, keep the server entry in each project's `.codex/config.toml`.
 
-Goldfish skills in `.agents/skills` are discovered automatically when you launch Codex inside the repository.
+Goldfish skills in `.agents/skills` are discovered automatically when you launch Codex inside the repository; use the six skill names directly when your Codex client exposes slash commands.
 
 ### OpenCode
 
@@ -300,7 +325,7 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 6 skills. Claude Code and Codex plugin installs expose them directly; OpenCode (and Codex without the plugin) discovers the same skill content from `.agents/skills/`.
+Goldfish ships 6 skills. Claude Code, Codex, and Cursor plugin installs expose them directly; OpenCode (and Codex or Cursor without the plugin) discovers the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
@@ -445,9 +470,14 @@ goldfish/
   .codex-plugin/
     plugin.json           # Codex plugin manifest (tools + skills + hooks)
   .mcp.json               # Canonical Codex MCP server map
+  .cursor-plugin/
+    plugin.json           # Native Cursor plugin manifest
+  mcp.json                # Cursor stdio MCP server map
   hooks/
     goldfish-hooks.json   # SessionStart hook map, shared by both manifests
     session-start.ts      # Prints the session guidance to stdout
+    cursor-hooks.json     # Native Cursor sessionStart hook map
+    cursor-session-start.ts # Prints Cursor additional_context JSON
   skills/
     brief/SKILL.md        # Canonical brief skill
     brief-status/SKILL.md # Canonical brief-status skill
@@ -537,6 +567,12 @@ Benchmarked on Apple Silicon (M-series).
 1. Verify the plugin is installed: `claude plugin list`
 2. Ensure Bun is installed and available in your PATH
 3. Restart Claude Code (plugins load at startup)
+4. **Codex:** run `codex plugin list`, review `/hooks` and trust Goldfish's SessionStart hook, then start a new thread
+5. **Cursor:** verify Goldfish under **Customize**; restart Cursor or run **Developer: Reload Window** after changing the local plugin copy
+
+### Cursor writes are refused
+
+If Goldfish refuses a Cursor write because no workspace signal is available, add the `type: "stdio"` entry with the absolute Bun server path and `GOLDFISH_WORKSPACE: "${workspaceFolder}"` to the project `.cursor/mcp.json`, then reload the window. Registry recovery helps recall known projects, but never authorizes writes.
 
 ### Checkpoints not saving
 
@@ -561,7 +597,8 @@ Benchmarked on Apple Silicon (M-series).
 1. The hook fires only in sessions started **after** the plugin was installed or updated -- start a new session
 2. **Claude Code:** check `/hooks` for Goldfish's SessionStart entry; verify the plugin is enabled (`claude plugin list`)
 3. **Codex:** plugin hooks stay silent until trusted -- run `/hooks`, review and trust the Goldfish SessionStart hook, then start a new thread
-4. The hook runs `bun`, so Bun must be on your PATH (already true if the MCP tools work)
+4. **Cursor:** verify the native `sessionStart` hook under **Customize**, then restart or run **Developer: Reload Window** and start a new conversation
+5. The hook runs `bun`, so Bun must be on your PATH (already true if the MCP tools work)
 
 ---
 
