@@ -4,9 +4,11 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [7.8.0] - 2026-08-18
 
 ### Added
+
+- First-class Cursor plugin setup: `.cursor-plugin/plugin.json` manifest, `mcp.json` server map, and a native `sessionStart` hook (`hooks/cursor-hooks.json` running `hooks/cursor-session-start.ts`) that injects the shared Goldfish guidance
 
 - Checkpoint `description_file` parameter: pass a workspace-relative (or absolute) path to a UTF-8 markdown file instead of an inline `description`. Large writeups skip tool-call JSON, which hosts reject when the model emits unescaped `\` (Windows paths), unescaped control characters, or truncated output — verified against a real Windows report where three ~4KB inline checkpoints failed with `InputValidationError` before Goldfish ran (related Claude Code issues #5504, #14442). Exactly one of `description` / `description_file` is required; backslash separators in relative paths are normalized; the file is never deleted
 
