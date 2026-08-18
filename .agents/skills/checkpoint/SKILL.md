@@ -49,6 +49,16 @@ Concurrent saves could corrupt the daily markdown file.
 
 **BAD (no context):** "Fixed file writing bug"
 
+## Long Descriptions — Use description_file
+
+Large inline descriptions can break the tool call before Goldfish runs. Unescaped `\` from Windows paths and real newlines corrupt the tool-call JSON, and the host rejects it.
+
+- Keep the inline `description` under ~2KB.
+- For a longer writeup, write the markdown to a file and pass `description_file` (a workspace-relative path) instead of `description`. Pass exactly one of the two.
+- Draft under `.memories/` (for example `.memories/draft.md`) — that directory is excluded from the captured changed-files list.
+- Delete the draft after the checkpoint saves. Goldfish does not delete it.
+- Use `/` path separators, even on Windows. Do not draft in `/tmp` on Windows — Git Bash `/tmp` is invisible to native Windows tools.
+
 ## Structured Fields
 
 Use `type` to classify your checkpoint for better searchability:

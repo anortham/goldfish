@@ -159,7 +159,8 @@ export interface ScoredCheckpoint {
 /** MCP tool argument types for compile-time safety */
 
 export interface CheckpointArgs {
-  description: string;
+  description?: string;
+  description_file?: string;
   tags?: string[] | string;
   type?: 'checkpoint' | 'decision' | 'incident' | 'learning';
   context?: string;

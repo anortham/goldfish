@@ -2,7 +2,8 @@
  * Checkpoint tool handler
  */
 
-import { relative, sep } from 'path';
+import { readFile } from 'fs/promises';
+import { isAbsolute, join, relative, sep } from 'path';
 import { getBrief } from '../briefs.js';
 import { saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
@@ -34,6 +35,30 @@ function coerceArray(value: unknown): string[] | undefined {
 }
 
 /**
+ * Read a checkpoint description from a file so large writeups skip
+ * tool-call JSON entirely (hosts reject unescaped `\` and control
+ * characters before the server ever sees the call).
+ */
+async function readDescriptionFile(path: string, workspace: string): Promise<string> {
+  const resolved = isAbsolute(path)
+    ? path
+    : join(workspace, path.split('\\').join('/'));
+
+  let content: string;
+  try {
+    content = await readFile(resolved, 'utf-8');
+  } catch {
+    throw new Error(`Could not read description_file: ${resolved}`);
+  }
+
+  const trimmed = content.trim();
+  if (!trimmed) {
+    throw new Error(`description_file is empty: ${resolved}`);
+  }
+  return trimmed;
+}
+
+/**
  * Handle checkpoint tool calls
  */
 export async function handleCheckpoint(args: CheckpointArgs) {
@@ -55,12 +80,20 @@ export async function handleCheckpoint(args: CheckpointArgs) {
   const symbols = coerceArray(args.symbols);
   const unknowns = coerceArray(args.unknowns);
 
-  if (!description) {
-    throw new Error('Description is required');
+  const descriptionFile = args.description_file;
+  if (description && descriptionFile) {
+    throw new Error('Provide description or description_file, not both');
+  }
+  if (!description && !descriptionFile) {
+    throw new Error('Description is required: pass description or description_file');
   }
 
   assertProjectWorkspace(workspace, 'checkpoint writes');
   const ws = resolveWorkspace(workspace);
+
+  const resolvedDescription = descriptionFile
+    ? await readDescriptionFile(descriptionFile, ws)
+    : description!;
 
   if (confidence !== undefined) {
     const parsed = Number(confidence);
@@ -70,7 +103,7 @@ export async function handleCheckpoint(args: CheckpointArgs) {
   }
 
   const checkpointInput: CheckpointInput = {
-    description,
+    description: resolvedDescription,
     ...(tags ? { tags } : {}),
     ...(type ? { type } : {}),
     ...(context ? { context } : {}),

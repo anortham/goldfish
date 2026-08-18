@@ -11,6 +11,13 @@
 ## From Real Usage
 - [ ] Tune skill language based on session observations
 - [ ] Evaluate checkpoint frequency in practice (too many? too few?)
+- [x] Windows / MCP JSON: checkpoint `description` payloads fail before Goldfish runs — fixed: `description_file` parameter + skill/tool guidance (see CHANGELOG Unreleased)
+  - Report: Claude Code + Goldfish plugin on Windows (`C:/Users/keaedwar/source/repos/ResearchFunding`).
+  - Symptom: `mcp_plugin_goldfish_goldfish_checkpoint` → `InputValidationError: ... input that could not be parsed as JSON` (unescaped backslashes, unescaped control characters, or truncated output). Brief save succeeded. Three ~4KB markdown checkpoint attempts failed; a shorter fourth succeeded (`checkpoint_088f7198`).
+  - Goldfish never saw the failed calls — the host rejected the tool args.
+  - Related agent mistake (not Goldfish): wrote `/tmp/brief_body.md` then `head`/`python` couldn't find it. Git Bash `/tmp` ≠ native Windows Python / `%TEMP%`.
+  - Likely cause: large `description` with real newlines or unescaped `\` from `C:\Users\...` in MCP JSON. Skill currently tells agents to embed `\n` + markdown in the arg.
+  - Candidate fix: add `description_file` (workspace-relative path) so big writeups skip MCP JSON; also tell skills to use `/` in Windows paths and keep inline descriptions short.
 
 ## Potential Future Features (Evidence Required)
 - [ ] Checkpoint pruning/archival (if `.memories/` size becomes a real burden)

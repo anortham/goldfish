@@ -244,6 +244,95 @@ describe('Readable markdown responses', () => {
       ).rejects.toThrow('Description is required');
     });
 
+    it('saves a checkpoint from a workspace-relative description_file', async () => {
+      const body = '## Long writeup\n\nSaved via file to skip MCP JSON.\n\n- **Impact:** works on Windows';
+      await writeFile(join(TEST_DIR, 'draft.md'), body, 'utf-8');
+
+      const result = await handleCheckpoint({
+        description_file: 'draft.md',
+        workspace: TEST_DIR
+      });
+
+      expect(result.content[0]!.text).toContain('Checkpoint saved');
+      const today = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+      expect(checkpoints.find(c => c.description === body)).toBeDefined();
+    });
+
+    it('saves a checkpoint from an absolute description_file path', async () => {
+      const body = '## Absolute path draft';
+      const absolute = join(TEST_DIR, 'absolute-draft.md');
+      await writeFile(absolute, body, 'utf-8');
+
+      await handleCheckpoint({
+        description_file: absolute,
+        workspace: TEST_DIR
+      });
+
+      const today = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+      expect(checkpoints.find(c => c.description === body)).toBeDefined();
+    });
+
+    it('normalizes backslash separators in a relative description_file path', async () => {
+      const body = '## Windows-style relative path';
+      await mkdir(join(TEST_DIR, 'notes'), { recursive: true });
+      await writeFile(join(TEST_DIR, 'notes', 'draft.md'), body, 'utf-8');
+
+      await handleCheckpoint({
+        description_file: 'notes\\draft.md',
+        workspace: TEST_DIR
+      });
+
+      const today = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+      expect(checkpoints.find(c => c.description === body)).toBeDefined();
+    });
+
+    it('leaves the description_file in place after the save', async () => {
+      const draftPath = join(TEST_DIR, 'keep-draft.md');
+      await writeFile(draftPath, '## Keep me', 'utf-8');
+
+      await handleCheckpoint({
+        description_file: 'keep-draft.md',
+        workspace: TEST_DIR
+      });
+
+      expect((await stat(draftPath)).isFile()).toBe(true);
+    });
+
+    it('rejects description and description_file together', async () => {
+      await writeFile(join(TEST_DIR, 'both-draft.md'), '## Draft', 'utf-8');
+
+      await expect(
+        handleCheckpoint({
+          description: 'Inline',
+          description_file: 'both-draft.md',
+          workspace: TEST_DIR
+        })
+      ).rejects.toThrow(/not both/i);
+    });
+
+    it('reports the resolved path when description_file is missing', async () => {
+      await expect(
+        handleCheckpoint({
+          description_file: 'missing-draft.md',
+          workspace: TEST_DIR
+        })
+      ).rejects.toThrow(join(TEST_DIR, 'missing-draft.md'));
+    });
+
+    it('rejects an empty description_file', async () => {
+      await writeFile(join(TEST_DIR, 'empty-draft.md'), '   \n\n', 'utf-8');
+
+      await expect(
+        handleCheckpoint({
+          description_file: 'empty-draft.md',
+          workspace: TEST_DIR
+        })
+      ).rejects.toThrow(/empty/i);
+    });
+
     it('rejects workspace="all" for checkpoint writes', async () => {
       await expect(
         handleCheckpoint({

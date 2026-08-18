@@ -16,7 +16,7 @@ import { getInstructions } from './instructions';
  */
 export const TOOL_QUICK_REFERENCE = `## Tool Quick Reference
 
-- \`checkpoint({ description, type?, tags?, symbols?, next?, ... })\` — save a progress checkpoint. Write the description as structured markdown covering WHAT, WHY, HOW, and IMPACT.
+- \`checkpoint({ description, type?, tags?, symbols?, next?, ... })\` — save a progress checkpoint. Write the description as structured markdown covering WHAT, WHY, HOW, and IMPACT. For bodies over ~2KB pass \`description_file\` (a workspace-relative path) instead of \`description\` — long inline text can break tool-call JSON.
 - \`recall({ search?, days?, since?, limit?, full?, workspace?, type?, tags?, file?, symbol? })\` — restore prior context when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant.
 - \`brief({ action: "save" | "get" | "list" | "activate" | "update" | "complete" | "delete", title?, content?, ... })\` — durable strategic direction for the workspace.
 

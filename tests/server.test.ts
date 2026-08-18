@@ -235,6 +235,20 @@ describe('Tool descriptions', () => {
     expect(tools.find(t => t.name === 'consolidate')).toBeUndefined();
   });
 
+  it('exposes description_file as an alternative to inline description', async () => {
+    const { getTools } = await import('../src/server');
+
+    const checkpointTool = getTools().find(t => t.name === 'checkpoint')!;
+    const schema = checkpointTool.inputSchema as {
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
+
+    expect(schema.properties.description_file).toBeDefined();
+    expect(schema.required ?? []).not.toContain('description');
+    expect(checkpointTool.description).toContain('description_file');
+  });
+
   it('uses consistent workspace parameter description across tools', async () => {
     const { getTools } = await import('../src/server');
 
