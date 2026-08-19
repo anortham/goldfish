@@ -4,7 +4,7 @@ An evidence ledger for AI coding sessions. Checkpoints capture what changed and 
 
 Goldfish is a cross-client MCP memory system. Claude Code, Codex, and Cursor can install it as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
-**Version 7.8.0** -- Checkpoint `description_file`: long writeups pass through a file instead of tool-call JSON, so host-side escaping failures (seen on Windows) can no longer lose them. See CHANGELOG.md for details.
+**Version 7.9.0** -- Audit-complete checkpoints: worktree-accurate git capture (`git.worktree` records which tree produced the save) and a server-observed `actor` block (harness, model, user, git identity) that agents cannot spoof through tool arguments. See CHANGELOG.md for details.
 
 ---
 

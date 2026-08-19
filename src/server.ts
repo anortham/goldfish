@@ -22,7 +22,7 @@ import {
 import { recoverWorkspace, formatKnownProjects, type RecoveredWorkspace } from './workspace-recovery.js';
 import { listRegisteredProjects } from './registry.js';
 
-export const SERVER_VERSION = '7.8.0';
+export const SERVER_VERSION = '7.9.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
 export const DEFAULT_SESSION_KEY = 'default';
 const ROOTS_LIST_TIMEOUT_MS = 500;
