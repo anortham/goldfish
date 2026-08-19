@@ -49,9 +49,20 @@ export function __setCheckpointDependenciesForTests(
 
 const ACTOR_KEYS = ['harness', 'model', 'session', 'user', 'git_user', 'git_email'] as const;
 
+const MAX_ACTOR_VALUE_LENGTH = 200;
+
+/**
+ * Identity values reach single-line response output verbatim, and git config
+ * is repo-controlled — collapse control characters so a hostile value cannot
+ * forge response lines, and cap length so it cannot flood them.
+ */
 function cleanActorValue(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+  if (value === undefined) return undefined;
+  const collapsed = value
+    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    .trim()
+    .slice(0, MAX_ACTOR_VALUE_LENGTH);
+  return collapsed ? collapsed : undefined;
 }
 
 /**
@@ -526,8 +537,20 @@ export async function saveCheckpoint(
   }
 
   try {
-    const user = checkpointDependencies.getOsUsername?.();
-    const identity = (await checkpointDependencies.getGitIdentity?.(capture.cwd)) ?? {};
+    let user: string | undefined;
+    try {
+      user = checkpointDependencies.getOsUsername?.();
+    } catch {
+      user = undefined;
+    }
+
+    let identity: { name?: string; email?: string } = {};
+    try {
+      identity = (await checkpointDependencies.getGitIdentity?.(capture.cwd)) ?? {};
+    } catch {
+      identity = {};
+    }
+
     const actor = assembleActor(
       observed,
       { user, gitUser: identity.name, gitEmail: identity.email },
@@ -535,7 +558,7 @@ export async function saveCheckpoint(
     );
     if (actor) checkpoint.actor = actor;
   } catch {
-    // Identity failure never fails the save; the git context captured above stays as-is
+    // Backstop: identity failure never fails the save; the git context captured above stays as-is
   }
 
   // Auto-generate summary for long descriptions

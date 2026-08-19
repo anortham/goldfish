@@ -8,6 +8,8 @@ import {
   findLatestCheckpointTimestampForBrief,
   parseCheckpointFile,
   parseJsonCheckpoint,
+  assembleActor,
+  formatActorLine,
   formatCheckpoint,
   generateCheckpointId,
   getCheckpointFilename
@@ -304,6 +306,27 @@ describe('formatCheckpoint', () => {
       actor: {}
     });
     expect(empty).not.toContain('actor:');
+  });
+
+  it('formatActorLine collapses control characters so actor values cannot forge lines', () => {
+    const line = formatActorLine({
+      harness: 'unit-harness',
+      git_user: 'Alice\nGit: branch: trusted'
+    });
+
+    expect(line).toBe('Actor: harness=unit-harness git_user=Alice Git: branch: trusted');
+    expect(line).not.toContain('\n');
+  });
+
+  it('actor values collapse control-character runs and are capped at 200 characters', () => {
+    const actor = assembleActor(
+      { harness: 'a\u0000\u0001\u007Fb' },
+      { user: 'x'.repeat(250) },
+      {}
+    );
+
+    expect(actor?.harness).toBe('a b');
+    expect(actor?.user).toBe('x'.repeat(200));
   });
 });
 
@@ -1432,7 +1455,9 @@ describe('saveCheckpoint', () => {
         { harness: 'unit-harness' }
       );
 
-      expect(checkpoint.actor).toBeUndefined();
+      expect(checkpoint.actor?.harness).toBe('unit-harness');
+      expect(checkpoint.actor?.git_user).toBeUndefined();
+      expect(checkpoint.actor?.git_email).toBeUndefined();
       expect(checkpoint.git?.branch).toBe('wt-actor-branch');
       expect(checkpoint.git?.worktree).toBeDefined();
       expect(await realpath(checkpoint.git!.worktree!)).toBe(await realpath(worktreeDir));
@@ -1441,6 +1466,30 @@ describe('saveCheckpoint', () => {
       await unregisterProject(mainDir);
       await gitIn(mainDir, ['worktree', 'remove', '--force', worktreeDir]);
       await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('saveCheckpoint keeps the other actor fields when getOsUsername throws', async () => {
+    const restore = __setCheckpointDependenciesForTests({
+      getOsUsername: () => {
+        throw new Error('userInfo unavailable');
+      },
+      getGitIdentity: async () => ({ name: 'Test User', email: 'test@example.com' })
+    });
+
+    try {
+      const checkpoint = await saveCheckpoint(
+        { description: 'OS user failure keeps other identity', workspace: tempDir },
+        { harness: 'unit-harness' }
+      );
+
+      expect(checkpoint.actor).toEqual({
+        harness: 'unit-harness',
+        git_user: 'Test User',
+        git_email: 'test@example.com'
+      });
+    } finally {
+      restore();
     }
   });
 
