@@ -15,9 +15,10 @@ import {
 import type { Checkpoint, CheckpointInput } from '../src/types';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
 import { listRegisteredProjects, unregisterProject } from '../src/registry';
+import { getGitContext } from '../src/git';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { rm, readdir, readFile, writeFile, mkdir, stat, utimes } from 'fs/promises';
+import { rm, readdir, readFile, writeFile, mkdir, mkdtemp, realpath, stat, utimes } from 'fs/promises';
 
 let tempDir: string;
 let tempHome: string;
@@ -241,11 +242,43 @@ describe('formatCheckpoint', () => {
     expect(formatted).toContain('confidence: 4');
     expect(formatted).toContain('unknowns:');
   });
+
+  it('formatCheckpoint + parseCheckpointFile round-trips a git object that has only worktree', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_wt111111',
+      timestamp: '2026-08-19T12:00:00.000Z',
+      description: 'Worktree-only git context',
+      git: { worktree: '/home/user/source/project/.worktrees/example' }
+    };
+
+    const content = formatCheckpoint(checkpoint);
+    expect(content).toContain('worktree: /home/user/source/project/.worktrees/example');
+
+    const parsed = parseCheckpointFile(content);
+    expect(parsed.git).toEqual({ worktree: '/home/user/source/project/.worktrees/example' });
+  });
 });
 
 // ─── parseCheckpointFile ─────────────────────────────────────────────
 
 describe('parseCheckpointFile', () => {
+  it('old file without git.worktree still parses', () => {
+    const content = `---
+id: checkpoint_old11111
+timestamp: "2026-01-05T10:00:00.000Z"
+git:
+  branch: main
+  commit: abc1234
+---
+
+Old checkpoint without worktree
+`;
+
+    const parsed = parseCheckpointFile(content);
+    expect(parsed.git).toEqual({ branch: 'main', commit: 'abc1234' });
+    expect(parsed.git?.worktree).toBeUndefined();
+  });
+
   it('parses checkpoint with all fields', () => {
     const content = `---
 id: checkpoint_a1b2c3d4
@@ -1098,6 +1131,74 @@ describe('saveCheckpoint', () => {
       });
 
       expect(receivedCwd).toBe(tempDir);
+    } finally {
+      restore();
+    }
+  });
+
+  it('saveCheckpoint from a worktree writes under the main workspace .memories/ with the worktree branch', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'g2-save-worktree-'));
+    const mainDir = join(baseDir, 'main');
+    const worktreeDir = join(baseDir, 'wt');
+    await mkdir(mainDir, { recursive: true });
+    const gitIn = (cwd: string, args: string[]) =>
+      Bun.spawn(['git', ...args], { cwd, stdout: 'ignore', stderr: 'ignore' }).exited;
+    await gitIn(mainDir, ['init', '-b', 'main']);
+    await writeFile(join(mainDir, 'file.txt'), 'initial');
+    await gitIn(mainDir, ['add', 'file.txt']);
+    await gitIn(mainDir, ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'init']);
+    await gitIn(mainDir, ['worktree', 'add', worktreeDir, '-b', 'wt-branch']);
+
+    const restore = __setCheckpointDependenciesForTests({
+      getGitContext,
+      getCallerCwd: () => worktreeDir
+    });
+
+    try {
+      const checkpoint = await saveCheckpoint({
+        description: 'Saved from a sibling worktree',
+        workspace: mainDir
+      });
+
+      expect(checkpoint.git?.branch).toBe('wt-branch');
+      expect(checkpoint.git?.worktree).toBeDefined();
+      expect(await realpath(checkpoint.git!.worktree!)).toBe(await realpath(worktreeDir));
+
+      const date = checkpoint.timestamp.split('T')[0]!;
+      const savedFiles = await readdir(join(getMemoriesDir(mainDir), date));
+      expect(savedFiles).toHaveLength(1);
+    } finally {
+      restore();
+      await unregisterProject(mainDir);
+      await gitIn(mainDir, ['worktree', 'remove', '--force', worktreeDir]);
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('saveCheckpoint does not throw when resolveGitCaptureCwd throws', async () => {
+    let receivedCwd: string | undefined;
+    let callerCwdCalls = 0;
+    const restore = __setCheckpointDependenciesForTests({
+      getGitContext: (cwd?: string) => {
+        receivedCwd = cwd;
+        return { branch: 'main', commit: 'abc1234' };
+      },
+      getCallerCwd: () => {
+        callerCwdCalls += 1;
+        throw new Error('caller cwd unavailable');
+      }
+    });
+
+    try {
+      const checkpoint = await saveCheckpoint({
+        description: 'Capture resolution failure',
+        workspace: tempDir
+      });
+
+      expect(callerCwdCalls).toBe(1);
+      expect(receivedCwd).toBe(tempDir);
+      expect(checkpoint.git?.branch).toBe('main');
+      expect(checkpoint.git?.worktree).toBeUndefined();
     } finally {
       restore();
     }

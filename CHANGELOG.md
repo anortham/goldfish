@@ -4,6 +4,12 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Checkpoints saved from a git worktree recorded the registered main checkout's branch and commit. Git capture now probes `--git-common-dir` at the caller's cwd; when it belongs to the same repository as the workspace, branch/commit/files are queried at that worktree's toplevel and the checkpoint records `git.worktree` (absolute path). Files still write under the workspace `.memories/`
+
 ## [7.8.0] - 2026-08-18
 
 ### Added

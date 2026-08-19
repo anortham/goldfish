@@ -139,6 +139,7 @@ export interface GitContext {
   branch?: string;
   commit?: string;
   files?: string[];       // Changed files
+  worktree?: string;      // Absolute worktree toplevel when git was captured outside the workspace checkout
 }
 
 export interface RegisteredProject {

@@ -2086,6 +2086,39 @@ describe('Compact display for intent-blame filters', () => {
     expect(result.checkpoints[0]!.git?.files).toEqual(['src/recall.ts']);
   });
 
+  async function writeWorktreeCheckpoint(
+    workspace: string,
+    id: string,
+    worktree: string
+  ): Promise<void> {
+    const dir = join(getMemoriesDir(workspace), '2026-05-01');
+    await mkdir(dir, { recursive: true });
+    const content = `---\nid: ${id}\ntimestamp: "2026-05-01T10:00:00.000Z"\ngit:\n  branch: wt-branch\n  commit: abc1234\n  worktree: ${worktree}\n  files:\n    - src/recall.ts\n---\n\nWorktree recall work\n`;
+    await writeFile(join(dir, `100000_${id}.md`), content, 'utf-8');
+  }
+
+  it('compact file-filtered recall omits git.worktree from the presented checkpoint', async () => {
+    await writeWorktreeCheckpoint(TEST_DIR_A, 'cp_wt', '/home/user/source/project/.worktrees/example');
+
+    const result = await recall({ file: 'recall.ts', workspace: TEST_DIR_A });
+
+    const git = result.checkpoints[0]!.git;
+    expect(git?.branch).toBe('wt-branch');
+    expect(git?.commit).toBe('abc1234');
+    expect(git?.files).toEqual(['src/recall.ts']);
+    expect(git?.worktree).toBeUndefined();
+  });
+
+  it('compact file-filtered recall then full recall in the same process still has git.worktree', async () => {
+    await writeWorktreeCheckpoint(TEST_DIR_A, 'cp_wt', '/home/user/source/project/.worktrees/example');
+
+    const compact = await recall({ file: 'recall.ts', workspace: TEST_DIR_A });
+    expect(compact.checkpoints[0]!.git?.worktree).toBeUndefined();
+
+    const full = await recall({ file: 'recall.ts', workspace: TEST_DIR_A, full: true });
+    expect(full.checkpoints[0]!.git?.worktree).toBe('/home/user/source/project/.worktrees/example');
+  });
+
   it('retains symbols in compact symbol-filtered recall', async () => {
     await writeFileCheckpoint(TEST_DIR_A, '2026-05-01', '10:00:00', 'cp_sym', [], ['recoverWorkspace'], 'Recovery work');
 

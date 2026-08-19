@@ -56,6 +56,7 @@ tags:
 git:
   branch: main
   commit: abc1234
+  worktree: /home/user/source/project/.worktrees/jwt-fix
   files:
     - src/auth/jwt.ts
 summary: "Fixed JWT validation bug"
@@ -63,6 +64,8 @@ summary: "Fixed JWT validation bug"
 
 Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check.
 ```
+
+`git.worktree` is the absolute toplevel of the git worktree the checkpoint was saved from. It is a machine-local path and only appears when that toplevel differs from the workspace path; saves from the main checkout omit it.
 
 ### Brief Format
 

@@ -5,7 +5,10 @@
  */
 
 import { spawnSync } from 'bun';
+import { realpath } from 'fs/promises';
+import { isAbsolute, join } from 'path';
 import type { GitContext } from './types';
+import { normalizePathKeyForSafetyCheck } from './workspace';
 
 /** Maximum number of files to include in git context */
 export const MAX_GIT_FILES = 30;
@@ -30,6 +33,70 @@ async function runGit(args: string[], cwd?: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+async function canonicalPathKey(value: string): Promise<string> {
+  try {
+    return normalizePathKeyForSafetyCheck(await realpath(value));
+  } catch {
+    return normalizePathKeyForSafetyCheck(value);
+  }
+}
+
+async function resolveCommonDir(cwd: string): Promise<string | null> {
+  const output = await runGit(['rev-parse', '--git-common-dir'], cwd);
+  const commonDir = output?.trim();
+  if (!commonDir) return null;
+  // Git for Windows can return a relative common dir (".git", "../main/.git");
+  // it is relative to the command cwd, not to process.cwd().
+  return isAbsolute(commonDir) ? commonDir : join(cwd, commonDir);
+}
+
+/**
+ * Decide which directory git metadata should be captured from.
+ *
+ * When the caller's cwd belongs to the same repository as the workspace
+ * (shared --git-common-dir), git queries run at the caller's --show-toplevel,
+ * and `worktree` carries that toplevel when it differs from the workspace.
+ * Any lookup failure falls back to the workspace path (today's behavior).
+ *
+ * @param workspacePath - Resolved workspace path (where .memories/ lives)
+ * @param callerCwd - Probe directory (defaults to process.cwd())
+ */
+export async function resolveGitCaptureCwd(
+  workspacePath: string,
+  callerCwd: string = process.cwd()
+): Promise<{ cwd: string; worktree?: string }> {
+  const [callerCommonDir, workspaceCommonDir] = await Promise.all([
+    resolveCommonDir(callerCwd),
+    resolveCommonDir(workspacePath)
+  ]);
+  if (!callerCommonDir || !workspaceCommonDir) {
+    return { cwd: workspacePath };
+  }
+
+  const [callerCommonKey, workspaceCommonKey] = await Promise.all([
+    canonicalPathKey(callerCommonDir),
+    canonicalPathKey(workspaceCommonDir)
+  ]);
+  if (callerCommonKey !== workspaceCommonKey) {
+    return { cwd: workspacePath };
+  }
+
+  const toplevelOutput = await runGit(['rev-parse', '--show-toplevel'], callerCwd);
+  const toplevel = toplevelOutput?.trim();
+  if (!toplevel) {
+    return { cwd: workspacePath };
+  }
+
+  const [toplevelKey, workspaceKey] = await Promise.all([
+    canonicalPathKey(toplevel),
+    canonicalPathKey(workspacePath)
+  ]);
+  if (toplevelKey === workspaceKey) {
+    return { cwd: toplevel };
+  }
+  return { cwd: toplevel, worktree: toplevel };
 }
 
 /**

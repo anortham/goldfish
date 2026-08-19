@@ -113,6 +113,7 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
     const gitParts: string[] = [];
     if (checkpoint.git.branch) gitParts.push(`branch: ${checkpoint.git.branch}`);
     if (checkpoint.git.commit) gitParts.push(`commit: ${checkpoint.git.commit}`);
+    if (checkpoint.git.worktree) gitParts.push(`worktree: ${checkpoint.git.worktree}`);
     if (gitParts.length > 0) lines.push(`Git: ${gitParts.join(', ')}`);
     const files = safeArray(checkpoint.git.files);
     if (files && files.length > 0) {

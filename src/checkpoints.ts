@@ -10,7 +10,7 @@ import { readFile, writeFile, readdir, rename, unlink, mkdir, stat } from 'fs/pr
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Checkpoint, CheckpointInput } from './types';
 import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
-import { getGitContext } from './git';
+import { getGitContext, resolveGitCaptureCwd } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
@@ -19,6 +19,7 @@ import { getLogger } from './logger';
 
 interface CheckpointDependencies {
   getGitContext: (cwd?: string) => import('./types').GitContext | Promise<import('./types').GitContext>;
+  getCallerCwd?: () => string;
 }
 
 const defaultCheckpointDependencies: CheckpointDependencies = {
@@ -113,6 +114,7 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
     const git: Record<string, unknown> = {};
     if (checkpoint.git.branch) git.branch = checkpoint.git.branch;
     if (checkpoint.git.commit) git.commit = checkpoint.git.commit;
+    if (checkpoint.git.worktree) git.worktree = checkpoint.git.worktree;
     if (checkpoint.git.files && checkpoint.git.files.length > 0) {
       git.files = checkpoint.git.files;
     }
@@ -227,6 +229,7 @@ function normalizeGit(rawGit: Record<string, unknown>): Checkpoint['git'] | unde
   const git: NonNullable<Checkpoint['git']> = {};
   if (rawGit.branch) git.branch = String(rawGit.branch);
   if (rawGit.commit) git.commit = String(rawGit.commit);
+  if (rawGit.worktree) git.worktree = String(rawGit.worktree);
   const files = rawGit.files ?? rawGit.files_changed ?? rawGit.filesChanged;
   if (Array.isArray(files) && files.length > 0) {
     git.files = files.map(String);
@@ -383,7 +386,24 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
 
   // Create checkpoint with current timestamp
   const timestamp = new Date().toISOString();
-  const gitContext = await checkpointDependencies.getGitContext(projectPath);
+  let capture: { cwd: string; worktree?: string } = { cwd: projectPath };
+  try {
+    const callerCwd = checkpointDependencies.getCallerCwd?.() ?? process.cwd();
+    capture = await resolveGitCaptureCwd(projectPath, callerCwd);
+  } catch {
+    capture = { cwd: projectPath };
+  }
+  if (capture.worktree) {
+    try {
+      getLogger().info(`git.capture cwd=${capture.cwd} workspace=${projectPath}`);
+    } catch {
+      // Logging must never fail the save
+    }
+  }
+  const gitContext = await checkpointDependencies.getGitContext(capture.cwd);
+  if (capture.worktree) {
+    gitContext.worktree = capture.worktree;
+  }
 
   // Generate deterministic ID
   const id = generateCheckpointId(timestamp, input.description);
@@ -409,7 +429,7 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
   if (input.tags) checkpoint.tags = input.tags;
 
   // Set git context as nested object
-  if (gitContext.branch || gitContext.commit || gitContext.files) {
+  if (gitContext.branch || gitContext.commit || gitContext.files || gitContext.worktree) {
     checkpoint.git = gitContext;
   }
 

@@ -374,6 +374,7 @@ tags:
 git:
   branch: fix/jwt-timeout
   commit: abc1234
+  worktree: /home/user/source/project/.worktrees/jwt-timeout
   files:
     - src/auth/jwt.ts
     - tests/auth.test.ts
@@ -384,6 +385,8 @@ Fixed JWT validation bug where expired tokens were accepted. Root cause
 was inverted expiry check in validateToken(). Added test coverage for
 the edge case and verified the fix prevents token reuse attacks.
 ```
+
+`git.worktree` is the absolute path of the git worktree the checkpoint was saved from. It only appears when the save ran from a worktree of the workspace repository; saves from the main checkout omit it.
 
 ### Cross-Project Registry
 

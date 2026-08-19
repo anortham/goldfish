@@ -481,7 +481,13 @@ function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Chec
     return {
       ...minimal,
       ...(minimal.next ? { next: truncate(minimal.next, MAX_DEFAULT_NEXT_LENGTH) } : {}),
-      ...(options.file && git ? { git } : {}),
+      ...(options.file && git ? {
+        git: {
+          ...(git.branch ? { branch: git.branch } : {}),
+          ...(git.commit ? { commit: git.commit } : {}),
+          ...(git.files ? { files: git.files } : {})
+        }
+      } : {}),
       ...(options.symbol && symbols ? { symbols } : {})
     };
   }
