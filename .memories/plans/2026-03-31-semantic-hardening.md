@@ -1,9 +1,9 @@
 ---
 id: 2026-03-31-semantic-hardening
 title: Semantic hardening
-status: active
+status: archived
 created: 2026-03-31T21:36:49.982Z
-updated: 2026-03-31T21:36:49.982Z
+updated: 2026-08-19T00:19:41.393Z
 tags:
   - semantic
   - hardening
