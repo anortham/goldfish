@@ -141,13 +141,13 @@ Completion: `serial-worker-commit` after assigned verification passes.
 12. `tests/recall.test.ts`: compact+file omits `git.worktree` from the presented checkpoint
 
 **Acceptance criteria:**
-- [ ] All named G2 behavior tests pass
-- [ ] `passes workspace path to getGitContext` still passes
-- [ ] Handler Branch line needs no edit and shows captured branch via `checkpoint.git`
-- [ ] Compact+file does not mutate the day-cache git object
-- [ ] Changelog `[Unreleased]` **Fixed**; YAML examples show an absolute `git.worktree`
-- [ ] `bun test git checkpoints recall` and `bun run typecheck` pass
-- [ ] Worker-scope verification passes and the change is committed (`serial-worker-commit`)
+- [x] All named G2 behavior tests pass
+- [x] `passes workspace path to getGitContext` still passes
+- [x] Handler Branch line needs no edit and shows captured branch via `checkpoint.git`
+- [x] Compact+file does not mutate the day-cache git object
+- [x] Changelog `[Unreleased]` **Fixed**; YAML examples show an absolute `git.worktree`
+- [x] `bun test git checkpoints recall` and `bun run typecheck` pass
+- [x] Worker-scope verification passes and the change is committed (`serial-worker-commit`)
 
 ---
 
@@ -211,14 +211,14 @@ Completion: `serial-worker-commit` after assigned verification passes.
 12. `tests/server.test.ts`: tool description ≤ 2000; `CheckpointArgs` / schema have no actor properties
 
 **Acceptance criteria:**
-- [ ] All named G1 behavior tests pass
-- [ ] Handlers do not import MCP ctx types
-- [ ] Tool schema unchanged except the auto-capture sentence
-- [ ] Compact recall omits actor; full recall prints `formatActorLine`
-- [ ] Both MCP eras pin harness
-- [ ] Changelog `[Unreleased]` **Added**; docs show `actor` example
-- [ ] `bun test git checkpoints handlers recall server protocol-compatibility test-isolation` and `bun run typecheck` pass
-- [ ] Worker-scope verification passes and the change is committed (`serial-worker-commit`)
+- [x] All named G1 behavior tests pass
+- [x] Handlers do not import MCP ctx types
+- [x] Tool schema unchanged except the auto-capture sentence
+- [x] Compact recall omits actor; full recall prints `formatActorLine`
+- [x] Both MCP eras pin harness
+- [x] Changelog `[Unreleased]` **Added**; docs show `actor` example
+- [x] `bun test git checkpoints handlers recall server protocol-compatibility test-isolation` and `bun run typecheck` pass
+- [x] Worker-scope verification passes and the change is committed (`serial-worker-commit`)
 
 ---
 
