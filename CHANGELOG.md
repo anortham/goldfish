@@ -6,6 +6,10 @@ All notable changes to Goldfish are documented in this file. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Checkpoints record a server-observed `actor` block (`harness`, `model`, `session`, `user`, `git_user`, `git_email`) in frontmatter. Identity is never taken from tool arguments: `GOLDFISH_HARNESS`/`GOLDFISH_MODEL`/`GOLDFISH_SESSION` env vars beat MCP-observed values, the MCP client name is read from the 2026-07-28 request envelope (with `getClientVersion()` as the 2025-era fallback), `user` comes from the OS, and `git_user`/`git_email` come from `git config` at the git query cwd. Empty fields are omitted, a `default` session is never recorded, and detection failure never fails the save. The save response and full recall print one labeled `Actor:` line; compact recall omits the block
+
 ### Fixed
 
 - Checkpoints saved from a git worktree recorded the registered main checkout's branch and commit. Git capture now probes `--git-common-dir` at the caller's cwd; when it belongs to the same repository as the workspace, branch/commit/files are queried at that worktree's toplevel and the checkpoint records `git.worktree` (absolute path). Files still write under the workspace `.memories/`

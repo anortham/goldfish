@@ -3,6 +3,7 @@
  */
 
 import { stat } from 'fs/promises';
+import { formatActorLine } from '../checkpoints.js';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
@@ -118,6 +119,13 @@ function formatCheckpoint(checkpoint: Checkpoint & { workspace?: string }): stri
     const files = safeArray(checkpoint.git.files);
     if (files && files.length > 0) {
       lines.push(`Files: ${files.join(', ')}`);
+    }
+  }
+
+  if (checkpoint.actor) {
+    const actorLine = formatActorLine(checkpoint.actor);
+    if (actorLine) {
+      lines.push(actorLine);
     }
   }
 

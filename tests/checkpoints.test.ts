@@ -56,7 +56,9 @@ beforeEach(async () => {
   delete process.env.USERPROFILE;
   await mkdir(tempHome, { recursive: true });
   restoreCheckpointDependencies = __setCheckpointDependenciesForTests({
-    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' }),
+    getOsUsername: () => undefined,
+    getGitIdentity: async () => ({})
   });
   await ensureMemoriesDir(tempDir);
 });
@@ -257,6 +259,52 @@ describe('formatCheckpoint', () => {
     const parsed = parseCheckpointFile(content);
     expect(parsed.git).toEqual({ worktree: '/home/user/source/project/.worktrees/example' });
   });
+
+  it('formatCheckpoint + parseCheckpointFile round-trips actor', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_actor111',
+      timestamp: '2026-08-19T12:00:00.000Z',
+      description: 'Checkpoint with a full actor block',
+      git: { branch: 'main', commit: 'abc1234' },
+      actor: {
+        harness: 'claude-code',
+        model: 'claude-opus-4',
+        session: '7f3a2c',
+        user: 'murphy',
+        git_user: 'Murphy',
+        git_email: 'murphy@example.com'
+      },
+      summary: 'Actor round-trip'
+    };
+
+    const content = formatCheckpoint(checkpoint);
+    expect(content.indexOf('git:')).toBeLessThan(content.indexOf('actor:'));
+    expect(content.indexOf('actor:')).toBeLessThan(content.indexOf('summary:'));
+
+    const parsed = parseCheckpointFile(content);
+    expect(parsed.actor).toEqual(checkpoint.actor!);
+  });
+
+  it('formatCheckpoint omits empty actor fields and a fully empty actor block', () => {
+    const partial = formatCheckpoint({
+      id: 'checkpoint_actor222',
+      timestamp: '2026-08-19T12:00:00.000Z',
+      description: 'Partial actor',
+      actor: { user: 'murphy' }
+    });
+    expect(partial).toContain('actor:');
+    expect(partial).toContain('user: murphy');
+    expect(partial).not.toContain('harness:');
+    expect(partial).not.toContain('git_email:');
+
+    const empty = formatCheckpoint({
+      id: 'checkpoint_actor333',
+      timestamp: '2026-08-19T12:00:00.000Z',
+      description: 'Empty actor',
+      actor: {}
+    });
+    expect(empty).not.toContain('actor:');
+  });
 });
 
 // ─── parseCheckpointFile ─────────────────────────────────────────────
@@ -277,6 +325,40 @@ Old checkpoint without worktree
     const parsed = parseCheckpointFile(content);
     expect(parsed.git).toEqual({ branch: 'main', commit: 'abc1234' });
     expect(parsed.git?.worktree).toBeUndefined();
+    expect(parsed.actor).toBeUndefined();
+  });
+
+  it('drops unknown actor keys and empty actor values', () => {
+    const content = `---
+id: checkpoint_actor444
+timestamp: "2026-08-19T12:00:00.000Z"
+actor:
+  harness: claude-code
+  session: ""
+  favorite_color: blue
+---
+
+Actor with unknown keys
+`;
+
+    const parsed = parseCheckpointFile(content);
+    expect(parsed.actor).toEqual({ harness: 'claude-code' });
+  });
+
+  it('omits actor entirely when every actor value is empty', () => {
+    const content = `---
+id: checkpoint_actor555
+timestamp: "2026-08-19T12:00:00.000Z"
+actor:
+  harness: ""
+  ignored: value
+---
+
+Actor with only empty values
+`;
+
+    const parsed = parseCheckpointFile(content);
+    expect(parsed.actor).toBeUndefined();
   });
 
   it('parses checkpoint with all fields', () => {
@@ -876,6 +958,22 @@ describe('parseJsonCheckpoint', () => {
     expect((checkpoint as any).type).toBeUndefined();
   });
 
+  it('normalizes actor with the same omit and unknown-key rules as markdown parsing', () => {
+    const content = JSON.stringify({
+      id: 'checkpoint_json_actor',
+      timestamp: 1763700000,
+      description: 'JSON checkpoint with actor',
+      actor: {
+        harness: 'claude-code',
+        session: '',
+        favorite_color: 'blue'
+      }
+    });
+
+    const checkpoint = parseJsonCheckpoint(content);
+    expect(checkpoint.actor).toEqual({ harness: 'claude-code' });
+  });
+
   it('parses JSON checkpoint with minimal fields', () => {
     const content = JSON.stringify({
       id: 'checkpoint_abcd1234_ef5678',
@@ -1201,6 +1299,148 @@ describe('saveCheckpoint', () => {
       expect(checkpoint.git?.worktree).toBeUndefined();
     } finally {
       restore();
+    }
+  });
+
+  it('saveCheckpoint assembles actor from observed identity, OS user, and git identity', async () => {
+    const restore = __setCheckpointDependenciesForTests({
+      getOsUsername: () => 'testuser',
+      getGitIdentity: async () => ({ name: 'Test User', email: 'test@example.com' })
+    });
+
+    try {
+      const checkpoint = await saveCheckpoint(
+        { description: 'Actor assembly test', workspace: tempDir },
+        { harness: 'unit-harness', session: 'abc123' }
+      );
+
+      expect(checkpoint.actor).toEqual({
+        harness: 'unit-harness',
+        session: 'abc123',
+        user: 'testuser',
+        git_user: 'Test User',
+        git_email: 'test@example.com'
+      });
+
+      const date = checkpoint.timestamp.split('T')[0]!;
+      const [saved] = await getCheckpointsForDay(tempDir, date);
+      expect(saved!.actor).toEqual(checkpoint.actor!);
+    } finally {
+      restore();
+    }
+  });
+
+  it('saveCheckpoint omits actor when env, OS user, and git identity are empty', async () => {
+    const checkpoint = await saveCheckpoint({
+      description: 'No observable identity',
+      workspace: tempDir
+    });
+
+    expect(checkpoint.actor).toBeUndefined();
+
+    const date = checkpoint.timestamp.split('T')[0]!;
+    const [saved] = await getCheckpointsForDay(tempDir, date);
+    expect(saved!.actor).toBeUndefined();
+  });
+
+  it('saveCheckpoint prefers GOLDFISH_* env over observed values and omits a winning default session', async () => {
+    process.env.GOLDFISH_HARNESS = 'env-harness';
+    process.env.GOLDFISH_MODEL = 'env-model';
+    process.env.GOLDFISH_SESSION = 'default';
+
+    try {
+      const checkpoint = await saveCheckpoint(
+        { description: 'Env override test', workspace: tempDir },
+        { harness: 'mcp-harness', session: 'mcp-session' }
+      );
+
+      expect(checkpoint.actor).toEqual({
+        harness: 'env-harness',
+        model: 'env-model'
+      });
+    } finally {
+      delete process.env.GOLDFISH_HARNESS;
+      delete process.env.GOLDFISH_MODEL;
+      delete process.env.GOLDFISH_SESSION;
+    }
+  });
+
+  it('inherited GOLDFISH_HARNESS does not leak into an unrelated save', async () => {
+    process.env.GOLDFISH_HARNESS = 'leaky-harness';
+    try {
+      const withEnv = await saveCheckpoint({
+        description: 'Save while env is set',
+        workspace: tempDir
+      });
+      expect(withEnv.actor?.harness).toBe('leaky-harness');
+    } finally {
+      delete process.env.GOLDFISH_HARNESS;
+    }
+
+    const afterRestore = await saveCheckpoint({
+      description: 'Unrelated save after restore',
+      workspace: tempDir
+    });
+    expect(afterRestore.actor).toBeUndefined();
+  });
+
+  it('saveCheckpoint reads git identity at the git query cwd', async () => {
+    let identityCwd: string | undefined;
+    const restore = __setCheckpointDependenciesForTests({
+      getGitIdentity: async (cwd?: string) => {
+        identityCwd = cwd;
+        return {};
+      }
+    });
+
+    try {
+      await saveCheckpoint({
+        description: 'Identity cwd test',
+        workspace: tempDir
+      });
+
+      expect(identityCwd).toBe(tempDir);
+    } finally {
+      restore();
+    }
+  });
+
+  it('saveCheckpoint does not throw when actor assembly throws and still records worktree git', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'g1-actor-throw-'));
+    const mainDir = join(baseDir, 'main');
+    const worktreeDir = join(baseDir, 'wt');
+    await mkdir(mainDir, { recursive: true });
+    const gitIn = (cwd: string, args: string[]) =>
+      Bun.spawn(['git', ...args], { cwd, stdout: 'ignore', stderr: 'ignore' }).exited;
+    await gitIn(mainDir, ['init', '-b', 'main']);
+    await writeFile(join(mainDir, 'file.txt'), 'initial');
+    await gitIn(mainDir, ['add', 'file.txt']);
+    await gitIn(mainDir, ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'init']);
+    await gitIn(mainDir, ['worktree', 'add', worktreeDir, '-b', 'wt-actor-branch']);
+
+    const restore = __setCheckpointDependenciesForTests({
+      getGitContext,
+      getCallerCwd: () => worktreeDir,
+      getGitIdentity: async () => {
+        throw new Error('identity unavailable');
+      }
+    });
+
+    try {
+      const checkpoint = await saveCheckpoint(
+        { description: 'Actor assembly failure keeps worktree git', workspace: mainDir },
+        { harness: 'unit-harness' }
+      );
+
+      expect(checkpoint.actor).toBeUndefined();
+      expect(checkpoint.git?.branch).toBe('wt-actor-branch');
+      expect(checkpoint.git?.worktree).toBeDefined();
+      expect(await realpath(checkpoint.git!.worktree!)).toBe(await realpath(worktreeDir));
+    } finally {
+      restore();
+      await unregisterProject(mainDir);
+      await gitIn(mainDir, ['worktree', 'remove', '--force', worktreeDir]);
+      await rm(baseDir, { recursive: true, force: true });
     }
   });
 

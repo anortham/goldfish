@@ -473,6 +473,7 @@ function presentCheckpoint(checkpoint: Checkpoint, options: RecallOptions): Chec
   if (!options.full) {
     const {
       git,
+      actor,
       symbols,
       context, decision, alternatives, evidence,
       impact, unknowns, confidence,

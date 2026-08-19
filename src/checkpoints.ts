@@ -6,11 +6,12 @@
  */
 
 import { join } from 'path';
+import { userInfo } from 'os';
 import { readFile, writeFile, readdir, rename, unlink, mkdir, stat } from 'fs/promises';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { Checkpoint, CheckpointInput } from './types';
+import type { Actor, Checkpoint, CheckpointInput, ObservedActor } from './types';
 import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
-import { getGitContext, resolveGitCaptureCwd } from './git';
+import { getGitContext, getGitIdentity, resolveGitCaptureCwd } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
@@ -20,10 +21,14 @@ import { getLogger } from './logger';
 interface CheckpointDependencies {
   getGitContext: (cwd?: string) => import('./types').GitContext | Promise<import('./types').GitContext>;
   getCallerCwd?: () => string;
+  getOsUsername?: () => string | undefined;
+  getGitIdentity?: (cwd?: string) => Promise<{ name?: string; email?: string }> | { name?: string; email?: string };
 }
 
 const defaultCheckpointDependencies: CheckpointDependencies = {
-  getGitContext
+  getGitContext,
+  getOsUsername: () => userInfo().username,
+  getGitIdentity
 };
 
 let checkpointDependencies: CheckpointDependencies = defaultCheckpointDependencies;
@@ -40,6 +45,54 @@ export function __setCheckpointDependenciesForTests(
   return () => {
     checkpointDependencies = previousDependencies;
   };
+}
+
+const ACTOR_KEYS = ['harness', 'model', 'session', 'user', 'git_user', 'git_email'] as const;
+
+function cleanActorValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * Assemble the server-observed actor for a checkpoint save.
+ * Env vars beat MCP-observed values; every empty field is omitted;
+ * returns undefined when no field survives.
+ */
+export function assembleActor(
+  observed: ObservedActor | undefined,
+  identity: { user?: string | undefined; gitUser?: string | undefined; gitEmail?: string | undefined },
+  env: Record<string, string | undefined> = process.env
+): Actor | undefined {
+  const harness = cleanActorValue(env.GOLDFISH_HARNESS) ?? cleanActorValue(observed?.harness);
+  const model = cleanActorValue(env.GOLDFISH_MODEL);
+  const sessionCandidate = cleanActorValue(env.GOLDFISH_SESSION) ?? cleanActorValue(observed?.session);
+  const session = sessionCandidate === 'default' ? undefined : sessionCandidate;
+  const user = cleanActorValue(identity.user);
+  const gitUser = cleanActorValue(identity.gitUser);
+  const gitEmail = cleanActorValue(identity.gitEmail);
+
+  const actor: Actor = {};
+  if (harness) actor.harness = harness;
+  if (model) actor.model = model;
+  if (session) actor.session = session;
+  if (user) actor.user = user;
+  if (gitUser) actor.git_user = gitUser;
+  if (gitEmail) actor.git_email = gitEmail;
+  return Object.keys(actor).length > 0 ? actor : undefined;
+}
+
+/**
+ * Format an actor as one labeled line of `key=value` pairs in field order.
+ * Empty fields are skipped; returns undefined when no pair remains.
+ */
+export function formatActorLine(actor: Actor): string | undefined {
+  const pairs: string[] = [];
+  for (const key of ACTOR_KEYS) {
+    const value = cleanActorValue(actor[key]);
+    if (value) pairs.push(`${key}=${value}`);
+  }
+  return pairs.length > 0 ? `Actor: ${pairs.join(' ')}` : undefined;
 }
 
 /**
@@ -120,6 +173,17 @@ export function formatCheckpoint(checkpoint: Checkpoint): string {
     }
     if (Object.keys(git).length > 0) {
       frontmatter.git = git;
+    }
+  }
+
+  if (checkpoint.actor) {
+    const actor: Record<string, string> = {};
+    for (const key of ACTOR_KEYS) {
+      const value = checkpoint.actor[key];
+      if (value) actor[key] = value;
+    }
+    if (Object.keys(actor).length > 0) {
+      frontmatter.actor = actor;
     }
   }
 
@@ -237,6 +301,26 @@ function normalizeGit(rawGit: Record<string, unknown>): Checkpoint['git'] | unde
   return Object.keys(git).length > 0 ? git : undefined;
 }
 
+/**
+ * Normalize a raw actor object from frontmatter or JSON. Unknown keys are
+ * dropped, empty values are omitted, and a fully empty block becomes undefined.
+ */
+function normalizeActor(rawActor: unknown): Actor | undefined {
+  if (!rawActor || typeof rawActor !== 'object' || Array.isArray(rawActor)) {
+    return undefined;
+  }
+
+  const raw = rawActor as Record<string, unknown>;
+  const actor: Actor = {};
+  for (const key of ACTOR_KEYS) {
+    const value = raw[key];
+    if (value === undefined || value === null) continue;
+    const normalized = cleanActorValue(String(value));
+    if (normalized) actor[key] = normalized;
+  }
+  return Object.keys(actor).length > 0 ? actor : undefined;
+}
+
 function normalizeStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -308,6 +392,8 @@ export function parseCheckpointFile(content: string): Checkpoint {
     : undefined;
   if (tags) checkpoint.tags = tags;
   if (git) checkpoint.git = git;
+  const actor = normalizeActor(frontmatter.actor);
+  if (actor) checkpoint.actor = actor;
   if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
   const affinityId = typeof frontmatter.briefId === 'string'
     ? frontmatter.briefId
@@ -373,6 +459,9 @@ export function parseJsonCheckpoint(content: string): Checkpoint {
   const git = rawGit ? normalizeGit(rawGit) : undefined;
   if (git) checkpoint.git = git;
 
+  const actor = normalizeActor(raw.actor);
+  if (actor) checkpoint.actor = actor;
+
   return checkpoint;
 }
 
@@ -380,7 +469,10 @@ export function parseJsonCheckpoint(content: string): Checkpoint {
  * Save a checkpoint as an individual file
  * Uses atomic write-then-rename to prevent corruption
  */
-export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint> {
+export async function saveCheckpoint(
+  input: CheckpointInput,
+  observed?: ObservedActor
+): Promise<Checkpoint> {
   const projectPath = resolveWorkspace(input.workspace);
   await ensureMemoriesDir(projectPath);
 
@@ -431,6 +523,19 @@ export async function saveCheckpoint(input: CheckpointInput): Promise<Checkpoint
   // Set git context as nested object
   if (gitContext.branch || gitContext.commit || gitContext.files || gitContext.worktree) {
     checkpoint.git = gitContext;
+  }
+
+  try {
+    const user = checkpointDependencies.getOsUsername?.();
+    const identity = (await checkpointDependencies.getGitIdentity?.(capture.cwd)) ?? {};
+    const actor = assembleActor(
+      observed,
+      { user, gitUser: identity.name, gitEmail: identity.email },
+      process.env
+    );
+    if (actor) checkpoint.actor = actor;
+  } catch {
+    // Identity failure never fails the save; the git context captured above stays as-is
   }
 
   // Auto-generate summary for long descriptions

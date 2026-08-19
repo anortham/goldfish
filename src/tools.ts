@@ -27,7 +27,7 @@ Write descriptions in MARKDOWN with structure (headers, bullets). Include WHAT, 
 
 For long descriptions (over ~2KB), write the markdown to a file in the workspace and pass \`description_file\` instead of \`description\` — large inline text with \`\\\` paths or real newlines can break tool-call JSON before the server runs.
 
-Automatically captures git context (branch, commit, changed files), timestamp (UTC), and tags.
+Automatically captures git context (branch, commit, changed files), timestamp (UTC), tags, and observed actor identity.
 
 Classify with \`type\` for better recall:
 - \`type: "decision"\` → include \`decision\` + \`alternatives\`

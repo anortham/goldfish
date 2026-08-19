@@ -24,4 +24,10 @@ describe('test isolation', () => {
   it('getGoldfishHomeDir() resolves to the isolated dir', () => {
     expect(getGoldfishHomeDir()).toBe(process.env.GOLDFISH_HOME!);
   });
+
+  it('GOLDFISH_HARNESS, GOLDFISH_MODEL, and GOLDFISH_SESSION are unset by preload', () => {
+    expect(process.env.GOLDFISH_HARNESS).toBeUndefined();
+    expect(process.env.GOLDFISH_MODEL).toBeUndefined();
+    expect(process.env.GOLDFISH_SESSION).toBeUndefined();
+  });
 });

@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'bun:test';
-import { mkdir, mkdtemp, rm, stat } from 'fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { parseCheckpointFile } from '../src/checkpoints';
 
 const REPO_ROOT = join(import.meta.dir, '..');
 const SERVER_PATH = join(REPO_ROOT, 'src', 'server.ts');
@@ -148,6 +149,35 @@ describe('MCP 2026-07-28 stdio compatibility', () => {
       expect(await pathExists(join(envWorkspace, '.memories'))).toBe(true);
       expect(await pathExists(join(explicitWorkspace, '.memories'))).toBe(true);
       expect(await pathExists(join(home, '.memories'))).toBe(false);
+    } finally {
+      await client?.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('modern spawned 2026-07-28 Client({ name }) records harness from the envelope', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'goldfish-modern-actor-'));
+    const home = join(root, 'home');
+    const goldfishHome = join(root, 'goldfish-home');
+    const workspace = join(root, 'workspace');
+    await Promise.all([mkdir(home), mkdir(goldfishHome), mkdir(workspace)]);
+
+    let client: Client | undefined;
+    try {
+      client = await connectModernServer({ cwd: home, home, goldfishHome });
+
+      const result = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'modern actor capture', workspace }
+      });
+      expect(result.isError).not.toBe(true);
+
+      const memoriesDir = join(workspace, '.memories');
+      const [date] = (await readdir(memoriesDir)).filter(entry => /^\d{4}-\d{2}-\d{2}$/.test(entry));
+      const [file] = await readdir(join(memoriesDir, date!));
+      const checkpoint = parseCheckpointFile(await readFile(join(memoriesDir, date!, file!), 'utf-8'));
+
+      expect(checkpoint.actor?.harness).toBe('goldfish-modern-test-client');
     } finally {
       await client?.close();
       await rm(root, { recursive: true, force: true });

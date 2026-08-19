@@ -5,9 +5,9 @@
 import { readFile } from 'fs/promises';
 import { isAbsolute, join, relative, sep } from 'path';
 import { getBrief } from '../briefs.js';
-import { saveCheckpoint } from '../checkpoints.js';
+import { formatActorLine, saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
-import type { CheckpointArgs, CheckpointInput } from '../types.js';
+import type { CheckpointArgs, CheckpointInput, ObservedActor } from '../types.js';
 import { assertProjectWorkspace, resolveWorkspace } from '../workspace.js';
 
 /**
@@ -61,7 +61,7 @@ async function readDescriptionFile(path: string, workspace: string): Promise<str
 /**
  * Handle checkpoint tool calls
  */
-export async function handleCheckpoint(args: CheckpointArgs) {
+export async function handleCheckpoint(args: CheckpointArgs, observed?: ObservedActor) {
   const {
     description,
     workspace,
@@ -118,7 +118,7 @@ export async function handleCheckpoint(args: CheckpointArgs) {
     workspace: ws
   };
 
-  const checkpoint = await saveCheckpoint(checkpointInput);
+  const checkpoint = await saveCheckpoint(checkpointInput, observed);
 
   // Build readable markdown response
   const MAX_FILES = 10;
@@ -136,6 +136,13 @@ export async function handleCheckpoint(args: CheckpointArgs) {
     const branch = git.branch || '?';
     const commit = git.commit || '?';
     lines.push(`Branch: ${branch} @ ${commit}`);
+  }
+
+  if (checkpoint.actor) {
+    const actorLine = formatActorLine(checkpoint.actor);
+    if (actorLine) {
+      lines.push(actorLine);
+    }
   }
 
   if (tags && tags.length > 0) {

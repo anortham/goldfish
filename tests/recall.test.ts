@@ -55,7 +55,9 @@ beforeEach(async () => {
   await ensureMemoriesDir(TEST_DIR_A);
   await ensureMemoriesDir(TEST_DIR_B);
   restoreCheckpointDeps = __setCheckpointDependenciesForTests({
-    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' }),
+    getOsUsername: () => undefined,
+    getGitIdentity: async () => ({})
   });
 });
 
@@ -1343,6 +1345,22 @@ describe('recall with minimal metadata', () => {
       // If git metadata exists, full: true should preserve it
       expect(true).toBe(true);
     }
+  });
+
+  it('compact recall omits actor; full recall includes it', async () => {
+    await saveCheckpoint(
+      { description: 'Checkpoint with observed actor', workspace: TEST_DIR_A },
+      { harness: 'recall-harness', session: 'sess99' }
+    );
+
+    const compact = await recall({ workspace: TEST_DIR_A, limit: 1 });
+    expect(compact.checkpoints[0]!.actor).toBeUndefined();
+
+    const full = await recall({ workspace: TEST_DIR_A, limit: 1, full: true });
+    expect(full.checkpoints[0]!.actor).toEqual({
+      harness: 'recall-harness',
+      session: 'sess99'
+    });
   });
 
   it('minimal metadata reduces token usage significantly', async () => {

@@ -143,6 +143,26 @@ export async function getGitContext(cwd?: string): Promise<GitContext> {
 }
 
 /**
+ * Read the configured git identity (user.name / user.email) at the given
+ * directory. Missing config or any git failure yields an empty result.
+ *
+ * @param cwd - Working directory for git commands (defaults to process.cwd())
+ */
+export async function getGitIdentity(cwd?: string): Promise<{ name?: string; email?: string }> {
+  const [nameOut, emailOut] = await Promise.all([
+    runGit(['config', 'user.name'], cwd),
+    runGit(['config', 'user.email'], cwd)
+  ]);
+
+  const identity: { name?: string; email?: string } = {};
+  const name = nameOut?.trim();
+  const email = emailOut?.trim();
+  if (name) identity.name = name;
+  if (email) identity.email = email;
+  return identity;
+}
+
+/**
  * Check if current directory is in a git repository
  */
 export function isGitRepository(): boolean {

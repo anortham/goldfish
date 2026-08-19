@@ -19,6 +19,7 @@ export interface Checkpoint {
   unknowns?: string[];
   tags?: string[];
   git?: GitContext;        // Git context at checkpoint time
+  actor?: Actor;          // Server-observed identity at checkpoint time
   summary?: string;       // Auto-generated concise summary (for recall display)
   briefId?: string;       // ID of active brief when checkpoint was created
   // Read-side legacy: existing checkpoint markdown in .memories/<date>/*.md may
@@ -140,6 +141,25 @@ export interface GitContext {
   commit?: string;
   files?: string[];       // Changed files
   worktree?: string;      // Absolute worktree toplevel when git was captured outside the workspace checkout
+}
+
+/**
+ * Server-observed checkpoint identity. Never taken from tool arguments:
+ * env vars and MCP request context are the only sources.
+ */
+export interface Actor {
+  harness?: string;       // GOLDFISH_HARNESS, else MCP client name
+  model?: string;         // GOLDFISH_MODEL only
+  session?: string;       // GOLDFISH_SESSION, else MCP session id (never 'default')
+  user?: string;          // OS username
+  git_user?: string;      // git config user.name at the git query cwd
+  git_email?: string;     // git config user.email at the git query cwd
+}
+
+/** Identity extracted from MCP request context in src/server.ts only. */
+export interface ObservedActor {
+  harness?: string;
+  session?: string;
 }
 
 export interface RegisteredProject {

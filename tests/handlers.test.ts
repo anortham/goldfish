@@ -59,7 +59,9 @@ afterAll(async () => {
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-handlers-'));
   restoreDeps = __setCheckpointDependenciesForTests({
-    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' }),
+    getOsUsername: () => undefined,
+    getGitIdentity: async () => ({})
   });
   await ensureMemoriesDir(TEST_DIR);
 });
@@ -121,6 +123,69 @@ describe('Readable markdown responses', () => {
 
       const text = result.content[0]!.text;
       expect(text).not.toContain('Tags:');
+    });
+
+    it('prints an Actor line after Branch when actor is observed', async () => {
+      const result = await handleCheckpoint(
+        { description: 'Observed actor checkpoint', workspace: TEST_DIR },
+        { harness: 'unit-harness', session: 'sess42' }
+      );
+
+      const text = result.content[0]!.text;
+      const lines = text.split('\n');
+      const branchIndex = lines.findIndex(line => line.startsWith('Branch:'));
+      const actorIndex = lines.findIndex(line => line.startsWith('Actor:'));
+      expect(branchIndex).toBeGreaterThanOrEqual(0);
+      expect(actorIndex).toBe(branchIndex + 1);
+      expect(lines[actorIndex]).toBe('Actor: harness=unit-harness session=sess42');
+    });
+
+    it('prints the Actor line after Time when there is no git context', async () => {
+      const restore = __setCheckpointDependenciesForTests({
+        getGitContext: () => ({})
+      });
+
+      try {
+        const result = await handleCheckpoint(
+          { description: 'Actor without git', workspace: TEST_DIR },
+          { harness: 'unit-harness' }
+        );
+
+        const text = result.content[0]!.text;
+        const lines = text.split('\n');
+        const timeIndex = lines.findIndex(line => line.startsWith('Time:'));
+        expect(text).not.toContain('Branch:');
+        expect(lines[timeIndex + 1]).toBe('Actor: harness=unit-harness');
+      } finally {
+        restore();
+      }
+    });
+
+    it('omits the Actor line when nothing is observed', async () => {
+      const result = await handleCheckpoint({
+        description: 'No actor checkpoint',
+        workspace: TEST_DIR
+      });
+
+      expect(result.content[0]!.text).not.toContain('Actor:');
+    });
+
+    it('handleCheckpoint ignores stuffed actor keys on the tool call', async () => {
+      const result = await handleCheckpoint({
+        description: 'Stuffed actor keys',
+        workspace: TEST_DIR,
+        actor: { harness: 'liar' },
+        harness: 'liar',
+        model: 'liar-model',
+        session: 'liar-session'
+      } as any);
+
+      expect(result.content[0]!.text).not.toContain('liar');
+
+      const today = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+      const saved = checkpoints.find(c => c.description === 'Stuffed actor keys');
+      expect(saved!.actor).toBeUndefined();
     });
 
     it('formats files line sensibly when git files are present', async () => {
@@ -526,6 +591,34 @@ describe('Readable markdown responses', () => {
 
       // Should have separator
       expect(text).toContain('---');
+    });
+
+    it('full recall prints the Actor line and worktree on the Git line; compact omits both', async () => {
+      const restore = __setCheckpointDependenciesForTests({
+        getGitContext: () => ({ branch: 'wt-branch', commit: 'def5678', worktree: '/tmp/wt-example' })
+      });
+
+      try {
+        const future = new Date(Date.now() + 60_000).toISOString();
+        await withFrozenTime(future, () =>
+          saveCheckpoint(
+            { description: 'Checkpoint with actor and worktree', workspace: TEST_DIR },
+            { harness: 'unit-harness' }
+          )
+        );
+      } finally {
+        restore();
+      }
+
+      const full = await handleRecall({ workspace: TEST_DIR, limit: 1, full: true });
+      const fullText = full.content[0]!.text;
+      expect(fullText).toContain('Actor: harness=unit-harness');
+      expect(fullText).toContain('Git: branch: wt-branch, commit: def5678, worktree: /tmp/wt-example');
+
+      const compact = await handleRecall({ workspace: TEST_DIR, limit: 1 });
+      const compactText = compact.content[0]!.text;
+      expect(compactText).not.toContain('Actor:');
+      expect(compactText).not.toContain('/tmp/wt-example');
     });
 
     it('truncates even a single oversized checkpoint in full mode', async () => {

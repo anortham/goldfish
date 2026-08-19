@@ -378,6 +378,13 @@ git:
   files:
     - src/auth/jwt.ts
     - tests/auth.test.ts
+actor:
+  harness: claude-code
+  model: claude-opus-4
+  session: 7f3a2c
+  user: murphy
+  git_user: Murphy
+  git_email: murphy@example.com
 summary: Fixed JWT timeout bug with refresh token rotation
 ---
 
@@ -387,6 +394,8 @@ the edge case and verified the fix prevents token reuse attacks.
 ```
 
 `git.worktree` is the absolute path of the git worktree the checkpoint was saved from. It only appears when the save ran from a worktree of the workspace repository; saves from the main checkout omit it.
+
+`actor` records who and what saved the checkpoint, observed by the server itself — never from tool arguments. `GOLDFISH_HARNESS`, `GOLDFISH_MODEL`, and `GOLDFISH_SESSION` env vars beat MCP-observed values; `user` is the OS username; `git_user` and `git_email` come from `git config` where git was queried. Fields that cannot be observed are omitted, and the block disappears entirely when nothing is observable.
 
 ### Cross-Project Registry
 

@@ -59,6 +59,13 @@ git:
   worktree: /home/user/source/project/.worktrees/jwt-fix
   files:
     - src/auth/jwt.ts
+actor:
+  harness: claude-code
+  model: claude-opus-4
+  session: 7f3a2c
+  user: murphy
+  git_user: Murphy
+  git_email: murphy@example.com
 summary: "Fixed JWT validation bug"
 ---
 
@@ -66,6 +73,8 @@ Fixed JWT validation bug where expired tokens were accepted. Root cause was inve
 ```
 
 `git.worktree` is the absolute toplevel of the git worktree the checkpoint was saved from. It is a machine-local path and only appears when that toplevel differs from the workspace path; saves from the main checkout omit it.
+
+`actor` is server-observed identity: `GOLDFISH_HARNESS`/`GOLDFISH_MODEL`/`GOLDFISH_SESSION` env vars beat MCP-observed values, `user` is the OS username, and `git_user`/`git_email` come from `git config` at the git query cwd. It is never taken from tool arguments. Empty fields are omitted and the whole block disappears when nothing is observable.
 
 ### Brief Format
 

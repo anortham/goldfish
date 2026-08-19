@@ -8,12 +8,12 @@
  * - brief: Manage durable strategic context
  */
 
-import { Server, type Root } from '@modelcontextprotocol/server';
+import { CLIENT_INFO_META_KEY, Server, type Root } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { getTools } from './tools.js';
 import { getInstructions } from './instructions.js';
 import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js';
-import type { CheckpointArgs, RecallArgs, BriefArgs } from './types.js';
+import type { CheckpointArgs, RecallArgs, BriefArgs, ObservedActor } from './types.js';
 import { getLogger } from './logger.js';
 import {
   resolveUnsafeCwdReason,
@@ -24,7 +24,7 @@ import { listRegisteredProjects } from './registry.js';
 
 export const SERVER_VERSION = '7.8.0';
 const WORKSPACE_AWARE_TOOLS = new Set(['checkpoint', 'recall', 'brief']);
-const DEFAULT_SESSION_KEY = 'default';
+export const DEFAULT_SESSION_KEY = 'default';
 const ROOTS_LIST_TIMEOUT_MS = 500;
 
 // Re-export for backward compatibility with tests
@@ -32,6 +32,53 @@ export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief 
 
 function getSessionKey(sessionId?: string): string {
   return sessionId ?? DEFAULT_SESSION_KEY;
+}
+
+/**
+ * Read the MCP client name for the request's protocol era. On 2026-07-28 the
+ * client's identity rides on every request's `_meta` envelope under
+ * CLIENT_INFO_META_KEY; 2025-era connections keep the initialize-scoped
+ * `getClientVersion()`.
+ */
+function readMcpClientName(
+  ctx: { mcpReq: { envelope?: unknown } },
+  server: Server
+): string | undefined {
+  const envelope = ctx.mcpReq.envelope;
+  if (envelope === undefined) {
+    const name = server.getClientVersion()?.name?.trim();
+    return name ? name : undefined;
+  }
+
+  if (envelope === null || typeof envelope !== 'object') {
+    return undefined;
+  }
+  const clientInfo = (envelope as Record<string, unknown>)[CLIENT_INFO_META_KEY];
+  if (!clientInfo || typeof clientInfo !== 'object') {
+    return undefined;
+  }
+  const name = (clientInfo as Record<string, unknown>).name;
+  if (typeof name !== 'string') {
+    return undefined;
+  }
+  const trimmed = name.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * Extract MCP-observed identity for a checkpoint save. This is the only place
+ * allowed to inspect MCP request context; storage receives a plain object.
+ */
+function extractObservedActor(
+  ctx: { sessionId?: string; mcpReq: { envelope?: unknown } },
+  server: Server
+): ObservedActor | undefined {
+  const observed: ObservedActor = {};
+  const harness = readMcpClientName(ctx, server);
+  const session = ctx.sessionId;
+  if (harness) observed.harness = harness;
+  if (session && session !== DEFAULT_SESSION_KEY) observed.session = session;
+  return observed.harness || observed.session ? observed : undefined;
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -212,7 +259,10 @@ export function createServer() {
       let result;
       switch (name) {
         case 'checkpoint':
-          result = await handleCheckpoint(hydratedArgs as unknown as CheckpointArgs);
+          result = await handleCheckpoint(
+            hydratedArgs as unknown as CheckpointArgs,
+            extractObservedActor(ctx, server)
+          );
           break;
         case 'recall':
           result = await handleRecall(hydratedArgs as RecallArgs);

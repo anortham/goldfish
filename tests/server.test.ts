@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
+import { saveCheckpoint, getCheckpointsForDay, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { saveBrief } from '../src/briefs';
 import { ensureMemoriesDir } from '../src/workspace';
 import { registerProject } from '../src/registry';
@@ -41,7 +41,9 @@ function getFirstTextContent(result: unknown): string {
 beforeEach(async () => {
   TEST_DIR = await mkdtemp(join(tmpdir(), 'test-server-'));
   restoreDeps = __setCheckpointDependenciesForTests({
-    getGitContext: () => ({ branch: 'main', commit: 'abc1234' })
+    getGitContext: () => ({ branch: 'main', commit: 'abc1234' }),
+    getOsUsername: () => undefined,
+    getGitIdentity: async () => ({})
   });
   delete process.env.GOLDFISH_WORKSPACE;
   process.chdir(ORIGINAL_CWD);
@@ -1112,6 +1114,87 @@ describe('Request-time workspace hydration', () => {
       process.chdir(ORIGINAL_CWD);
       delete process.env.GOLDFISH_WORKSPACE;
     }
+  });
+});
+
+describe('Observed actor identity', () => {
+  async function connectLegacyClient(clientName: string) {
+    const { createServer } = await import('../src/server');
+    const server = createServer();
+    const client = new Client(
+      { name: clientName, version: '1.0.0' },
+      { versionNegotiation: { mode: 'legacy' } }
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport)
+    ]);
+    return { client, server };
+  }
+
+  async function findSavedCheckpoint(description: string) {
+    const today = new Date().toISOString().split('T')[0]!;
+    const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+    return checkpoints.find(c => c.description === description);
+  }
+
+  it('exports the default session sentinel', async () => {
+    const { DEFAULT_SESSION_KEY } = await import('../src/server');
+    expect(DEFAULT_SESSION_KEY).toBe('default');
+  });
+
+  it('legacy InMemoryTransport Client({ name }) records harness via getClientVersion()', async () => {
+    const { client, server } = await connectLegacyClient('goldfish-test-client');
+
+    try {
+      const result = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'legacy era actor capture', workspace: TEST_DIR }
+      });
+      expect(result.isError).not.toBe(true);
+
+      const saved = await findSavedCheckpoint('legacy era actor capture');
+      expect(saved!.actor?.harness).toBe('goldfish-test-client');
+    } finally {
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+
+  it('env GOLDFISH_HARNESS overrides the MCP-observed harness and a default session is omitted', async () => {
+    process.env.GOLDFISH_HARNESS = 'env-harness';
+    process.env.GOLDFISH_SESSION = 'default';
+    const { client, server } = await connectLegacyClient('goldfish-test-client');
+
+    try {
+      const result = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'env override actor capture', workspace: TEST_DIR }
+      });
+      expect(result.isError).not.toBe(true);
+
+      const saved = await findSavedCheckpoint('env override actor capture');
+      expect(saved!.actor?.harness).toBe('env-harness');
+      expect(saved!.actor?.session).toBeUndefined();
+    } finally {
+      delete process.env.GOLDFISH_HARNESS;
+      delete process.env.GOLDFISH_SESSION;
+      await Promise.all([client.close(), server.close()]);
+    }
+  });
+
+  it('checkpoint tool schema gains no actor fields and the description mentions actor auto-capture', async () => {
+    const { getTools } = await import('../src/server');
+    const checkpointTool = getTools().find(t => t.name === 'checkpoint');
+
+    const properties = Object.keys(
+      (checkpointTool!.inputSchema as { properties: Record<string, unknown> }).properties
+    );
+    expect(properties).not.toContain('actor');
+    expect(properties).not.toContain('harness');
+    expect(properties).not.toContain('model');
+    expect(properties).not.toContain('session');
+    expect(checkpointTool!.description).toContain('and observed actor identity');
   });
 });
 
