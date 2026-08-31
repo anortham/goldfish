@@ -4,6 +4,16 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.1] - 2026-08-31
+
+### Fixed
+
+- Protocol test setup created sibling directories concurrently with their parent, so `tests/protocol-compatibility.test.ts` failed intermittently with `EEXIST` (observed on the v8.0.0 tag CI run). The parent directory is now created before the children. Test-only change; runtime behavior is identical to 8.0.0.
+
+### Notes
+
+- Supersedes the `v8.0.0` tag, which points at a commit whose CI run failed. Use 8.0.1.
+
 ## [8.0.0] - 2026-08-31
 
 ### Changed
