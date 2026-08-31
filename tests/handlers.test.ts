@@ -9,6 +9,8 @@ import { rm, mkdtemp, mkdir, writeFile, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+const WORKSPACE_UNBOUND_RETRY = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
+
 async function withFrozenTime<T>(isoTimestamp: string, fn: () => Promise<T>): Promise<T> {
   const RealDate = Date;
   const fixedTime = new RealDate(isoTimestamp).getTime();
@@ -73,6 +75,77 @@ afterEach(async () => {
 });
 
 describe('Readable markdown responses', () => {
+  describe('workspace binding', () => {
+    it('rejects an unbound checkpoint call without changing the launch cwd', async () => {
+      const originalCwd = process.cwd();
+      const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+      delete process.env.GOLDFISH_WORKSPACE;
+
+      try {
+        await expect(handleCheckpoint({ description: 'Unbound checkpoint' })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+        expect(process.cwd()).toBe(originalCwd);
+      } finally {
+        if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+        else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+      }
+    });
+
+    it('rejects an unbound brief call without changing the launch cwd', async () => {
+      const originalCwd = process.cwd();
+      const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+      delete process.env.GOLDFISH_WORKSPACE;
+
+      try {
+        await expect(handleBrief({ action: 'list' })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+        expect(process.cwd()).toBe(originalCwd);
+      } finally {
+        if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+        else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+      }
+    });
+
+    it('rejects an unbound recall call without changing the launch cwd', async () => {
+      const originalCwd = process.cwd();
+      const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+      delete process.env.GOLDFISH_WORKSPACE;
+
+      try {
+        await expect(handleRecall({})).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+        expect(process.cwd()).toBe(originalCwd);
+      } finally {
+        if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+        else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+      }
+    });
+
+    it('binds before invoking an injected recall dependency and forwards the resolved workspace', async () => {
+      let invoked = false;
+      let receivedWorkspace: string | undefined;
+      const injectedRecall = async (recallArgs: { workspace?: string }) => {
+        invoked = true;
+        receivedWorkspace = recallArgs.workspace;
+        return { checkpoints: [] };
+      };
+      const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+      delete process.env.GOLDFISH_WORKSPACE;
+
+      try {
+        await expect(handleRecall({}, injectedRecall)).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+        expect(invoked).toBe(false);
+
+        await handleRecall({ workspace: TEST_DIR }, injectedRecall);
+        expect(invoked).toBe(true);
+        expect(receivedWorkspace).toBe(TEST_DIR);
+
+        await handleRecall({ workspace: 'all' }, injectedRecall);
+        expect(receivedWorkspace).toBe('all');
+      } finally {
+        if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+        else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+      }
+    });
+  });
+
   describe('checkpoint handler', () => {
     it('returns readable markdown response', async () => {
       const result = await handleCheckpoint({

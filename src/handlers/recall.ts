@@ -7,7 +7,7 @@ import { formatActorLine } from '../checkpoints.js';
 import { recall as recallFunc } from '../recall.js';
 import { getMemoriesDir, resolveWorkspace } from '../workspace.js';
 import { getFishEmoji } from '../emoji.js';
-import type { Brief, BriefRefreshNotice, Checkpoint, RecallArgs, StaleBriefNotice } from '../types.js';
+import type { Brief, BriefRefreshNotice, Checkpoint, RecallArgs, RecallResult, StaleBriefNotice } from '../types.js';
 
 /**
  * Char cap for the checkpoints section in full mode (~5k tokens). Full-mode
@@ -36,9 +36,9 @@ function safeArray(value: unknown): string[] | undefined {
 /**
  * Resolve the effective workspace path, handling the 'all' special case
  */
-function resolveWorkspacePath(workspace?: string): string {
+async function resolveWorkspacePath(workspace?: string): Promise<string> {
   if (workspace === 'all') return '(cross-project)';
-  return resolveWorkspace(workspace);
+  return await resolveWorkspace(workspace);
 }
 
 /**
@@ -167,14 +167,21 @@ function formatStaleBriefNotice(notice: StaleBriefNotice): string {
   return `⚠️ Active brief "${notice.title}" untouched ${age} — complete or archive it, or update it if it's still the direction.${gist}`;
 }
 
+type RecallDependency = (args: RecallArgs) => Promise<RecallResult>;
+
 /**
  * Handle recall tool calls
  */
-export async function handleRecall(args: RecallArgs) {
-  const result = await recallFunc(args);
+export async function handleRecall(
+  args: RecallArgs,
+  recallDependency: RecallDependency = recallFunc
+) {
+  const resolvedPath = await resolveWorkspacePath(args.workspace);
+  const result = await recallDependency(
+    args.workspace === 'all' ? args : { ...args, workspace: resolvedPath }
+  );
 
   // Capture diagnostic info
-  const resolvedPath = resolveWorkspacePath(args.workspace);
   const memoriesDir = resolvedPath !== '(cross-project)' ? getMemoriesDir(resolvedPath) : null;
   let memoriesExists = false;
   if (memoriesDir) {

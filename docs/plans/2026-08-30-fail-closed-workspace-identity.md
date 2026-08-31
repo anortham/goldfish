@@ -87,12 +87,12 @@
 **Commit mode:** `serial-worker-commit` after lead inline review and focused verification.
 
 **Acceptance criteria:**
-- [ ] Missing/current input with no env or Roots fails with the exact retry sentence.
-- [ ] Explicit, environment, and Roots sources all pass one validation policy.
-- [ ] Host-native absolute, unsafe-directory, token/URI, dot-segment, and platform edge cases are covered.
-- [ ] Nested projects refuse with a suggestion; markerless existing directories remain valid.
-- [ ] Cwd is never returned as a workspace source.
-- [ ] `bun test workspace` passes and the reviewed task is committed.
+- [x] Missing/current input with no env or Roots fails with the exact retry sentence.
+- [x] Explicit, environment, and Roots sources all pass one validation policy.
+- [x] Host-native absolute, unsafe-directory, token/URI, dot-segment, and platform edge cases are covered.
+- [x] Nested projects refuse with a suggestion; markerless existing directories remain valid.
+- [x] Cwd is never returned as a workspace source.
+- [x] `bun test workspace` passes and the reviewed task is committed.
 
 ### Task 2: MCP adapter and recovery removal
 
@@ -122,12 +122,12 @@
 **Commit mode:** `parallel-lead-commit`; do not stage or commit from the worker lane.
 
 **Acceptance criteria:**
-- [ ] Modern omitted/current calls return `isError` before checkpoint, recall, or brief handlers execute.
-- [ ] Plugin-cache cwd with `.memories` cannot become the workspace implicitly.
-- [ ] Explicit path and fixed environment work; legacy spawned stdio Roots still works.
-- [ ] Registry and parent-walk candidates appear only under the exact suggestions label.
-- [ ] Recovery selection and recovery notices are removed with their obsolete tests.
-- [ ] `bun test server workspace-recovery protocol-compatibility` passes and the worker hands off an uncommitted reviewed diff.
+- [x] Modern omitted/current calls return `isError` before checkpoint, recall, or brief handlers execute.
+- [x] Plugin-cache cwd with `.memories` cannot become the workspace implicitly.
+- [x] Explicit path and fixed environment work; legacy spawned stdio Roots still works.
+- [x] Registry and parent-walk candidates appear only under the exact suggestions label.
+- [x] Recovery selection and recovery notices are removed with their obsolete tests.
+- [x] `bun test server workspace-recovery protocol-compatibility` passes and the worker hands off an uncommitted reviewed diff.
 
 ### Task 3: Handler and storage backstops
 
@@ -162,12 +162,12 @@
 **Commit mode:** `parallel-lead-commit`; do not stage or commit from the worker lane.
 
 **Acceptance criteria:**
-- [ ] Direct checkpoint, brief, and current-workspace recall calls refuse before filesystem access when unbound.
-- [ ] Explicit and fixed-environment direct calls retain existing behavior.
-- [ ] Worktree-aware checkpoint storage and git capture remain green.
-- [ ] Two explicit workspaces in one process do not cross-contaminate storage or caches.
-- [ ] Cross-project recall remains explicit and green.
-- [ ] `bun test handlers checkpoints briefs recall` passes and the worker hands off an uncommitted reviewed diff.
+- [x] Direct checkpoint, brief, and current-workspace recall calls refuse before filesystem access when unbound.
+- [x] Explicit and fixed-environment direct calls retain existing behavior.
+- [x] Worktree-aware checkpoint storage and git capture remain green.
+- [x] Two explicit workspaces in one process do not cross-contaminate storage or caches.
+- [x] Cross-project recall remains explicit and green.
+- [x] `bun test handlers checkpoints briefs recall` passes and the worker hands off an uncommitted reviewed diff.
 
 ### Task 4: Tool contract and guidance
 

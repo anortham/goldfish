@@ -89,7 +89,7 @@ export async function handleCheckpoint(args: CheckpointArgs, observed?: Observed
   }
 
   assertProjectWorkspace(workspace, 'checkpoint writes');
-  const ws = resolveWorkspace(workspace);
+  const ws = await resolveWorkspace(workspace);
 
   const resolvedDescription = descriptionFile
     ? await readDescriptionFile(descriptionFile, ws)

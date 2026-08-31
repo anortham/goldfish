@@ -67,7 +67,7 @@ async function resolveId(args: BriefArgs, workspace: string): Promise<string | n
 export async function handleBrief(args: BriefArgs) {
   const { action, workspace: wsArg } = args;
   assertProjectWorkspace(wsArg, 'brief writes');
-  const workspace = resolveWorkspace(wsArg);
+  const workspace = await resolveWorkspace(wsArg);
   const fish = getFishEmoji();
 
   switch (action) {

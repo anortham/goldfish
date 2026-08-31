@@ -2,9 +2,11 @@ import { describe, it, expect } from 'bun:test';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { parseCheckpointFile } from '../src/checkpoints';
+import { WORKSPACE_UNBOUND_MESSAGE } from '../src/workspace';
 
 const REPO_ROOT = join(import.meta.dir, '..');
 const SERVER_PATH = join(REPO_ROOT, 'src', 'server.ts');
@@ -71,6 +73,7 @@ async function connectLegacyServer(options: {
   cwd: string;
   home: string;
   goldfishHome: string;
+  roots?: string;
 }): Promise<Client> {
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -88,8 +91,16 @@ async function connectLegacyServer(options: {
   });
   const client = new Client(
     { name: 'goldfish-legacy-test-client', version: '1.0.0' },
-    { versionNegotiation: { mode: 'legacy' } }
+    {
+      ...(options.roots ? { capabilities: { roots: { listChanged: true } } } : {}),
+      versionNegotiation: { mode: 'legacy' }
+    }
   );
+  if (options.roots) {
+    client.setRequestHandler('roots/list', async () => ({
+      roots: [{ uri: pathToFileURL(options.roots!).href }]
+    }));
+  }
 
   try {
     await client.connect(transport);
@@ -188,20 +199,33 @@ describe('MCP 2026-07-28 stdio compatibility', () => {
     const root = await mkdtemp(join(tmpdir(), 'goldfish-modern-refusal-'));
     const home = join(root, 'home');
     const goldfishHome = join(root, 'goldfish-home');
-    await Promise.all([mkdir(home), mkdir(goldfishHome)]);
+    await Promise.all([mkdir(home), mkdir(goldfishHome), mkdir(join(home, '.memories'), { recursive: true })]);
+    const before = await readdir(join(home, '.memories'));
 
     let client: Client | undefined;
     try {
       client = await connectModernServer({ cwd: home, home, goldfishHome });
 
-      const result = await client.callTool({
-        name: 'recall',
-        arguments: { limit: 1 }
-      });
+      const results = await Promise.all([
+        client.callTool({
+          name: 'checkpoint',
+          arguments: { description: 'must not use the launch directory' }
+        }),
+        client.callTool({
+          name: 'recall',
+          arguments: { limit: 1 }
+        }),
+        client.callTool({
+          name: 'brief',
+          arguments: { action: 'save', title: 'must refuse', content: 'must refuse' }
+        })
+      ]);
 
-      expect(result.isError).toBe(true);
-      expect(getFirstTextContent(result).toLowerCase()).toContain('home directory');
-      expect(await pathExists(join(home, '.memories'))).toBe(false);
+      for (const result of results) {
+        expect(result.isError).toBe(true);
+        expect(getFirstTextContent(result)).toContain(WORKSPACE_UNBOUND_MESSAGE);
+      }
+      expect(await readdir(join(home, '.memories'))).toEqual(before);
     } finally {
       await client?.close();
       await rm(root, { recursive: true, force: true });
@@ -227,6 +251,31 @@ describe('MCP legacy stdio compatibility', () => {
         'checkpoint',
         'recall'
       ]);
+    } finally {
+      await client?.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('hydrates a legacy workspace from Roots over the real stdio entry point', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'goldfish-legacy-roots-'));
+    const home = join(root, 'home');
+    const goldfishHome = join(root, 'goldfish-home');
+    const workspace = join(root, 'workspace');
+    await Promise.all([mkdir(home), mkdir(goldfishHome), mkdir(workspace)]);
+
+    let client: Client | undefined;
+    try {
+      client = await connectLegacyServer({ cwd: home, home, goldfishHome, roots: workspace });
+
+      const result = await client.callTool({
+        name: 'checkpoint',
+        arguments: { description: 'legacy Roots hydration' }
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(await pathExists(join(workspace, '.memories'))).toBe(true);
+      expect(await pathExists(join(home, '.memories'))).toBe(false);
     } finally {
       await client?.close();
       await rm(root, { recursive: true, force: true });

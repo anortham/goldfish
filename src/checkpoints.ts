@@ -484,7 +484,7 @@ export async function saveCheckpoint(
   input: CheckpointInput,
   observed?: ObservedActor
 ): Promise<Checkpoint> {
-  const projectPath = resolveWorkspace(input.workspace);
+  const projectPath = await resolveWorkspace(input.workspace);
   await ensureMemoriesDir(projectPath);
 
   // Create checkpoint with current timestamp
@@ -743,7 +743,8 @@ export async function getCheckpointsForDay(
   projectPath: string,
   date: string
 ): Promise<Checkpoint[]> {
-  const { checkpoints } = await loadDay(projectPath, date);
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
+  const { checkpoints } = await loadDay(resolvedProjectPath, date);
   return checkpoints;
 }
 
@@ -759,7 +760,8 @@ export async function getAllCheckpoints(
   projectPath: string,
   limit?: number
 ): Promise<Checkpoint[]> {
-  const { checkpoints } = await getAllCheckpointsInternal(projectPath, limit);
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
+  const { checkpoints } = await getAllCheckpointsInternal(resolvedProjectPath, limit);
   return checkpoints;
 }
 
@@ -772,7 +774,8 @@ export async function getAllCheckpoints(
 export async function getAllCheckpointsWithFingerprint(
   projectPath: string
 ): Promise<{ checkpoints: Checkpoint[]; fingerprint: string }> {
-  return getAllCheckpointsInternal(projectPath);
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
+  return getAllCheckpointsInternal(resolvedProjectPath);
 }
 
 async function getAllCheckpointsInternal(
@@ -834,7 +837,8 @@ export async function findLatestCheckpointTimestampForBrief(
   briefId: string,
   notBeforeDate?: string
 ): Promise<string | null> {
-  const memoriesDir = getMemoriesDir(projectPath);
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
+  const memoriesDir = getMemoriesDir(resolvedProjectPath);
 
   let entries: string[];
   try {
@@ -854,7 +858,7 @@ export async function findLatestCheckpointTimestampForBrief(
   }
 
   for (const dir of dateDirs) {
-    const checkpoints = await getCheckpointsForDay(projectPath, dir);
+    const checkpoints = await getCheckpointsForDay(resolvedProjectPath, dir);
     let latest: string | null = null;
     for (const checkpoint of checkpoints) {
       const affinity = checkpoint.briefId ?? checkpoint.planId;
@@ -883,7 +887,8 @@ export async function getCheckpointsForDateRange(
   fromDate: string,
   toDate: string
 ): Promise<Checkpoint[]> {
-  const memoriesDir = getMemoriesDir(projectPath);
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
+  const memoriesDir = getMemoriesDir(resolvedProjectPath);
 
   let entries: string[];
   try {
@@ -924,7 +929,7 @@ export async function getCheckpointsForDateRange(
     .sort();
 
   // Load all relevant directories concurrently
-  const perDay = await Promise.all(relevantDirs.map(dir => getCheckpointsForDay(projectPath, dir)));
+  const perDay = await Promise.all(relevantDirs.map(dir => getCheckpointsForDay(resolvedProjectPath, dir)));
   const allCheckpoints: Checkpoint[] = perDay.flat();
 
   // Filter by actual timestamp (not just directory date)

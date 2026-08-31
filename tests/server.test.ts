@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { saveCheckpoint, getCheckpointsForDay, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { saveBrief } from '../src/briefs';
-import { ensureMemoriesDir } from '../src/workspace';
+import { ensureMemoriesDir, WORKSPACE_UNBOUND_MESSAGE } from '../src/workspace';
 import { registerProject } from '../src/registry';
-import { rm, mkdtemp, mkdir, stat, writeFile } from 'fs/promises';
+import { rm, mkdtemp, mkdir, readdir, stat, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -669,15 +669,15 @@ describe('Request-time workspace hydration', () => {
     };
   }
 
-  it('does not invoke roots when the protocol adapter disables it', async () => {
-    const cwdFallback = await mkdtemp(join(tmpdir(), 'test-server-modern-cwd-'));
-    process.chdir(cwdFallback);
+  it('refuses an omitted workspace when the protocol adapter disables roots', async () => {
+    const launchDir = await mkdtemp(join(tmpdir(), 'test-server-modern-cwd-'));
+    process.chdir(launchDir);
     delete process.env.GOLDFISH_WORKSPACE;
     const { hydrateWorkspaceArguments } = await import('../src/server');
     let rootsCalls = 0;
 
     try {
-      const hydrated = await hydrateWorkspaceArguments(
+      await expect(hydrateWorkspaceArguments(
         'recall',
         { limit: 1 },
         new Map(),
@@ -687,13 +687,130 @@ describe('Request-time workspace hydration', () => {
           rootsCalls += 1;
           return { roots: [{ uri: pathToFileURL(TEST_DIR).href }] };
         }
-      );
+      )).rejects.toThrow(WORKSPACE_UNBOUND_MESSAGE);
 
       expect(rootsCalls).toBe(0);
-      expect(hydrated.args.workspace).toBe(cwdFallback);
     } finally {
       process.chdir(ORIGINAL_CWD);
-      await rm(cwdFallback, { recursive: true, force: true });
+      await rm(launchDir, { recursive: true, force: true });
+    }
+  });
+
+  it('allows workspace all only for recall', async () => {
+    const { hydrateWorkspaceArguments } = await import('../src/server');
+    let rootsCalls = 0;
+    const sendRoots = async () => {
+      rootsCalls += 1;
+      return { roots: [] };
+    };
+
+    const recall = await hydrateWorkspaceArguments(
+      'recall',
+      { workspace: 'all', limit: 1 },
+      new Map(),
+      'modern',
+      false,
+      sendRoots
+    );
+    expect(recall.args).toEqual({ workspace: 'all', limit: 1 });
+
+    for (const name of ['checkpoint', 'brief']) {
+      await expect(hydrateWorkspaceArguments(
+        name,
+        { workspace: 'all' },
+        new Map(),
+        'modern',
+        false,
+        sendRoots
+      )).rejects.toThrow(`workspace="all" is only valid for recall, not ${name}`);
+    }
+    expect(rootsCalls).toBe(0);
+  });
+
+  it('rejects empty and whitespace workspace arguments before fallback', async () => {
+    const { hydrateWorkspaceArguments } = await import('../src/server');
+    const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+    let rootsCalls = 0;
+    const sendRoots = async () => {
+      rootsCalls += 1;
+      return { roots: [{ uri: pathToFileURL(TEST_DIR).href }] };
+    };
+
+    try {
+      for (const workspace of ['', '   ']) {
+        process.env.GOLDFISH_WORKSPACE = TEST_DIR;
+        await expect(hydrateWorkspaceArguments(
+          'checkpoint',
+          { workspace },
+          new Map(),
+          'modern',
+          true,
+          sendRoots
+        )).rejects.toThrow(WORKSPACE_UNBOUND_MESSAGE);
+
+        delete process.env.GOLDFISH_WORKSPACE;
+        await expect(hydrateWorkspaceArguments(
+          'checkpoint',
+          { workspace },
+          new Map(),
+          'modern',
+          true,
+          sendRoots
+        )).rejects.toThrow(WORKSPACE_UNBOUND_MESSAGE);
+      }
+      expect(rootsCalls).toBe(0);
+    } finally {
+      if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+      else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+    }
+  });
+
+  it('returns registered paths as suggestions without selecting one', async () => {
+    const originalGoldfishHome = process.env.GOLDFISH_HOME;
+    const goldfishHome = await mkdtemp(join(tmpdir(), 'test-server-suggestions-home-'));
+    const project = await mkdtemp(join(tmpdir(), 'test-server-suggestions-project-'));
+    const launchDir = await mkdtemp(join(tmpdir(), 'test-server-suggestions-launch-'));
+    try {
+      process.env.GOLDFISH_HOME = goldfishHome;
+      await mkdir(join(project, '.memories'));
+      await registerProject(project);
+      process.chdir(launchDir);
+
+      const { createServer } = await import('../src/server');
+      const server = createServer();
+      const client = new Client(
+        { name: 'goldfish-test-client', version: '1.0.0' },
+        { versionNegotiation: { mode: 'legacy' } }
+      );
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport)
+      ]);
+
+      try {
+        const result = await client.callTool({
+          name: 'checkpoint',
+          arguments: { description: 'must choose a suggested project explicitly' }
+        });
+        const text = getFirstTextContent(result);
+        expect(result.isError).toBe(true);
+        expect(text).toContain(WORKSPACE_UNBOUND_MESSAGE);
+        expect(text).toContain('Suggestions only; choose one explicitly:');
+        expect(text).toContain(project);
+        expect(text).not.toContain('recovered');
+      } finally {
+        await Promise.all([client.close(), server.close()]);
+      }
+    } finally {
+      process.chdir(ORIGINAL_CWD);
+      if (originalGoldfishHome === undefined) delete process.env.GOLDFISH_HOME;
+      else process.env.GOLDFISH_HOME = originalGoldfishHome;
+      await Promise.all([
+        rm(goldfishHome, { recursive: true, force: true }),
+        rm(project, { recursive: true, force: true }),
+        rm(launchDir, { recursive: true, force: true })
+      ]);
     }
   });
 
@@ -811,15 +928,13 @@ describe('Request-time workspace hydration', () => {
     const connection = await connectServerWithRoots(() => roots);
 
     try {
-      // First tool call arrives before the client has populated roots. Empty
-      // roots must not be cached as a permanent failure: the cwd fallback here
-      // points at a home directory and is rejected.
+      // Empty roots must not be cached as a permanent failure.
       const firstAttempt = await connection.client.callTool({
         name: 'recall',
         arguments: { limit: 1 }
       });
       expect(firstAttempt.isError).toBe(true);
-      expect(getFirstTextContent(firstAttempt).toLowerCase()).toContain('home directory');
+      expect(getFirstTextContent(firstAttempt)).toContain(WORKSPACE_UNBOUND_MESSAGE);
       expect(connection.rootsCalls).toBe(1);
 
       // Client now advertises the real project root.
@@ -887,7 +1002,7 @@ describe('Request-time workspace hydration', () => {
         arguments: { limit: 1 }
       });
       expect(firstAttempt.isError).toBe(true);
-      expect(getFirstTextContent(firstAttempt).toLowerCase()).toContain('home directory');
+      expect(getFirstTextContent(firstAttempt)).toContain(WORKSPACE_UNBOUND_MESSAGE);
       expect(rootsCalls).toBe(1);
 
       roots = [{ uri: pathToFileURL(rootDir).href }];
@@ -915,9 +1030,11 @@ describe('Request-time workspace hydration', () => {
     }
   });
 
-  it('falls back to cwd when roots lookup is unavailable', async () => {
-    const cwdFallback = await mkdtemp(join(tmpdir(), 'test-server-cwd-'));
-    process.chdir(cwdFallback);
+  it('refuses the launch directory when roots lookup is unavailable', async () => {
+    const launchDir = await mkdtemp(join(tmpdir(), 'test-server-cwd-'));
+    await mkdir(join(launchDir, '.memories'));
+    const before = await readdir(join(launchDir, '.memories'));
+    process.chdir(launchDir);
 
     const { createServer } = await import('../src/server');
     const server = createServer();
@@ -935,28 +1052,24 @@ describe('Request-time workspace hydration', () => {
 
       const checkpoint = await client.callTool({
         name: 'checkpoint',
-        arguments: { description: 'checkpoint through cwd fallback' }
+        arguments: { description: 'checkpoint must not use launch directory' }
       });
-      expect(checkpoint.isError).not.toBe(true);
-
-      const recall = await client.callTool({
-        name: 'recall',
-        arguments: { workspace: cwdFallback, full: true }
-      });
-
-      const text = getFirstTextContent(recall);
-      expect(text).toContain('checkpoint through cwd fallback');
-      expect((await stat(join(cwdFallback, '.memories'))).isDirectory()).toBe(true);
+      expect(checkpoint.isError).toBe(true);
+      const text = getFirstTextContent(checkpoint);
+      expect(text).toContain(WORKSPACE_UNBOUND_MESSAGE);
+      expect(text).toContain('Suggestions only; choose one explicitly:');
+      expect(text).toContain(launchDir);
+      expect(await readdir(join(launchDir, '.memories'))).toEqual(before);
     } finally {
       await Promise.all([client.close(), server.close()]);
       process.chdir(ORIGINAL_CWD);
-      await rm(cwdFallback, { recursive: true, force: true });
+      await rm(launchDir, { recursive: true, force: true });
     }
   });
 
-  it('falls back to cwd when roots lookup never settles', async () => {
-    const cwdFallback = await mkdtemp(join(tmpdir(), 'test-server-cwd-hung-roots-'));
-    process.chdir(cwdFallback);
+  it('refuses after the legacy roots lookup timeout', async () => {
+    const launchDir = await mkdtemp(join(tmpdir(), 'test-server-cwd-hung-roots-'));
+    process.chdir(launchDir);
 
     const { createServer } = await import('../src/server');
     const server = createServer();
@@ -983,7 +1096,7 @@ describe('Request-time workspace hydration', () => {
       const checkpoint = await Promise.race([
         client.callTool({
           name: 'checkpoint',
-          arguments: { description: 'checkpoint through hung roots fallback' }
+          arguments: { description: 'checkpoint after hung roots' }
         }),
         new Promise<'timed out'>(resolve => setTimeout(() => resolve('timed out'), 1200))
       ]);
@@ -991,25 +1104,17 @@ describe('Request-time workspace hydration', () => {
       if (checkpoint === 'timed out') {
         throw new Error('checkpoint call did not return when roots/list never settled');
       }
-      expect(checkpoint.isError).not.toBe(true);
+      expect(checkpoint.isError).toBe(true);
+      expect(getFirstTextContent(checkpoint)).toContain(WORKSPACE_UNBOUND_MESSAGE);
       expect(rootsCalls).toBe(1);
-
-      const recall = await client.callTool({
-        name: 'recall',
-        arguments: { workspace: cwdFallback, full: true }
-      });
-
-      const text = getFirstTextContent(recall);
-      expect(text).toContain('checkpoint through hung roots fallback');
-      expect((await stat(join(cwdFallback, '.memories'))).isDirectory()).toBe(true);
     } finally {
       await Promise.all([client.close(), server.close()]);
       process.chdir(ORIGINAL_CWD);
-      await rm(cwdFallback, { recursive: true, force: true });
+      await rm(launchDir, { recursive: true, force: true });
     }
   });
 
-  it('rejects filesystem-root cwd fallback with a helpful error', async () => {
+  it('rejects omitted workspace from a filesystem-root launch directory', async () => {
     process.chdir('/');
     delete process.env.GOLDFISH_WORKSPACE;
 
@@ -1033,16 +1138,14 @@ describe('Request-time workspace hydration', () => {
       });
 
       expect(result.isError).toBe(true);
-      const text = getFirstTextContent(result);
-      expect(text).toContain('GOLDFISH_WORKSPACE');
-      expect(text.toLowerCase()).toContain('filesystem root');
+      expect(getFirstTextContent(result)).toContain(WORKSPACE_UNBOUND_MESSAGE);
     } finally {
       await Promise.all([client.close(), server.close()]);
       process.chdir(ORIGINAL_CWD);
     }
   });
 
-  it('rejects home-directory cwd fallback with a helpful error', async () => {
+  it('rejects omitted workspace from a home-directory launch directory', async () => {
     const originalHome = process.env.HOME;
     const homeFallback = await mkdtemp(join(tmpdir(), 'test-server-home-'));
     process.chdir(homeFallback);
@@ -1069,9 +1172,7 @@ describe('Request-time workspace hydration', () => {
       });
 
       expect(result.isError).toBe(true);
-      const text = getFirstTextContent(result);
-      expect(text).toContain('GOLDFISH_WORKSPACE');
-      expect(text.toLowerCase()).toContain('home directory');
+      expect(getFirstTextContent(result)).toContain(WORKSPACE_UNBOUND_MESSAGE);
     } finally {
       await Promise.all([client.close(), server.close()]);
       process.chdir(ORIGINAL_CWD);
@@ -1081,7 +1182,7 @@ describe('Request-time workspace hydration', () => {
     }
   });
 
-  it('allows GOLDFISH_WORKSPACE=/ as an explicit user override', async () => {
+  it('rejects an unsafe GOLDFISH_WORKSPACE override', async () => {
     process.chdir('/');
     process.env.GOLDFISH_WORKSPACE = '/';
 
@@ -1104,11 +1205,8 @@ describe('Request-time workspace hydration', () => {
         arguments: { workspace: 'current', limit: 1 }
       });
 
-      // We don't assert success of the storage operation (cwd=/ is read-only on
-      // most CI machines anyway). The contract is: explicit env override is not
-      // pre-rejected with the filesystem-root guard.
-      const text = getFirstTextContent(result);
-      expect(text.toLowerCase()).not.toContain('filesystem root');
+      expect(result.isError).toBe(true);
+      expect(getFirstTextContent(result)).toContain(WORKSPACE_UNBOUND_MESSAGE);
     } finally {
       await Promise.all([client.close(), server.close()]);
       process.chdir(ORIGINAL_CWD);
@@ -1216,415 +1314,8 @@ describe('Error handling', () => {
   it('handles workspace errors gracefully', async () => {
     const { handleRecall } = await import('../src/server');
 
-    // Non-existent path should return empty results, not error
-    const result = await handleRecall({
+    await expect(handleRecall({
       workspace: join(tmpdir(), 'nonexistent-workspace-xyz-' + Date.now())
-    });
-
-    expect(result.content[0]!.type).toBe('text');
-    const text = result.content[0]!.text;
-    // Should be readable markdown with "No checkpoints found"
-    expect(text).toMatch(/No checkpoints found/);
-  });
-});
-
-describe('Workspace recovery (registry + parent walk)', () => {
-  const ORIGINAL_GOLDFISH_HOME = process.env.GOLDFISH_HOME;
-  const ORIGINAL_HOME = process.env.HOME;
-  const ORIGINAL_CWD = process.cwd();
-  const isolatedDirs: string[] = [];
-
-  async function isolatedGoldfishHome(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'test-goldfish-home-'));
-    isolatedDirs.push(dir);
-    process.env.GOLDFISH_HOME = dir;
-    return dir;
-  }
-
-  async function makeProject(name: string): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), `test-recovery-${name}-`));
-    isolatedDirs.push(dir);
-    await mkdir(join(dir, '.memories'), { recursive: true });
-    return dir;
-  }
-
-  // Registry-sourced workspace paths are reported with forward slashes (see
-  // normalizePath in src/registry.ts), while mkdtemp returns native
-  // separators on Windows — compare separator-insensitively.
-  function expectTextToContainPath(text: string, p: string): void {
-    expect(text.replace(/\\/g, '/')).toContain(p.replace(/\\/g, '/'));
-  }
-
-  async function connectWithoutRoots() {
-    const { createServer } = await import('../src/server');
-    const server = createServer();
-    const client = new Client(
-      { name: 'goldfish-test-client', version: '1.0.0' },
-      // No roots capability — simulates Cursor plugin installs.
-      { versionNegotiation: { mode: 'legacy' } }
-    );
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    await Promise.all([
-      server.connect(serverTransport),
-      client.connect(clientTransport)
-    ]);
-    return { server, client };
-  }
-
-  afterEach(async () => {
-    process.chdir(ORIGINAL_CWD);
-    if (ORIGINAL_GOLDFISH_HOME === undefined) delete process.env.GOLDFISH_HOME;
-    else process.env.GOLDFISH_HOME = ORIGINAL_GOLDFISH_HOME;
-    if (ORIGINAL_HOME === undefined) delete process.env.HOME;
-    else process.env.HOME = ORIGINAL_HOME;
-    delete process.env.GOLDFISH_WORKSPACE;
-    for (const dir of isolatedDirs) {
-      await rm(dir, { recursive: true, force: true }).catch(() => {});
-    }
-    isolatedDirs.length = 0;
-  });
-
-  it('recovers via registry-ancestor when cwd is a subdir of a registered project (no roots)', async () => {
-    await isolatedGoldfishHome();
-    const project = await makeProject('ancestor');
-    await registerProject(project);
-    // chdir into a subdir of the project — no roots advertised.
-    const sub = join(project, 'src', 'deep');
-    await mkdir(sub, { recursive: true });
-    process.chdir(sub);
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const checkpoint = await client.callTool({
-        name: 'checkpoint',
-        arguments: { description: 'recovered via registry ancestor' }
-      });
-      expect(checkpoint.isError).not.toBe(true);
-      // .memories/ should land in the project root, not the subdir.
-      expect((await stat(join(project, '.memories'))).isDirectory()).toBe(true);
-      expect(await stat(join(sub, '.memories')).catch(() => null)).toBeNull();
-      // The agent must be told where recovery landed so a wrong-but-plausible
-      // root is visible, not silent.
-      const text = getFirstTextContent(checkpoint);
-      expect(text).toContain('Workspace:');
-      expectTextToContainPath(text, project);
-      expect(text.toLowerCase()).toContain('recovered');
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-  });
-
-  it('recovers via parent walk when cwd is a subdir of an unregistered project with .memories/', async () => {
-    await isolatedGoldfishHome();
-    const project = await makeProject('walk');
-    // NOT registered — recovery must come from the parent walk.
-    const sub = join(project, 'pkg');
-    await mkdir(sub, { recursive: true });
-    process.chdir(sub);
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const checkpoint = await client.callTool({
-        name: 'checkpoint',
-        arguments: { description: 'recovered via parent walk' }
-      });
-      expect(checkpoint.isError).not.toBe(true);
-      expect((await stat(join(project, '.memories'))).isDirectory()).toBe(true);
-      expect(await stat(join(sub, '.memories')).catch(() => null)).toBeNull();
-      // Walk-sourced recovery is surfaced too, with the walk source label.
-      const text = getFirstTextContent(checkpoint);
-      expect(text).toContain('Workspace:');
-      expectTextToContainPath(text, project);
-      expect(text.toLowerCase()).toContain('recovered');
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-  });
-
-  it('surfaces the recovered workspace in a brief save response', async () => {
-    await isolatedGoldfishHome();
-    const project = await makeProject('briefsurf');
-    await registerProject(project);
-    const sub = join(project, 'doc');
-    await mkdir(sub, { recursive: true });
-    process.chdir(sub);
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const result = await client.callTool({
-        name: 'brief',
-        arguments: {
-          action: 'save',
-          title: 'Recovery surface test',
-          content: 'Ensure brief writes show where they landed.'
-        }
-      });
-      expect(result.isError).not.toBe(true);
-      const text = getFirstTextContent(result);
-      expect(text).toContain('Brief saved');
-      expect(text).toContain('Workspace:');
-      expectTextToContainPath(text, project);
-      expect(text.toLowerCase()).toContain('recovered');
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-  });
-
-  it('recovers via parent walk for first use in a git repo with no .memories/ yet', async () => {
-    await isolatedGoldfishHome();
-    const repo = await mkdtemp(join(tmpdir(), 'test-recovery-git-'));
-    isolatedDirs.push(repo);
-    await writeFile(join(repo, '.git'), '');
-    const sub = join(repo, 'app');
-    await mkdir(sub, { recursive: true });
-    process.chdir(sub);
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const checkpoint = await client.callTool({
-        name: 'checkpoint',
-        arguments: { description: 'first use in a git repo' }
-      });
-      expect(checkpoint.isError).not.toBe(true);
-      // .memories/ created at the repo root, not the subdir.
-      expect((await stat(join(repo, '.memories'))).isDirectory()).toBe(true);
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-  });
-
-  it('recall resolves via single-registered recovery when cwd is home and no roots (Cursor plugin scenario)', async () => {
-    await isolatedGoldfishHome();
-    const project = await makeProject('single');
-    await registerProject(project);
-    // Seed a checkpoint so recall has something to find at the recovered path.
-    await saveCheckpoint({ description: 'seed checkpoint', workspace: project });
-
-    const home = await mkdtemp(join(tmpdir(), 'test-recovery-home-'));
-    isolatedDirs.push(home);
-    process.chdir(home);
-    process.env.HOME = home;
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const recall = await client.callTool({
-        name: 'recall',
-        arguments: { full: true }
-      });
-      expect(recall.isError).not.toBe(true);
-      const text = getFirstTextContent(recall);
-      expect(text).toContain('seed checkpoint');
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-  });
-
-  it('checkpoint refuses with Known projects when cwd is home, single-registered, no roots', async () => {
-    await isolatedGoldfishHome();
-    const project = await makeProject('singlemut');
-    await registerProject(project);
-
-    const home = await mkdtemp(join(tmpdir(), 'test-recovery-home-mut-'));
-    isolatedDirs.push(home);
-    process.chdir(home);
-    process.env.HOME = home;
-
-    // Snapshot .memories/ before the call. makeProject created only .memories/
-    // itself; a successful checkpoint would add a date dir (e.g. 2026-06-26/).
-    const { readdir: readdirBefore } = await import('fs/promises');
-    const before = await readdirBefore(join(project, '.memories')).catch(() => []);
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const result = await client.callTool({
-        name: 'checkpoint',
-        arguments: { description: 'should be refused with known projects' }
-      });
-      expect(result.isError).toBe(true);
-      const text = getFirstTextContent(result);
-      expect(text.toLowerCase()).toContain('home directory');
-      expect(text).toContain('Known projects');
-      expectTextToContainPath(text, project);
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-
-    // Must NOT have written anything: .memories/ contents are unchanged (no
-    // new date dir, no stray files). This is the real correctness check — the
-    // earlier assertion only confirmed .memories/ existed, which makeProject
-    // already guaranteed, so a buggy recovery that wrote here would have passed.
-    const { readdir: readdirAfter } = await import('fs/promises');
-    const after = await readdirAfter(join(project, '.memories')).catch(() => []);
-    expect(after.sort()).toEqual(before.sort());
-    expect(after.some(entry => /^\d{4}-\d{2}-\d{2}$/.test(entry))).toBe(false);
-  });
-
-  it('brief refuses with Known projects when cwd is home, single-registered, no roots', async () => {
-    // Mirror of the checkpoint refusal test for the other mutating tool. Brief
-    // must also refuse (not 4b-recover) when cwd is unsafe and only one project
-    // is registered, and must not write a brief file into the project.
-    await isolatedGoldfishHome();
-    const project = await makeProject('singlebrief');
-    await registerProject(project);
-
-    const home = await mkdtemp(join(tmpdir(), 'test-recovery-home-brief-'));
-    isolatedDirs.push(home);
-    process.chdir(home);
-    process.env.HOME = home;
-
-    const { readdir: readdirBefore } = await import('fs/promises');
-    const before = await readdirBefore(join(project, '.memories')).catch(() => []);
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const result = await client.callTool({
-        name: 'brief',
-        arguments: { action: 'save', title: 'should be refused', content: 'nope' }
-      });
-      expect(result.isError).toBe(true);
-      const text = getFirstTextContent(result);
-      expect(text.toLowerCase()).toContain('home directory');
-      expect(text).toContain('Known projects');
-      expectTextToContainPath(text, project);
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-
-    // No briefs/ dir or brief file written by the refused call.
-    const { readdir: readdirAfter, stat: statAfter } = await import('fs/promises');
-    const after = await readdirAfter(join(project, '.memories')).catch(() => []);
-    expect(after.sort()).toEqual(before.sort());
-    const briefsDir = await statAfter(join(project, '.memories', 'briefs')).catch(() => null);
-    expect(briefsDir?.isDirectory()).toBeFalsy();
-  });
-
-  it('checkpoint refuses when $HOME itself is the registered project (no silent home write)', async () => {
-    // F1 regression guard (end-to-end): if home was registered as a project
-    // (e.g. the user once ran goldfish from ~), a mutating tool with cwd=home
-    // must still refuse — 4a must not recover to the unsafe registered home.
-    await isolatedGoldfishHome();
-    const home = await mkdtemp(join(tmpdir(), 'test-recovery-home-registered-'));
-    isolatedDirs.push(home);
-    await mkdir(join(home, '.memories'), { recursive: true });
-    await registerProject(home);
-
-    process.chdir(home);
-    process.env.HOME = home;
-
-    const { readdir: readdirBefore } = await import('fs/promises');
-    const before = await readdirBefore(join(home, '.memories')).catch(() => []);
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const result = await client.callTool({
-        name: 'checkpoint',
-        arguments: { description: 'must not recover to registered home' }
-      });
-      expect(result.isError).toBe(true);
-      const text = getFirstTextContent(result);
-      expect(text.toLowerCase()).toContain('home directory');
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-
-    // Nothing written into home/.memories/ by the refused call.
-    const { readdir: readdirAfter } = await import('fs/promises');
-    const after = await readdirAfter(join(home, '.memories')).catch(() => []);
-    expect(after.sort()).toEqual(before.sort());
-    expect(after.some(entry => /^\d{4}-\d{2}-\d{2}$/.test(entry))).toBe(false);
-  });
-
-  it('does not read the real ~/.goldfish/registry.json — isolation via GOLDFISH_HOME', async () => {
-    // With an isolated (empty) goldfish home and a home cwd with no markers,
-    // recovery must find nothing and refuse — regardless of the real user's
-    // registry. This proves tests never depend on real registry state.
-    const home = await mkdtemp(join(tmpdir(), 'test-recovery-iso-'));
-    isolatedDirs.push(home);
-    await isolatedGoldfishHome();
-    process.chdir(home);
-    process.env.HOME = home;
-
-    const { server, client } = await connectWithoutRoots();
-    try {
-      const result = await client.callTool({
-        name: 'recall',
-        arguments: { limit: 1 }
-      });
-      // Empty isolated registry + no markers + unsafe cwd -> refuse, no 4b.
-      expect(result.isError).toBe(true);
-      const text = getFirstTextContent(result);
-      expect(text.toLowerCase()).toContain('home directory');
-      // No "Known projects" line because the isolated registry is empty.
-      expect(text).not.toContain('Known projects');
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
-  });
-
-  it('roots arriving after a recovery still win on the next call (late roots)', async () => {
-    await isolatedGoldfishHome();
-    const project = await makeProject('lateroots');
-    await registerProject(project);
-    const sub = join(project, 'src');
-    await mkdir(sub, { recursive: true });
-    process.chdir(sub);
-
-    // Client advertises roots from the start but serves an EMPTY list first,
-    // then populates it — mirrors the 7.2.1 "roots arrive late" scenario but
-    // with recovery also in play. First call must recover via registry-ancestor
-    // (empty roots are not cached as permanent); once roots populate, the cache
-    // is consulted and roots win.
-    const { createServer } = await import('../src/server');
-    const server = createServer();
-    const client = new Client(
-      { name: 'goldfish-test-client', version: '1.0.0' },
-      {
-        capabilities: { roots: { listChanged: true } },
-        versionNegotiation: { mode: 'legacy' }
-      }
-    );
-    let roots: Array<{ uri: string }> = [];
-    let rootsCalls = 0;
-    client.setRequestHandler('roots/list', async () => {
-      rootsCalls += 1;
-      return { roots };
-    });
-
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    await Promise.all([
-      server.connect(serverTransport),
-      client.connect(clientTransport)
-    ]);
-
-    try {
-      // First call: roots list is empty -> recovery via registry-ancestor must
-      // place .memories/ at the project root.
-      const first = await client.callTool({
-        name: 'checkpoint',
-        arguments: { description: 'recovered before roots populated' }
-      });
-      expect(first.isError).not.toBe(true);
-      expect((await stat(join(project, '.memories'))).isDirectory()).toBe(true);
-      expect(rootsCalls).toBe(1);
-
-      // Roots now populate; notify the server so its cache clears.
-      roots = [{ uri: pathToFileURL(project).href }];
-      await client.notification({ method: 'notifications/roots/list_changed' });
-
-      const second = await client.callTool({
-        name: 'checkpoint',
-        arguments: { description: 'after roots populated' }
-      });
-      expect(second.isError).not.toBe(true);
-      expect(rootsCalls).toBe(2);
-
-      const recall = await client.callTool({
-        name: 'recall',
-        arguments: { workspace: project, full: true }
-      });
-      expect(getFirstTextContent(recall)).toContain('after roots populated');
-    } finally {
-      await Promise.all([client.close(), server.close()]);
-    }
+    })).rejects.toThrow(WORKSPACE_UNBOUND_MESSAGE);
   });
 });

@@ -220,7 +220,7 @@ function validateBriefId(id: string): void {
  * Save a new brief.
  */
 export async function saveBrief(input: BriefInput): Promise<Brief> {
-  const projectPath = resolveWorkspace(input.workspace);
+  const projectPath = await resolveWorkspace(input.workspace);
   await ensureMemoriesDir(projectPath);
 
   const now = new Date().toISOString();
@@ -262,7 +262,8 @@ export async function saveBrief(input: BriefInput): Promise<Brief> {
  * Get a brief by ID.
  */
 export async function getBrief(projectPath: string, id: string): Promise<Brief | null> {
-  const stored = await getStoredBrief(projectPath, id);
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
+  const stored = await getStoredBrief(resolvedProjectPath, id);
   return stored?.brief ?? null;
 }
 
@@ -271,9 +272,10 @@ export async function getBrief(projectPath: string, id: string): Promise<Brief |
  * Reads from both .memories/briefs/ and the legacy .memories/plans/ directory.
  */
 export async function listBriefs(projectPath: string): Promise<Brief[]> {
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
   const ids = new Set([
-    ...await listBriefIds(getBriefsDir(projectPath)),
-    ...await listBriefIds(getPlansDir(projectPath))
+    ...await listBriefIds(getBriefsDir(resolvedProjectPath)),
+    ...await listBriefIds(getPlansDir(resolvedProjectPath))
   ]);
 
   // Tolerate a single corrupt brief: skip and log rather than letting one
@@ -281,7 +283,7 @@ export async function listBriefs(projectPath: string): Promise<Brief[]> {
   const briefs = await Promise.all(
     [...ids].map(async (id) => {
       try {
-        return await getBrief(projectPath, id);
+        return await getBrief(resolvedProjectPath, id);
       } catch (error: any) {
         getLogger().warn(`skipping unreadable brief '${id}': ${error?.message ?? 'parse error'}`);
         return null;
@@ -300,7 +302,8 @@ export async function listBriefs(projectPath: string): Promise<Brief[]> {
  * Get the currently active brief for a workspace.
  */
 export async function getActiveBrief(projectPath: string): Promise<Brief | null> {
-  const briefId = await resolveActiveBriefId(projectPath);
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
+  const briefId = await resolveActiveBriefId(resolvedProjectPath);
   if (!briefId) {
     return null;
   }
@@ -310,7 +313,7 @@ export async function getActiveBrief(projectPath: string): Promise<Brief | null>
   // recall(). An explicit getBrief(id) still throws — see getBrief.
   let brief: Brief | null;
   try {
-    brief = await getBrief(projectPath, briefId);
+    brief = await getBrief(resolvedProjectPath, briefId);
   } catch (error: any) {
     getLogger().warn(
       `active brief '${briefId}' is unreadable, ignoring: ${error?.message ?? 'parse error'}`
@@ -329,9 +332,10 @@ export async function getActiveBrief(projectPath: string): Promise<Brief | null>
  * Set the active brief for a workspace.
  */
 export async function setActiveBrief(projectPath: string, briefId: string): Promise<void> {
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
   validateBriefId(briefId);
 
-  const brief = await getBrief(projectPath, briefId);
+  const brief = await getBrief(resolvedProjectPath, briefId);
   if (!brief) {
     throw new Error(`Brief '${briefId}' does not exist`);
   }
@@ -339,7 +343,7 @@ export async function setActiveBrief(projectPath: string, briefId: string): Prom
     throw new Error(`Cannot activate brief '${briefId}' with status '${brief.status}'`);
   }
 
-  const activeBriefPath = getActiveBriefPath(projectPath);
+  const activeBriefPath = getActiveBriefPath(resolvedProjectPath);
   await withLock(activeBriefPath, async () => {
     await atomicWriteFile(activeBriefPath, briefId);
   });
@@ -353,15 +357,16 @@ export async function updateBrief(
   id: string,
   updates: BriefUpdate
 ): Promise<void> {
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
   validateBriefId(id);
 
-  const stored = await getStoredBrief(projectPath, id);
+  const stored = await getStoredBrief(resolvedProjectPath, id);
   if (!stored) {
     throw new Error(`Brief '${id}' does not exist`);
   }
 
   await withLock(stored.path, async () => {
-    const current = await getStoredBrief(projectPath, id);
+    const current = await getStoredBrief(resolvedProjectPath, id);
     if (!current) {
       throw new Error(`Brief '${id}' does not exist`);
     }
@@ -388,27 +393,28 @@ export async function updateBrief(
  * Delete a brief.
  */
 export async function deleteBrief(projectPath: string, id: string): Promise<void> {
+  const resolvedProjectPath = await resolveWorkspace(projectPath);
   validateBriefId(id);
 
-  const stored = await getStoredBrief(projectPath, id);
+  const stored = await getStoredBrief(resolvedProjectPath, id);
   if (!stored) {
     throw new Error(`Brief '${id}' does not exist`);
   }
 
   await withLock(stored.path, async () => {
-    const current = await getStoredBrief(projectPath, id);
+    const current = await getStoredBrief(resolvedProjectPath, id);
     if (!current) {
       throw new Error(`Brief '${id}' does not exist`);
     }
 
     await unlink(current.path);
 
-    const activeBriefPath = getActiveBriefPath(projectPath);
+    const activeBriefPath = getActiveBriefPath(resolvedProjectPath);
     await withLock(activeBriefPath, async () => {
       await clearActiveMarkerIfMatch(activeBriefPath, id);
     });
 
-    const legacyActivePlanPath = getLegacyActivePlanPath(projectPath);
+    const legacyActivePlanPath = getLegacyActivePlanPath(resolvedProjectPath);
     await withLock(legacyActivePlanPath, async () => {
       await clearActiveMarkerIfMatch(legacyActivePlanPath, id);
     });

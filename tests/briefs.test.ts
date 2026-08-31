@@ -17,6 +17,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
+const WORKSPACE_UNBOUND_RETRY = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
+
 let TEST_DIR: string;
 
 beforeEach(async () => {
@@ -250,6 +252,52 @@ describe('Brief save locking (TOCTOU)', () => {
 });
 
 describe('Brief storage', () => {
+  it('rejects an unbound direct save without changing the launch cwd', async () => {
+    const originalCwd = process.cwd();
+    const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    try {
+      await expect(saveBrief({ title: 'Unbound brief', content: 'Content' })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+      expect(process.cwd()).toBe(originalCwd);
+    } finally {
+      if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+      else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+    }
+  });
+
+  it('keeps same-ID brief reads isolated across explicit workspaces', async () => {
+    const otherDir = await mkdtemp(join(tmpdir(), 'test-briefs-other-'));
+    await ensureMemoriesDir(otherDir);
+
+    try {
+      await saveBrief({
+        id: 'shared-brief',
+        title: 'Workspace A brief',
+        content: 'A content',
+        workspace: TEST_DIR
+      });
+      await saveBrief({
+        id: 'shared-brief',
+        title: 'Workspace B brief',
+        content: 'B content',
+        workspace: otherDir
+      });
+
+      const firstRead = await getBrief(TEST_DIR, 'shared-brief');
+      const secondRead = await getBrief(otherDir, 'shared-brief');
+      const firstAgain = await getBrief(TEST_DIR, 'shared-brief');
+      const secondAgain = await getBrief(otherDir, 'shared-brief');
+
+      expect(firstRead?.title).toBe('Workspace A brief');
+      expect(secondRead?.title).toBe('Workspace B brief');
+      expect(firstAgain?.title).toBe('Workspace A brief');
+      expect(secondAgain?.title).toBe('Workspace B brief');
+    } finally {
+      await rm(otherDir, { recursive: true, force: true });
+    }
+  });
+
   it('saveBrief writes to briefs storage', async () => {
     const brief = await saveBrief({
       id: 'brief-id',
@@ -419,6 +467,13 @@ describe('Brief retrieval', () => {
       content: 'Content 2',
       workspace: TEST_DIR
     });
+  });
+
+  it('rejects an unverified nested workspace before reading brief state', async () => {
+    const nestedWorkspace = join(TEST_DIR, 'nested-project');
+    await mkdir(nestedWorkspace);
+
+    await expect(getBrief(nestedWorkspace, 'missing-brief')).rejects.toThrow();
   });
 
   it('gets brief by ID', async () => {

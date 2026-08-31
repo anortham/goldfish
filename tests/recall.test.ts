@@ -9,6 +9,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Checkpoint } from '../src/types';
 
+const WORKSPACE_UNBOUND_RETRY = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
+
 async function withFrozenTime<T>(isoTimestamp: string, fn: () => Promise<T>): Promise<T> {
   const RealDate = Date;
   const fixedTime = new RealDate(isoTimestamp).getTime();
@@ -185,7 +187,7 @@ describe('Basic recall functionality', () => {
     expect(result.checkpoints.some(c => c.description === 'Old checkpoint outside since window')).toBe(false);
   });
 
-  it('uses cwd when workspace not specified', async () => {
+  it('refuses cwd when workspace is not specified', async () => {
     const originalCwd = process.cwd();
     const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
 
@@ -193,14 +195,8 @@ describe('Basic recall functionality', () => {
       delete process.env.GOLDFISH_WORKSPACE;
       process.chdir(TEST_DIR_A);
 
-      await saveCheckpoint({
-        description: 'Checkpoint loaded from cwd workspace',
-        workspace: TEST_DIR_A
-      });
-
-      const result = await recall({ limit: 10 });
-
-      expect(result.checkpoints.some(c => c.description === 'Checkpoint loaded from cwd workspace')).toBe(true);
+      await expect(recall({ limit: 10 })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+      expect(process.cwd()).toBe(TEST_DIR_A);
     } finally {
       process.chdir(originalCwd);
       if (originalWorkspace === undefined) {
@@ -209,6 +205,33 @@ describe('Basic recall functionality', () => {
         process.env.GOLDFISH_WORKSPACE = originalWorkspace;
       }
     }
+  });
+});
+
+describe('Workspace cache isolation', () => {
+  it('keeps alternating explicit workspace search results isolated', async () => {
+    await saveCheckpoint({
+      description: 'Alpha workspace marker',
+      workspace: TEST_DIR_A
+    });
+    await saveCheckpoint({
+      description: 'Beta workspace marker',
+      workspace: TEST_DIR_B
+    });
+
+    const firstA = await recall({ workspace: TEST_DIR_A, search: 'Alpha', limit: 10, full: true });
+    const firstB = await recall({ workspace: TEST_DIR_B, search: 'Beta', limit: 10, full: true });
+    const secondA = await recall({ workspace: TEST_DIR_A, search: 'Alpha', limit: 10, full: true });
+    const secondB = await recall({ workspace: TEST_DIR_B, search: 'Beta', limit: 10, full: true });
+    const wrongA = await recall({ workspace: TEST_DIR_A, search: 'Beta', limit: 10, full: true });
+    const wrongB = await recall({ workspace: TEST_DIR_B, search: 'Alpha', limit: 10, full: true });
+
+    expect(firstA.checkpoints.map(checkpoint => checkpoint.description)).toEqual(['Alpha workspace marker']);
+    expect(firstB.checkpoints.map(checkpoint => checkpoint.description)).toEqual(['Beta workspace marker']);
+    expect(secondA.checkpoints.map(checkpoint => checkpoint.description)).toEqual(['Alpha workspace marker']);
+    expect(secondB.checkpoints.map(checkpoint => checkpoint.description)).toEqual(['Beta workspace marker']);
+    expect(wrongA.checkpoints).toEqual([]);
+    expect(wrongB.checkpoints).toEqual([]);
   });
 });
 

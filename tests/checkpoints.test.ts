@@ -22,6 +22,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { rm, readdir, readFile, writeFile, mkdir, mkdtemp, realpath, stat, utimes } from 'fs/promises';
 
+const WORKSPACE_UNBOUND_RETRY = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
+
 let tempDir: string;
 let tempHome: string;
 const originalHome = process.env.HOME;
@@ -1191,6 +1193,49 @@ describe('getCheckpointFilename', () => {
 // ─── saveCheckpoint ──────────────────────────────────────────────────
 
 describe('saveCheckpoint', () => {
+  it('rejects an unbound direct save without changing the launch cwd', async () => {
+    const originalCwd = process.cwd();
+    const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    try {
+      await expect(saveCheckpoint({ description: 'Unbound checkpoint' })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+      expect(process.cwd()).toBe(originalCwd);
+    } finally {
+      if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+      else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+    }
+  });
+
+  it('keeps day cache entries isolated across explicit workspaces', async () => {
+    const otherDir = await mkdtemp(join(tmpdir(), 'test-checkpoints-other-'));
+    await ensureMemoriesDir(otherDir);
+
+    try {
+      const first = await saveCheckpoint({
+        description: 'Workspace A checkpoint',
+        workspace: tempDir
+      });
+      const second = await saveCheckpoint({
+        description: 'Workspace B checkpoint',
+        workspace: otherDir
+      });
+      const date = first.timestamp.split('T')[0]!;
+
+      const firstRead = await getCheckpointsForDay(tempDir, date);
+      const secondRead = await getCheckpointsForDay(otherDir, second.timestamp.split('T')[0]!);
+      const firstAgain = await getCheckpointsForDay(tempDir, date);
+      const secondAgain = await getCheckpointsForDay(otherDir, second.timestamp.split('T')[0]!);
+
+      expect(firstRead.map(checkpoint => checkpoint.description)).toEqual(['Workspace A checkpoint']);
+      expect(secondRead.map(checkpoint => checkpoint.description)).toEqual(['Workspace B checkpoint']);
+      expect(firstAgain.map(checkpoint => checkpoint.description)).toEqual(['Workspace A checkpoint']);
+      expect(secondAgain.map(checkpoint => checkpoint.description)).toEqual(['Workspace B checkpoint']);
+    } finally {
+      await rm(otherDir, { recursive: true, force: true });
+    }
+  });
+
   it('saves checkpoint as individual file in .memories/{date}/', async () => {
     const input: CheckpointInput = {
       description: 'Test checkpoint save',
@@ -1684,6 +1729,13 @@ describe('saveCheckpoint', () => {
 // ─── getCheckpointsForDay ────────────────────────────────────────────
 
 describe('getCheckpointsForDay', () => {
+  it('rejects an unverified nested workspace before reading checkpoint state', async () => {
+    const nestedWorkspace = join(tempDir, 'nested-project');
+    await mkdir(nestedWorkspace);
+
+    await expect(getCheckpointsForDay(nestedWorkspace, new Date().toISOString().split('T')[0]!)).rejects.toThrow();
+  });
+
   it('returns checkpoints for a specific day', async () => {
     const date = '2026-03-12';
     const dateDir = join(getMemoriesDir(tempDir), date);
@@ -1923,6 +1975,7 @@ describe('getAllCheckpoints', () => {
 
   it('returns empty for project with no memories', async () => {
     const emptyDir = join(tmpdir(), `test-empty-${Date.now()}`);
+    await mkdir(emptyDir, { recursive: true });
     const checkpoints = await getAllCheckpoints(emptyDir);
     expect(checkpoints).toEqual([]);
   });
@@ -1952,6 +2005,7 @@ describe('findLatestCheckpointTimestampForBrief', () => {
 
   it('returns null when the project has no memories at all', async () => {
     const emptyDir = join(tmpdir(), `test-empty-brief-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(emptyDir, { recursive: true });
     const result = await findLatestCheckpointTimestampForBrief(emptyDir, 'target-brief');
     expect(result).toBeNull();
   });

@@ -16,10 +16,13 @@ import { handleCheckpoint, handleRecall, handleBrief } from './handlers/index.js
 import type { CheckpointArgs, RecallArgs, BriefArgs, ObservedActor } from './types.js';
 import { getLogger } from './logger.js';
 import {
-  resolveUnsafeCwdReason,
+  WORKSPACE_UNBOUND_MESSAGE,
   resolveWorkspaceWithSource
 } from './workspace.js';
-import { recoverWorkspace, formatKnownProjects, type RecoveredWorkspace } from './workspace-recovery.js';
+import {
+  formatKnownProjects,
+  WORKSPACE_SUGGESTIONS_LABEL
+} from './workspace-recovery.js';
 import { listRegisteredProjects } from './registry.js';
 
 export const SERVER_VERSION = '7.9.0';
@@ -129,7 +132,7 @@ export async function hydrateWorkspaceArguments(
   sessionId: string,
   canRequestRoots: boolean,
   sendRequest: (request: { method: 'roots/list' }) => Promise<{ roots: Root[] }>
-): Promise<{ args: Record<string, unknown>; recovered?: RecoveredWorkspace }> {
+): Promise<{ args: Record<string, unknown> }> {
   const args = asObject(rawArgs);
 
   if (!WORKSPACE_AWARE_TOOLS.has(name)) {
@@ -139,84 +142,26 @@ export async function hydrateWorkspaceArguments(
   const workspace = typeof args.workspace === 'string' ? args.workspace : undefined;
 
   if (workspace === 'all') {
-    return { args };
+    if (name === 'recall') return { args };
+    throw new Error(`workspace="all" is only valid for recall, not ${name}`);
   }
 
-  if (workspace && workspace !== 'current') {
-    return { args };
-  }
-
-  const roots = process.env.GOLDFISH_WORKSPACE || !canRequestRoots
+  const explicit = workspace !== undefined && workspace !== 'current' ? workspace : undefined;
+  const fixedEnv = process.env.GOLDFISH_WORKSPACE;
+  const roots = explicit !== undefined || fixedEnv?.trim() || !canRequestRoots
     ? undefined
     : await getCachedRoots(cache, sessionId, sendRequest);
 
-  const resolved = roots
-    ? resolveWorkspaceWithSource(workspace, { roots })
-    : resolveWorkspaceWithSource(workspace);
-
-  // When the chain falls through to process.cwd(), try to recover a better
-  // project root before accepting cwd or refusing. Cursor plugin installs (and
-  // other harnesses that spawn the server with cwd=home and never advertise
-  // the MCP roots capability) would otherwise hard-refuse on every call. The
-  // registry reader is real here; tests inject a stub via GOLDFISH_HOME.
-  let effective = resolved;
-  let recovered: RecoveredWorkspace | undefined;
-  if (resolved.source === 'cwd') {
-    recovered = await recoverWorkspace({
-      cwd: resolved.path,
-      tool: name as 'checkpoint' | 'recall' | 'brief',
-      registryReader: () => listRegisteredProjects()
-    });
-    if (recovered) {
-      const log = getLogger();
-      log.info(`workspace.recovered source=${recovered.source} path=${recovered.path} cwd=${resolved.path}`);
-      effective = { path: recovered.path, source: recovered.source };
-    }
-  }
-
-  const unsafeCwdReason = effective.source === 'cwd'
-    ? await resolveUnsafeCwdReason(effective.path)
-    : undefined;
-  if (unsafeCwdReason) {
-    let knownProjects = '';
-    try {
-      const projects = await listRegisteredProjects();
-      knownProjects = formatKnownProjects(projects);
-    } catch {
-      // Registry read failure must not silence the underlying refusal.
-    }
-    throw new Error(
-      `Refusing to use ${unsafeCwdReason} (${effective.path}) as workspace from process cwd. ` +
-        'Set GOLDFISH_WORKSPACE to your project path, pass `workspace:` to a tool call, ' +
-        'or open a project folder in your MCP client.' +
-        knownProjects
-    );
-  }
-
-  const hydrated: { args: Record<string, unknown>; recovered?: RecoveredWorkspace } = {
+  const resolved = await resolveWorkspaceWithSource(explicit, {
+    roots,
+    cwd: process.cwd()
+  });
+  return {
     args: {
       ...args,
-      workspace: effective.path
+      workspace: resolved.path
     }
   };
-  if (recovered) {
-    hydrated.recovered = recovered;
-  }
-  return hydrated;
-}
-
-/**
- * Append a "Workspace: … (recovered via …)" line to a checkpoint/brief result
- * so the agent can see where a recovered root landed. Recovery can pick a
- * wrong-but-plausible root (e.g. a parent .git); without this line the
- * misplacement is silent. Recall already prints its own workspace line, so we
- * only surface for the mutating tools.
- */
-function appendRecoveryNotice(result: { content: Array<{ type: string; text?: string }> }, recovered: RecoveredWorkspace): void {
-  const first = result.content?.[0];
-  if (!first || first.type !== 'text' || typeof first.text !== 'string') return;
-  const sourceLabel = recovered.source === 'registry' ? 'registry' : 'parent walk';
-  first.text = `${first.text}\n\nWorkspace: ${recovered.path} (recovered via ${sourceLabel})`;
 }
 
 export function createServer() {
@@ -248,7 +193,7 @@ export function createServer() {
     const start = performance.now();
 
     try {
-      const { args: hydratedArgs, recovered } = await hydrateWorkspaceArguments(
+      const { args: hydratedArgs } = await hydrateWorkspaceArguments(
         name,
         args,
         rootsCache,
@@ -274,24 +219,27 @@ export function createServer() {
           throw new Error(`Unknown tool: ${name}`);
       }
 
-      // Surface where a recovered root landed for mutating tools. Recall
-      // already prints its own workspace line; checkpoint/brief do not, so a
-      // wrong-but-plausible recovery would otherwise be silent.
-      if (recovered && (name === 'checkpoint' || name === 'brief')) {
-        appendRecoveryNotice(result as { content: Array<{ type: string; text?: string }> }, recovered);
-      }
-
       const ms = (performance.now() - start).toFixed(1);
       log.info(`tool.call name=${name} duration=${ms}ms`);
       return result;
     } catch (error: any) {
       const ms = (performance.now() - start).toFixed(1);
       log.error(`tool.call name=${name} duration=${ms}ms`, error);
+      let message = error?.message ?? String(error);
+      if (typeof message === 'string' && message.includes(WORKSPACE_UNBOUND_MESSAGE)) {
+        try {
+          const projects = await listRegisteredProjects();
+          const hasSuggestions = message.includes(WORKSPACE_SUGGESTIONS_LABEL);
+          message += formatKnownProjects(projects, !hasSuggestions);
+        } catch {
+          message = String(message);
+        }
+      }
       return {
         content: [
           {
             type: 'text',
-            text: `Error: ${error.message}`
+            text: `Error: ${message}`
           }
         ],
         isError: true

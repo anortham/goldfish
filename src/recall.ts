@@ -573,7 +573,7 @@ export async function recall(options: RecallInput = {}): Promise<RecallResult> {
 
   // Single workspace recall
   if (workspace !== 'all') {
-    const projectPath = resolveWorkspace(workspace === 'current' ? undefined : workspace);
+    const projectPath = await resolveWorkspace(workspace === 'current' ? undefined : workspace);
 
     const { checkpoints, activeBrief, staleBrief, briefRefresh } = await recallFromWorkspace(projectPath, normalizedOptions);
 
