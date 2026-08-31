@@ -1,9 +1,9 @@
 ---
 id: post-7-8-0-evidence-driven-hardening-across-client
 title: Fail-closed workspace identity across MCP clients
-status: active
+status: completed
 created: 2026-08-19T00:19:51.973Z
-updated: 2026-08-30T23:20:29.184Z
+updated: 2026-08-31T01:04:28.120Z
 tags:
   - direction
   - workspace-binding
