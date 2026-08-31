@@ -199,7 +199,8 @@ describe('MCP 2026-07-28 stdio compatibility', () => {
     const root = await mkdtemp(join(tmpdir(), 'goldfish-modern-refusal-'));
     const home = join(root, 'home');
     const goldfishHome = join(root, 'goldfish-home');
-    await Promise.all([mkdir(home), mkdir(goldfishHome), mkdir(join(home, '.memories'), { recursive: true })]);
+    await mkdir(home);
+    await Promise.all([mkdir(goldfishHome), mkdir(join(home, '.memories'), { recursive: true })]);
     const before = await readdir(join(home, '.memories'));
 
     let client: Client | undefined;
