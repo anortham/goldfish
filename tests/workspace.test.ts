@@ -11,10 +11,12 @@ import {
   getGoldfishHomeDir,
   parentWalkWorkspace,
 } from '../src/workspace';
-import { join, resolve } from 'path';
-import { tmpdir } from 'os';
-import { mkdir, rm, stat, symlink } from 'fs/promises';
+import { join } from 'path';
+import { homedir, tmpdir } from 'os';
+import { mkdir, mkdtemp, rm, stat, symlink } from 'fs/promises';
 import { pathToFileURL } from 'url';
+
+const WORKSPACE_UNBOUND_RETRY = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
 
 describe('Workspace normalization', () => {
   it('normalizes full Unix path to simple name', () => {
@@ -106,9 +108,8 @@ describe('Project-level .memories/ storage', () => {
   });
 
   describe('getMemoriesDir', () => {
-    it('returns {cwd}/.memories/ when no arg is provided', () => {
-      const result = getMemoriesDir();
-      expect(result).toBe(join(process.cwd(), '.memories'));
+    it('requires a verified project path', () => {
+      expect(() => getMemoriesDir()).toThrow(WORKSPACE_UNBOUND_RETRY);
     });
 
     it('returns {projectPath}/.memories/ when a path is provided', () => {
@@ -118,9 +119,8 @@ describe('Project-level .memories/ storage', () => {
   });
 
   describe('getPlansDir', () => {
-    it('returns {cwd}/.memories/plans/ when no arg is provided', () => {
-      const result = getPlansDir();
-      expect(result).toBe(join(process.cwd(), '.memories', 'plans'));
+    it('requires a verified project path', () => {
+      expect(() => getPlansDir()).toThrow(WORKSPACE_UNBOUND_RETRY);
     });
 
     it('returns {projectPath}/.memories/plans/ when a path is provided', () => {
@@ -130,9 +130,8 @@ describe('Project-level .memories/ storage', () => {
   });
 
   describe('getBriefsDir', () => {
-    it('returns {cwd}/.memories/briefs/ when no arg is provided', () => {
-      const result = getBriefsDir();
-      expect(result).toBe(join(process.cwd(), '.memories', 'briefs'));
+    it('requires a verified project path', () => {
+      expect(() => getBriefsDir()).toThrow(WORKSPACE_UNBOUND_RETRY);
     });
 
     it('returns {projectPath}/.memories/briefs/ when a path is provided', () => {
@@ -165,174 +164,173 @@ describe('Project-level .memories/ storage', () => {
       expect(memoriesStat.isDirectory()).toBe(true);
     });
 
-    it('uses cwd when no arg is provided', async () => {
-      const tmpDir = makeTmpDir();
-      await Bun.write(join(tmpDir, '.keep'), '');
-      process.chdir(tmpDir);
-
-      await ensureMemoriesDir();
-
-      const memoriesStat = await stat(join(tmpDir, '.memories'));
-      expect(memoriesStat.isDirectory()).toBe(true);
-
-      const briefsStat = await stat(join(tmpDir, '.memories', 'briefs'));
-      expect(briefsStat.isDirectory()).toBe(true);
-
-      await expect(stat(join(tmpDir, '.memories', 'plans'))).rejects.toThrow();
+    it('requires a verified project path when no arg is provided', async () => {
+      await expect(ensureMemoriesDir()).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
     });
   });
 });
 
-describe('resolveWorkspace', () => {
-  const originalEnv = process.env.GOLDFISH_WORKSPACE;
+describe('verified workspace binding', () => {
+  const tmpDirs: string[] = [];
+  const originalWorkspace = process.env.GOLDFISH_WORKSPACE;
+  const originalHome = process.env.HOME;
 
-  afterEach(() => {
-    if (originalEnv === undefined) delete process.env.GOLDFISH_WORKSPACE;
-    else process.env.GOLDFISH_WORKSPACE = originalEnv;
+  async function makeTmpDir(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'test-goldfish-binding-'));
+    tmpDirs.push(dir);
+    return dir;
+  }
+
+  afterEach(async () => {
+    if (originalWorkspace === undefined) delete process.env.GOLDFISH_WORKSPACE;
+    else process.env.GOLDFISH_WORKSPACE = originalWorkspace;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+
+    for (const dir of tmpDirs) {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+    tmpDirs.length = 0;
   });
 
-  it('returns explicit path when provided', () => {
-    process.env.GOLDFISH_WORKSPACE = '/env/path';
-    expect(resolveWorkspace('/explicit/path')).toBe('/explicit/path');
-  });
-
-  it('returns GOLDFISH_WORKSPACE when no explicit path', () => {
-    process.env.GOLDFISH_WORKSPACE = '/env/path';
-    expect(resolveWorkspace()).toBe('/env/path');
-  });
-
-  it('uses the first valid file root when no explicit path or env var exists', () => {
+  it('fails with the exact retry sentence when identity is missing or current', async () => {
     delete process.env.GOLDFISH_WORKSPACE;
 
-    // resolve() makes the fixture a real absolute path on every OS — Windows
-    // fileURLToPath rejects drive-less file URLs like file:///roots/....
-    const rootPath = resolve('/roots/project one');
-    expect(resolveWorkspace(undefined, {
-      roots: [
-        { uri: 'https://example.com/not-a-file-root' },
-        { uri: pathToFileURL(rootPath).href }
-      ],
-      cwd: '/fallback/cwd'
-    })).toBe(rootPath);
+    await expect(resolveWorkspace()).rejects.toThrow(new Error(WORKSPACE_UNBOUND_RETRY));
+    await expect(resolveWorkspace('current')).rejects.toThrow(new Error(WORKSPACE_UNBOUND_RETRY));
   });
 
-  it('treats "current" same as undefined', () => {
-    process.env.GOLDFISH_WORKSPACE = '/env/path';
-    expect(resolveWorkspace('current')).toBe('/env/path');
-  });
-
-  it('treats "current" as a roots-aware fallback when env is unset', () => {
+  it('accepts an existing markerless absolute directory for first use', async () => {
     delete process.env.GOLDFISH_WORKSPACE;
+    const project = await makeTmpDir();
 
-    const rootPath = resolve('/roots/current-project');
-    expect(resolveWorkspace('current', {
-      roots: [{ uri: pathToFileURL(rootPath).href }],
-      cwd: '/fallback/cwd'
-    })).toBe(rootPath);
-  });
-
-  it('prefers env var over roots', () => {
-    process.env.GOLDFISH_WORKSPACE = '/env/path';
-
-    expect(resolveWorkspace(undefined, {
-      roots: [{ uri: pathToFileURL('/roots/project').href }],
-      cwd: '/fallback/cwd'
-    })).toBe('/env/path');
-  });
-
-  it('falls back to cwd when no env var', () => {
-    delete process.env.GOLDFISH_WORKSPACE;
-    expect(resolveWorkspace()).toBe(process.cwd());
-  });
-
-  it('ignores empty string GOLDFISH_WORKSPACE', () => {
-    process.env.GOLDFISH_WORKSPACE = '';
-    expect(resolveWorkspace()).toBe(process.cwd());
-  });
-
-  it('falls back to cwd when roots are empty or invalid', () => {
-    delete process.env.GOLDFISH_WORKSPACE;
-
-    expect(resolveWorkspace(undefined, {
-      roots: [
-        { uri: 'notaurl' },
-        { uri: 'https://example.com/not-a-file-root' }
-      ],
-      cwd: '/fallback/cwd'
-    })).toBe('/fallback/cwd');
-  });
-});
-
-describe('resolveWorkspaceWithSource', () => {
-  const originalEnv = process.env.GOLDFISH_WORKSPACE;
-
-  afterEach(() => {
-    if (originalEnv === undefined) delete process.env.GOLDFISH_WORKSPACE;
-    else process.env.GOLDFISH_WORKSPACE = originalEnv;
-  });
-
-  it('tags explicit paths as source=explicit', () => {
-    process.env.GOLDFISH_WORKSPACE = '/env/path';
-    expect(resolveWorkspaceWithSource('/explicit/path')).toEqual({
-      path: '/explicit/path',
+    await expect(resolveWorkspaceWithSource(project)).resolves.toEqual({
+      path: project,
+      source: 'explicit'
+    });
+    await expect(resolveWorkspaceWithSource(`${project}/`)).resolves.toEqual({
+      path: `${project}/`,
       source: 'explicit'
     });
   });
 
-  it('tags GOLDFISH_WORKSPACE values as source=env', () => {
-    process.env.GOLDFISH_WORKSPACE = '/env/path';
-    expect(resolveWorkspaceWithSource()).toEqual({
-      path: '/env/path',
-      source: 'env'
-    });
+  it('uses explicit, then environment, then the first valid legacy root', async () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    const explicit = await makeTmpDir();
+    const env = await makeTmpDir();
+    const root = await makeTmpDir();
+
+    await expect(resolveWorkspaceWithSource(explicit, {
+      env,
+      roots: [{ uri: pathToFileURL(root).href }]
+    })).resolves.toEqual({ path: explicit, source: 'explicit' });
+
+    await expect(resolveWorkspaceWithSource(undefined, {
+      env,
+      roots: [{ uri: pathToFileURL(root).href }]
+    })).resolves.toEqual({ path: env, source: 'env' });
+
+    await expect(resolveWorkspaceWithSource(undefined, {
+      roots: [
+        { uri: 'https://example.com/not-a-file-root' },
+        { uri: pathToFileURL(root).href }
+      ]
+    })).resolves.toEqual({ path: root, source: 'roots' });
   });
 
-  it('tags roots-derived paths as source=roots', () => {
-    delete process.env.GOLDFISH_WORKSPACE;
+  it('uses GOLDFISH_WORKSPACE when the workspace argument is omitted or current', async () => {
+    const env = await makeTmpDir();
+    process.env.GOLDFISH_WORKSPACE = env;
 
-    const rootPath = resolve('/roots/project');
-    expect(resolveWorkspaceWithSource(undefined, {
-      roots: [{ uri: pathToFileURL(rootPath).href }],
-      cwd: '/fallback/cwd'
-    })).toEqual({
-      path: rootPath,
-      source: 'roots'
-    });
+    await expect(resolveWorkspaceWithSource()).resolves.toEqual({ path: env, source: 'env' });
+    await expect(resolveWorkspaceWithSource('current')).resolves.toEqual({ path: env, source: 'env' });
   });
 
-  it('tags cwd fallback as source=cwd', () => {
-    delete process.env.GOLDFISH_WORKSPACE;
+  it('does not replace an invalid explicit path with environment or Roots', async () => {
+    const env = await makeTmpDir();
+    const root = await makeTmpDir();
 
-    expect(resolveWorkspaceWithSource(undefined, {
-      cwd: '/fallback/cwd'
-    })).toEqual({
-      path: '/fallback/cwd',
-      source: 'cwd'
-    });
+    await expect(resolveWorkspace('relative/project', {
+      env,
+      roots: [{ uri: pathToFileURL(root).href }]
+    })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
   });
 
-  it('tags cwd fallback when roots are empty/invalid', () => {
-    delete process.env.GOLDFISH_WORKSPACE;
+  it('does not replace an invalid environment path with a legacy Root', async () => {
+    const root = await makeTmpDir();
 
-    expect(resolveWorkspaceWithSource(undefined, {
-      roots: [{ uri: 'notaurl' }],
-      cwd: '/fallback/cwd'
-    })).toEqual({
-      path: '/fallback/cwd',
-      source: 'cwd'
-    });
+    await expect(resolveWorkspace(undefined, {
+      env: 'relative/project',
+      roots: [{ uri: pathToFileURL(root).href }]
+    })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
   });
 
-  it('treats "current" the same as undefined for source tagging', () => {
+  it('rejects invalid candidates and never falls back to cwd or parent walking', async () => {
     delete process.env.GOLDFISH_WORKSPACE;
-    const rootPath = resolve('/roots/project');
-    expect(resolveWorkspaceWithSource('current', {
-      roots: [{ uri: pathToFileURL(rootPath).href }],
-      cwd: '/fallback/cwd'
-    })).toEqual({
-      path: rootPath,
-      source: 'roots'
-    });
+    const cwdProject = await makeTmpDir();
+    await mkdir(join(cwdProject, '.memories'));
+
+    await expect(resolveWorkspace(undefined, { cwd: cwdProject })).rejects.toThrow(
+      `${WORKSPACE_UNBOUND_RETRY}\nSuggestions only; choose one explicitly:\n- ${cwdProject}`
+    );
+    await expect(resolveWorkspace('/path/does/not/exist')).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+  });
+
+  it('requires an existing directory rather than accepting a file', async () => {
+    const parent = await makeTmpDir();
+    const file = join(parent, 'workspace.txt');
+    await Bun.write(file, 'not a directory');
+
+    await expect(resolveWorkspace(file)).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+  });
+
+  it('rejects unsafe broad directories for explicit and environment sources', async () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+
+    await expect(resolveWorkspace('/')).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+    await expect(resolveWorkspace(undefined, { env: homedir() })).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+  });
+
+  it('rejects home aliases, variables, URIs, relative paths, and dot segments', async () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    const project = await makeTmpDir();
+
+    for (const candidate of ['~', `~/${project}`, '${workspaceFolder}', '$HOME/project', `file://${project}`, './project', `../${project}`, `${project}/../${project}`]) {
+      await expect(resolveWorkspace(candidate)).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects foreign Windows absolute paths on POSIX', async () => {
+    await expect(resolveWorkspace('C:\\work\\project')).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+    await expect(resolveWorkspace('C:/work/project')).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+  });
+
+  it.skipIf(process.platform !== 'win32')('rejects foreign POSIX and drive-relative paths on Windows', async () => {
+    await expect(resolveWorkspace('/tmp/project')).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+    await expect(resolveWorkspace('C:project')).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
+  });
+
+  it('rejects paths nested below a project marker and suggests that root', async () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    const root = await makeTmpDir();
+    await mkdir(join(root, '.memories'));
+    const nested = join(root, 'src');
+    await mkdir(nested);
+
+    await expect(resolveWorkspace(nested)).rejects.toThrow(
+      `${WORKSPACE_UNBOUND_RETRY}\nSuggestions only; choose one explicitly:\n- ${root}`
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')('rejects symlink aliases of the home directory', async () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    const home = await makeTmpDir();
+    const parent = await makeTmpDir();
+    const homeAlias = join(parent, 'home-link');
+    await symlink(home, homeAlias);
+    process.env.HOME = homeAlias;
+
+    await expect(resolveWorkspace(home)).rejects.toThrow(WORKSPACE_UNBOUND_RETRY);
   });
 });
 

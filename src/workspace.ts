@@ -78,57 +78,185 @@ export function normalizeWorkspace(pathOrName: string): string {
  * - 'explicit': caller passed a non-'current' workspace argument
  * - 'env':      GOLDFISH_WORKSPACE was set
  * - 'roots':    came from MCP roots/list
- * - 'cwd':      fell back to process.cwd() — least trustworthy on desktop MCP clients
- * - 'registry': recovered from the cross-project registry (cwd or an ancestor is a
- *               registered project, or the single-registered recall-only fallback)
- * - 'walk':     recovered by walking up from cwd to the nearest .memories/ or .git/
+ * Only caller-provided sources can authorize a workspace. Parent-walk results
+ * are suggestions only and are represented by `RecoveredWorkspace`.
  */
-export type WorkspaceSource = 'explicit' | 'env' | 'roots' | 'cwd' | 'registry' | 'walk';
+export type WorkspaceSource = 'explicit' | 'env' | 'roots';
 
 export interface ResolvedWorkspace {
   path: string;
   source: WorkspaceSource;
 }
 
-/**
- * Result of a workspace recovery attempt (registry lookup or parent walk).
- * Used when the resolution chain reaches the cwd fallback and tries to find a
- * better root before accepting cwd or refusing.
- */
+/** Result of bounded candidate discovery used in an unbound error. */
 export interface RecoveredWorkspace {
   path: string;
   source: 'registry' | 'walk';
 }
 
+export const WORKSPACE_UNBOUND_MESSAGE = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
+
 /**
  * Resolve the effective workspace path.
- * Priority: explicit arg > GOLDFISH_WORKSPACE env var > roots > process.cwd()
+ * Priority: explicit arg > GOLDFISH_WORKSPACE env var > roots; no cwd fallback.
  */
-export function resolveWorkspace(explicit?: string, options: ResolveWorkspaceOptions = {}): string {
-  return resolveWorkspaceWithSource(explicit, options).path;
+export async function resolveWorkspace(explicit?: string, options: ResolveWorkspaceOptions = {}): Promise<string> {
+  return (await resolveWorkspaceWithSource(explicit, options)).path;
 }
 
 /**
- * Resolve the effective workspace path along with the source it came from.
- * Callers (e.g., MCP tool handlers) can use the source tag to apply policy:
- * cwd-sourced filesystem roots are unsafe defaults on desktop MCP clients.
+ * Resolve and validate the effective workspace path along with its source.
+ * Cwd, registry, and parent-walk results are never authorization sources.
  */
-export function resolveWorkspaceWithSource(
+export async function resolveWorkspaceWithSource(
   explicit?: string,
   options: ResolveWorkspaceOptions = {}
-): ResolvedWorkspace {
-  if (explicit && explicit !== 'current') {
-    return { path: explicit, source: 'explicit' };
+): Promise<ResolvedWorkspace> {
+  const explicitCandidate = explicit !== undefined && explicit.trim() !== 'current'
+    ? explicit
+    : undefined;
+
+  if (explicitCandidate !== undefined) {
+    return bindWorkspaceCandidate(explicitCandidate, 'explicit', options);
   }
+
   const fromEnv = options.env ?? process.env.GOLDFISH_WORKSPACE;
-  if (fromEnv) return { path: fromEnv, source: 'env' };
-  const fromRoots = getWorkspaceFromRoots(options.roots);
-  if (fromRoots) return { path: fromRoots, source: 'roots' };
-  return { path: options.cwd ?? process.cwd(), source: 'cwd' };
+  if (fromEnv?.trim()) {
+    return bindWorkspaceCandidate(fromEnv, 'env', options);
+  }
+
+  const suggestions: string[] = [];
+  for (const root of getWorkspaceRootCandidates(options.roots)) {
+    const result = await validateWorkspaceCandidate(root);
+    if (result.path) return { path: result.path, source: 'roots' };
+    suggestions.push(...(result.suggestions ?? []));
+  }
+
+  throw await workspaceBindingError(options.cwd, suggestions);
+}
+
+type WorkspaceCandidateValidation = {
+  path?: string;
+  suggestions?: string[];
+};
+
+async function bindWorkspaceCandidate(
+  candidate: string,
+  source: WorkspaceSource,
+  options: ResolveWorkspaceOptions
+): Promise<ResolvedWorkspace> {
+  const result = await validateWorkspaceCandidate(candidate);
+  if (!result.path) {
+    throw await workspaceBindingError(options.cwd, result.suggestions);
+  }
+  return { path: result.path, source };
+}
+
+async function workspaceBindingError(cwd?: string, suggestions: string[] = []): Promise<Error> {
+  const allSuggestions = [...suggestions];
+  if (allSuggestions.length === 0 && cwd !== undefined) {
+    const candidate = await parentWalkWorkspace(cwd);
+    if (candidate) allSuggestions.push(candidate.path);
+  }
+
+  const uniqueSuggestions = [...new Set(allSuggestions)];
+  const suffix = uniqueSuggestions.length > 0
+    ? `\nSuggestions only; choose one explicitly:\n${uniqueSuggestions.map((path) => `- ${path}`).join('\n')}`
+    : '';
+  return new Error(`${WORKSPACE_UNBOUND_MESSAGE}${suffix}`);
+}
+
+async function validateWorkspaceCandidate(candidate: string): Promise<WorkspaceCandidateValidation> {
+  const value = candidate.trim();
+  if (!isHostNativeAbsolutePath(value) || hasDotSegment(value)) {
+    return {};
+  }
+
+  let candidateStat;
+  try {
+    candidateStat = await stat(value);
+  } catch {
+    return {};
+  }
+  if (!candidateStat.isDirectory()) return {};
+
+  const unsafe = await resolveUnsafeCwdReason(value);
+  if (unsafe) return {};
+
+  const suggestions = await findEnclosingProjectRoots(value);
+  if (suggestions.length > 0) return { suggestions };
+
+  return { path: value };
+}
+
+function isHostNativeAbsolutePath(value: string): boolean {
+  if (!value || value === 'current' || value === 'all') return false;
+  if (value === '~' || /^~[\\/]/.test(value)) return false;
+  if (/(?:\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*|%[^%]+%)/.test(value)) return false;
+  if (/^file:/i.test(value) || /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value)) return false;
+
+  if (process.platform === 'win32') {
+    const driveAbsolute = /^[A-Za-z]:[\\/]/.test(value);
+    const uncAbsolute = /^(?:\\\\|\/\/)[^\\/]+[\\/]+[^\\/]+/.test(value);
+    return driveAbsolute || uncAbsolute;
+  }
+
+  if (!posix.isAbsolute(value)) return false;
+  return !/^[A-Za-z]:[\\/]/.test(value) && !/^\\\\/.test(value) && !/^\/\//.test(value);
+}
+
+function hasDotSegment(value: string): boolean {
+  return value.split(/[\\/]/).some((part) => part === '.' || part === '..');
+}
+
+async function findEnclosingProjectRoots(workspacePath: string): Promise<string[]> {
+  const pathOps = process.platform === 'win32' ? win32 : posix;
+  const normalized = pathOps.normalize(workspacePath);
+  const root = pathOps.parse(normalized).root;
+  const walkStart = normalized.length > root.length
+    ? normalized.replace(/[\\/]+$/, '')
+    : normalized;
+  const candidates = [walkStart];
+  const canonical = await tryRealpath(walkStart);
+  if (canonical && canonical !== walkStart) candidates.push(canonical);
+
+  const roots: string[] = [];
+  for (const candidate of candidates) {
+    let current = pathOps.dirname(candidate);
+    let guard = 0;
+    while (current !== candidate && guard++ <= 128) {
+      if (!(await resolveUnsafeCwdReason(current))) {
+        if (await hasProjectMarker(current, pathOps)) {
+          roots.push(current);
+          break;
+        }
+      }
+      const parent = pathOps.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+
+  return [...new Set(roots)];
+}
+
+async function hasProjectMarker(path: string, pathOps: typeof posix | typeof win32): Promise<boolean> {
+  try {
+    const memories = await stat(pathOps.join(path, '.memories'));
+    if (memories.isDirectory()) return true;
+  } catch {
+  }
+
+  try {
+    await stat(pathOps.join(path, '.git'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function getWorkspaceFromRootUri(uri: string): string | undefined {
-  if (!uri.startsWith('file://')) return undefined;
+  if (!uri.toLowerCase().startsWith('file://')) return undefined;
 
   try {
     return fileURLToPath(uri);
@@ -146,6 +274,13 @@ export function getWorkspaceFromRoots(roots?: WorkspaceRoot[] | null): string | 
   }
 
   return undefined;
+}
+
+function getWorkspaceRootCandidates(roots?: WorkspaceRoot[] | null): string[] {
+  if (!roots || roots.length === 0) return [];
+  return roots
+    .map((root) => getWorkspaceFromRootUri(root.uri))
+    .filter((path): path is string => path !== undefined);
 }
 
 function isWindowsPath(value: string): boolean {
@@ -353,27 +488,18 @@ export function assertProjectWorkspace(workspace: string | undefined, toolName: 
 
 // ─── Project-level .memories/ storage ────────────────────────────────
 
-/**
- * Get the .memories/ directory path for a project.
- * Falls back to resolveWorkspace() if no projectPath is provided.
- */
+/** Get the .memories/ directory path for a verified project root. */
 export function getMemoriesDir(projectPath?: string): string {
-  const base = projectPath ?? resolveWorkspace();
-  return join(base, '.memories');
+  if (!projectPath) throw new Error(WORKSPACE_UNBOUND_MESSAGE);
+  return join(projectPath, '.memories');
 }
 
-/**
- * Get the .memories/briefs/ directory path for a project.
- * Falls back to resolveWorkspace() if no projectPath is provided.
- */
+/** Get the .memories/briefs/ directory path for a verified project root. */
 export function getBriefsDir(projectPath?: string): string {
   return join(getMemoriesDir(projectPath), 'briefs');
 }
 
-/**
- * Get the .memories/plans/ directory path for a project.
- * Falls back to resolveWorkspace() if no projectPath is provided.
- */
+/** Get the .memories/plans/ directory path for a verified project root. */
 export function getPlansDir(projectPath?: string): string {
   return join(getMemoriesDir(projectPath), 'plans');
 }
@@ -384,10 +510,7 @@ export function getGoldfishHomeDir(): string {
   return join(homeDir, '.goldfish');
 }
 
-/**
- * Ensure .memories/ and .memories/briefs/ directories exist for a project.
- * Falls back to resolveWorkspace() if no projectPath is provided.
- */
+/** Ensure .memories/ and .memories/briefs/ exist for a verified project root. */
 export async function ensureMemoriesDir(projectPath?: string): Promise<void> {
   const briefsDir = getBriefsDir(projectPath);
 
