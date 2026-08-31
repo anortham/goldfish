@@ -43,7 +43,7 @@ export interface CheckpointInput {
   confidence?: number;
   unknowns?: string[];
   tags?: string[];
-  workspace?: string;     // Defaults to current workspace
+  workspace?: string;     // Absolute path; user-level calls pass the project root
 }
 
 export interface Brief {
@@ -74,7 +74,7 @@ export interface BriefUpdate {
 }
 
 export interface RecallOptions {
-  workspace?: string;     // 'current' | 'all' | specific path
+  workspace?: string;     // Absolute path; "all" is explicit cross-project recall
   since?: string;         // Human-friendly ("2h", "30m", "3d") or ISO 8601 UTC
   days?: number;          // Look back N days (no default — only used when explicitly set)
   from?: string;          // ISO 8601 UTC

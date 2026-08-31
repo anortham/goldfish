@@ -5,6 +5,10 @@ description: Use when returning to a project after time away, switching harnesse
 
 # Handoff
 
+## Workspace binding
+
+For user-level MCP registrations, pass workspace as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and "current" work only with fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots. recall({ workspace: "all" }) is explicit cross-project search, never a fallback; it is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.
+
 ## When To Use
 
 Three triggers:
@@ -28,7 +32,7 @@ Four steps. Run them in order, then compose the document.
 ### 1. Load the active brief
 
 ```ts
-recall({ limit: 0 })
+recall({ workspace: "/absolute/path/to/project", limit: 0 })
 ```
 
 This returns the active brief without pulling checkpoints. If no brief is active, note that in the output and keep going.
@@ -36,13 +40,13 @@ This returns the active brief without pulling checkpoints. If no brief is active
 ### 2. Load recent checkpoints
 
 ```ts
-recall({ days: 3, limit: 10, full: true })
+recall({ workspace: "/absolute/path/to/project", days: 3, limit: 10, full: true })
 ```
 
 Default window is 3 days. If the user passed a time argument (for example `--since 2d` or `--since 4h`), honour it:
 
 ```ts
-recall({ since: "2d", limit: 10, full: true })
+recall({ workspace: "/absolute/path/to/project", since: "2d", limit: 10, full: true })
 ```
 
 `full: true` is required so you see `next`, `unknowns`, and git context.

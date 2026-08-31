@@ -5,6 +5,10 @@ applyTo: "**"
 ---
 # Goldfish Checkpoint & Brief Discipline
 
+## Workspace binding
+
+For user-level MCP registrations, pass `workspace` as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and `"current"` work only with fixed absolute `GOLDFISH_WORKSPACE` or supported legacy Roots. `recall({ workspace: "all" })` is explicit cross-project search, never a fallback; it is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with `{"workspace":"<absolute-project-root>"}`.
+
 ## Checkpointing (`mcp_goldfish_checkpoint`)
 
 - Treat `mcp_goldfish_checkpoint` as required for meaningful milestones, not optional.
@@ -23,7 +27,7 @@ applyTo: "**"
 
 - Use `mcp_goldfish_brief` to save durable strategic context when project direction, constraints, or success criteria should persist across sessions.
 - Do not mirror harness plan mode into Goldfish. Harness planning owns current-session execution detail.
-- Always `activate: true` after saving a brief so it appears in future `recall()` responses. Only ONE brief can be active per workspace.
+- Always `activate: true` after saving a brief so it appears in future recall responses. Only ONE brief can be active per workspace.
 - Update the brief (`action: "update"`) when goals, constraints, or success criteria change.
 - Mark a brief as `complete` (`action: "complete"`) only when the direction has landed.
 - Briefs survive context compaction and capture strategic direction.
@@ -37,9 +41,9 @@ applyTo: "**"
 
 ## Recall (`mcp_goldfish_recall`)
 
-- Use `mcp_goldfish_recall` at the start of a new session (or after `/recall`) to restore prior context.
+- Use `mcp_goldfish_recall` when resuming prior work, after `/recall`, or when earlier decisions matter.
 - After context compaction, call recall to restore lost state before continuing work.
-- Trust recalled context — do not re-verify information from checkpoints.
+- Treat recalled context as historical evidence; verify current or drift-prone facts against live sources.
 - Key parameters (all optional):
   - `limit`: Max checkpoints to return (default: 5). Set to `0` for active brief only.
   - `since`: Human-friendly time span (`"2h"`, `"3d"`, `"1w"`) or ISO timestamp.
@@ -47,14 +51,14 @@ applyTo: "**"
   - `from`/`to`: Explicit date range (ISO 8601 or YYYY-MM-DD).
   - `search`: BM25 search across descriptions, tags, branches, and files.
   - `full`: Return full descriptions + git metadata (default: false).
-  - `workspace`: `"current"` (default), `"all"` (cross-workspace), or specific path.
+  - `workspace`: the conversation's host-native absolute project root for user-level calls; `"all"` is explicit cross-project recall only.
   - `briefId`: Filter checkpoints to those created under a specific brief.
 - Examples:
-  - `recall()` — last 5 checkpoints
-  - `recall({ since: "2h" })` — last 2 hours
-  - `recall({ search: "auth", full: true })` — BM25 search with full details
+  - `recall({ workspace: "/absolute/path/to/project" })` — last 5 checkpoints
+  - `recall({ workspace: "/absolute/path/to/project", since: "2h" })` — last 2 hours
+  - `recall({ workspace: "/absolute/path/to/project", search: "auth", full: true })` — BM25 search with full details
   - `recall({ workspace: "all", days: 1 })` — cross-project standup
-  - `recall({ limit: 0 })` — active brief only, no checkpoints
+  - `recall({ workspace: "/absolute/path/to/project", limit: 0 })` — active brief only, no checkpoints
 
 ## Code Exploration with Julie (`mcp_julie_*` tools)
 
@@ -88,5 +92,5 @@ Use julie tools to gather context before implementing changes. This accelerates 
 
 ## VS Code MCP Setup
 
-- `GOLDFISH_WORKSPACE` is optional in VS Code now that Goldfish can resolve the active workspace from MCP roots.
-- Keep `GOLDFISH_WORKSPACE` as an override when you want Goldfish pinned to a different path than the active workspace folder.
+- User-level calls must pass the conversation's host-native absolute project root as `workspace` on every checkpoint, brief, and current-project recall call.
+- A project-level server may omit `workspace` when `GOLDFISH_WORKSPACE` is fixed to an absolute path or supported legacy Roots supplies it.

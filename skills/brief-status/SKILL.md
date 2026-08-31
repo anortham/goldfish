@@ -5,6 +5,10 @@ description: Use when the user asks for progress against current project directi
 
 # Brief Status
 
+## Workspace binding
+
+For user-level MCP registrations, pass workspace as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and "current" work only with fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots. recall({ workspace: "all" }) is explicit cross-project search, never a fallback; it is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.
+
 ## Core Split
 
 Assess status from three sources:
@@ -18,19 +22,19 @@ Assess status from three sources:
 ### 1. Load the current brief
 
 ```ts
-recall({ limit: 0 })
+recall({ workspace: "/absolute/path/to/project", limit: 0 })
 ```
 
 If the user asks about a specific brief, fetch it directly:
 
 ```ts
-brief({ action: "get", id: "brief-id" })
+brief({ action: "get", id: "brief-id", workspace: "/absolute/path/to/project" })
 ```
 
 ### 2. Pull recent evidence
 
 ```ts
-recall({ days: 7, limit: 20, full: true })
+recall({ workspace: "/absolute/path/to/project", days: 7, limit: 20, full: true })
 ```
 
 Use `full: true` when you need files, git context, or detailed checkpoint metadata.

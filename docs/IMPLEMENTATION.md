@@ -38,6 +38,10 @@ Legacy `.memories/plans/` and `.active-plan` paths are still read so older repos
 5. **Atomic writes** (write-then-rename with locking)
 6. **No derived caches** -- search runs over the markdown corpus on demand
 
+### Workspace binding
+
+User-level MCP registrations must pass the conversation's host-native absolute project root as `workspace` on every checkpoint, brief, and current-project recall call. A project-level server may omit `workspace` when `GOLDFISH_WORKSPACE` is fixed to an absolute path or a supported legacy Roots binding supplies it. Omission and `"current"` do not bind user-level calls. `recall({ workspace: "all" })` is explicit cross-project search, never a fallback, and `"all"` is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only. An unbound call returns `Workspace is not bound. User-level MCP registrations must pass the host-native absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}`.
+
 ---
 
 ## Data Formats
@@ -153,7 +157,7 @@ Used for cross-project recall and standup aggregation. Stale entries are filtere
 
 | Module | Purpose |
 |--------|---------|
-| `src/workspace.ts` | Workspace detection, `getMemoriesDir()`, `getBriefsDir()`, `ensureMemoriesDir()` (legacy `getPlansDir()` is retained internally for reading old plan files) |
+| `src/workspace.ts` | Workspace path validation, `getMemoriesDir()`, `getBriefsDir()`, `ensureMemoriesDir()` (legacy `getPlansDir()` is retained internally for reading old plan files) |
 | `src/checkpoints.ts` | YAML frontmatter individual files, `generateCheckpointId()`, `saveCheckpoint()`, `getCheckpointsForDay()`, `getCheckpointsForDateRange()` |
 | `src/briefs.ts` | Brief CRUD, active brief tracking, legacy plan-path reads |
 | `src/recall.ts` | Aggregation across date ranges and workspaces, cross-project recall via registry |
@@ -211,7 +215,7 @@ Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `Sessio
 
 Cursor uses a separate native hook map rather than the Claude/Codex compatibility map. `hooks/cursor-hooks.json` declares top-level `version: 1` and exactly one lowercase `sessionStart` command with a 5-second timeout. `hooks/cursor-session-start.ts` wraps `getHookContext()` as JSON `{ "additional_context": "..." }`, reports import or setup failures to stderr, and exits successfully so startup is never blocked.
 
-The Cursor Plugin manifest (`.cursor-plugin/plugin.json`) points to `skills/`, `hooks/cursor-hooks.json`, and `mcp.json`. The MCP map is stdio: Bun launches `${PLUGIN_ROOT}/src/server.ts`. If a Cursor mutating tool has no workspace signal, registry recovery remains useful for recall but never binds writes; a project `.cursor/mcp.json` entry with an absolute server path and `GOLDFISH_WORKSPACE=${workspaceFolder}` is the write-safe fallback.
+The Cursor Plugin manifest (`.cursor-plugin/plugin.json`) points to `skills/`, `hooks/cursor-hooks.json`, and `mcp.json`. The MCP map is stdio: Bun launches `${PLUGIN_ROOT}/src/server.ts`. User-level Cursor calls pass the conversation's host-native absolute project root as `workspace`. A project `.cursor/mcp.json` entry with an absolute server path and `GOLDFISH_WORKSPACE=${workspaceFolder}` provides a fixed project-level binding; registry and parent-walk candidates never authorize access.
 
 ---
 
@@ -233,7 +237,7 @@ The rule was recalibrated twice: aggressive language caused overuse (100+ checkp
 3. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
 4. Aggregate the active brief and (when `workspace: "all"`) results from peer projects discovered through the registry.
 
-Agents call `recall()` at session start. Users can also invoke `/recall` for targeted queries (search, cross-project, time ranges).
+Agents call `recall()` when resuming prior work or when earlier decisions matter. Users can also invoke `/recall` for targeted queries (search, cross-project, time ranges).
 
 ### Brief Tool
 - Keeps strong guidance around maintaining durable strategic direction
@@ -285,9 +289,9 @@ We achieve this through:
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
 11. **Hooks tier (7.5+)** - SessionStart guidance injection for Claude Code + Codex plugin installs; Codex manifest bundles the MCP server
-12. **Cursor Plugin** - Native Cursor manifest, stdio MCP map, 6 bundled skills, and version-1 `sessionStart` hook with explicit project write fallback
+12. **Cursor Plugin** - Native Cursor manifest, stdio MCP map, 6 bundled skills, and version-1 `sessionStart` hook with explicit workspace binding guidance
 
-**Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/server`, `@orama/orama`, and `yaml`. The stdio entry serves legacy 2025-era and modern 2026-07-28 clients; legacy roots discovery is preserved, while modern clients use explicit/env/cwd recovery and safe refusal.
+**Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/server`, `@orama/orama`, and `yaml`. The stdio entry serves legacy 2025-era and modern 2026-07-28 clients; legacy Roots remain supported, while modern user-level calls pass a host-native absolute workspace or use a fixed absolute `GOLDFISH_WORKSPACE`. Candidate paths never authorize access.
 
 ---
 

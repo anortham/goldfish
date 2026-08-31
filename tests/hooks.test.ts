@@ -109,6 +109,21 @@ describe('hook context content', () => {
     expect(context).toContain('live sources');
   });
 
+  it('carries verified workspace binding guidance without recovery behavior', () => {
+    const context = getHookContext();
+
+    expect(context).toContain('User-level MCP registrations must pass the conversation\'s host-native absolute project root');
+    expect(context).toContain('host-native absolute project root');
+    expect(context).toContain('fixed absolute GOLDFISH_WORKSPACE');
+    expect(context).toContain('supported legacy Roots');
+    expect(context).toContain('GOLDFISH_WORKSPACE');
+    expect(context).toContain('legacy Roots');
+    expect(context).toContain('workspace: "all"');
+    expect(context).toContain('suggestions only');
+    expect(context).not.toContain('automatic recovery');
+    expect(context).not.toContain('process.cwd()');
+  });
+
   it('stays within the Goldfish hook-context safety budget', () => {
     expect(getHookContext().length).toBeLessThanOrEqual(HOOK_CONTEXT_CHAR_BUDGET);
   });

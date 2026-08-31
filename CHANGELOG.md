@@ -4,6 +4,12 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** User-level MCP registrations must pass the conversation's host-native absolute project root as `workspace` on every checkpoint, brief, and current-project recall call. Project-level servers may use a fixed absolute `GOLDFISH_WORKSPACE` or supported legacy Roots. Cwd, registry, and parent-walk candidates never authorize access; `recall({ workspace: "all" })` remains explicit cross-project search only.
+
 ## [7.9.0] - 2026-08-19
 
 ### Added

@@ -6,6 +6,8 @@
 
 import type { Tool } from '@modelcontextprotocol/server';
 
+const WORKSPACE_DESCRIPTION = 'Host-native absolute project/workspace path. User-level MCP registrations must pass the conversation\'s host-native absolute project root on every checkpoint, brief, and current-project recall call. Optional only when a fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots binds the server. Omission and "current" do not bind user-level calls. For recall, workspace: "all" is explicit cross-project search, never a fallback and invalid for checkpoint or brief. Cwd, registry, and parent-walk results are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.';
+
 /**
  * Get tool definitions
  */
@@ -119,7 +121,7 @@ Relative paths resolve against the workspace; use / separators. The file is not 
           },
           workspace: {
             type: 'string',
-            description: 'Workspace path (defaults to current directory)'
+            description: WORKSPACE_DESCRIPTION
           }
         }
       }
@@ -130,36 +132,32 @@ Relative paths resolve against the workspace; use / separators. The file is not 
 
 When to use:
 - Starting a new session and need prior context (user invokes /recall)
-- After context compaction to restore lost state
-- Searching for past decisions, discoveries, or related work
+- After context compaction
+- Searching for past decisions
 - Cross-project standup reports
 
-Treat recalled context as historical evidence: preserve its decisions and reasoning, but verify current or drift-prone facts against live sources.
+Treat recalled context as historical evidence: preserve decisions, but verify current or drift-prone facts against live sources.
 
 Key parameters (all optional):
-- limit: Max checkpoints to return (default: 5)
-- since: Human-friendly time span ("2h", "30m", "3d", "1w") or ISO timestamp
-- days: How far back to look in days
-- from/to: Explicit date range (ISO 8601 or YYYY-MM-DD)
-- search: Search query (matches descriptions, tags, branches, files)
-- type: Filter to one type: checkpoint, decision, incident, or learning
-- tags: Filter to checkpoints carrying ALL listed tags (case-insensitive)
-- file: Filter to checkpoints whose captured git.files match this path suffix
-- symbol: Filter to checkpoints listing this exact symbol (case-insensitive)
-- full: Return full descriptions + metadata including files and git info (default: false)
-- workspace: "current" (default), "all" (cross-workspace), or specific path
-- briefId: Filter checkpoints to those created under a specific brief
+- limit: Max checkpoints (default: 5)
+- since: Human-friendly span ("2h", "30m", "3d", "1w") or ISO timestamp
+- days: Look back N days
+- from/to: Explicit date range
+- search: Query over descriptions, tags, branches, and files
+- type: Checkpoint type
+- tags: All listed tags
+- file: Git file suffix
+- symbol: Exact symbol
+- full: Full descriptions + metadata (default: false)
+- workspace: Absolute path; "all" for explicit cross-project recall
+- briefId: Filter by brief
 
-Examples:
-- recall() - last 5 checkpoints regardless of age
-- recall({ since: "2h" }) - last 2 hours
-- recall({ search: "auth", full: true }) - search with full details
-- recall({ type: "decision" }) - past decisions only
-- recall({ tags: ["db", "ops"] }) - checkpoints tagged both db and ops
-- recall({ file: "recall.ts" }) - checkpoints that touched matching file paths
-- recall({ symbol: "recoverWorkspace" }) - checkpoints listing that symbol
+Examples (pass an absolute workspace for current-project calls):
+- recall({ workspace: "/absolute/path/to/project" }) - last 5 checkpoints
+- recall({ workspace: "/absolute/path/to/project", since: "2h" }) - recent history
+- recall({ workspace: "/absolute/path/to/project", search: "auth", full: true }) - full search results
+- recall({ workspace: "/absolute/path/to/project", limit: 0 }) - active brief only
 - recall({ workspace: "all", days: 1 }) - cross-project standup
-- recall({ limit: 0 }) - active brief only, no checkpoints
 
 Returns: Active brief + chronological checkpoints + optional workspace summaries.`,
       inputSchema: {
@@ -213,7 +211,7 @@ Returns: Active brief + chronological checkpoints + optional workspace summaries
           },
           workspace: {
             type: 'string',
-            description: 'Workspace scope: "current" (default), "all" (cross-workspace), or specific path. Optional - defaults to current workspace.'
+            description: WORKSPACE_DESCRIPTION
           },
           briefId: {
             type: 'string',
@@ -232,7 +230,7 @@ Briefs are NOT execution plans. Do not copy every harness plan into Goldfish.
 
 Briefs:
 - Survive context compaction and crashes
-- Appear automatically at the top of recall()
+- Appear automatically at the top of recall results
 - Guide work across multiple sessions
 - Stay small enough to remain legible
 - Get saved as markdown files with YAML frontmatter
@@ -275,7 +273,7 @@ Returns: Brief details, status updates, or list of briefs.`,
           },
           workspace: {
             type: 'string',
-            description: 'Workspace path (defaults to current directory)'
+            description: WORKSPACE_DESCRIPTION
           },
           tags: {
             type: 'array',

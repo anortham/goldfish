@@ -5,6 +5,10 @@ description: Save developer context to Goldfish memory — checkpoint at meaning
 
 # Checkpoint — Save Developer Memory
 
+## Workspace binding
+
+For user-level MCP registrations, pass workspace as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and "current" work only with fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots. recall({ workspace: "all" }) is explicit cross-project search, never a fallback; it is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.
+
 ## When to Checkpoint
 
 **When in doubt, checkpoint** — a few extra checkpoints are better than lost context.
@@ -27,6 +31,7 @@ Your description becomes the **markdown body** of a `.md` file. Format it with s
 
 ```
 checkpoint({
+  workspace: "/absolute/path/to/project",
   description: "## Implemented JWT refresh token rotation\n\nThe existing single-token approach was vulnerable to token theft.\n\n- **Approach:** Rotate tokens on each use, limiting the attack window\n- **Added:** `RefreshTokenStore` with atomic file writes and 7-day expiry\n- **Tests:** All 12 auth tests passing\n- **Impact:** Unblocks the session management PR",
   tags: ["feature", "auth", "security", "jwt", "refresh-token", "token-rotation", "session-management"]
 })
@@ -69,7 +74,7 @@ Use `type` to classify your checkpoint for better searchability:
 
 All types benefit from `symbols`, `next`, and `impact`.
 
-Populate `symbols` with the key functions, classes, or modules you touched (e.g. `["recoverWorkspace", "resolveActiveBrief"]`). Intent-blame recall can filter on them later with `recall({ symbol: "recoverWorkspace" })`.
+Populate `symbols` with the key functions, classes, or modules you touched (e.g. `["resolveWorkspace", "resolveActiveBrief"]`). Intent-blame recall can filter on them later with `recall({ workspace: "/absolute/path/to/project", symbol: "resolveWorkspace" })`.
 
 ## Tags — Think About Future Search
 

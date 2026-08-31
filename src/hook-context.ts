@@ -16,9 +16,10 @@ import { getInstructions } from './instructions';
  */
 export const TOOL_QUICK_REFERENCE = `## Tool Quick Reference
 
-- \`checkpoint({ description, type?, tags?, symbols?, next?, ... })\` — save a progress checkpoint. Write the description as structured markdown covering WHAT, WHY, HOW, and IMPACT. For bodies over ~2KB pass \`description_file\` (a workspace-relative path) instead of \`description\` — long inline text can break tool-call JSON.
-- \`recall({ search?, days?, since?, limit?, full?, workspace?, type?, tags?, file?, symbol? })\` — restore prior context when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant.
-- \`brief({ action: "save" | "get" | "list" | "activate" | "update" | "complete" | "delete", title?, content?, ... })\` — durable strategic direction for the workspace.
+- User-level MCP registrations must pass the conversation's host-native absolute project root as \`workspace\` on every checkpoint, brief, and current-project recall call. A fixed absolute \`GOLDFISH_WORKSPACE\` or supported legacy Roots can bind a project-level server. Omission and \`"current"\` do not bind user-level calls. \`recall({ workspace: "all" })\` is explicit cross-project search, never a fallback. Cwd, registry, and parent-walk candidates are suggestions only.
+- \`checkpoint({ workspace: "/absolute/path/to/project", description, type?, tags?, symbols?, next?, ... })\` — save a progress checkpoint. Write the description as structured markdown covering WHAT, WHY, HOW, and IMPACT. For bodies over ~2KB pass \`description_file\` (a workspace-relative path) instead of \`description\` — long inline text can break tool-call JSON.
+- \`recall({ workspace: "/absolute/path/to/project", search?, days?, since?, limit?, full?, type?, tags?, file?, symbol? })\` — restore prior context when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions are relevant.
+- \`brief({ workspace: "/absolute/path/to/project", action: "save" | "get" | "list" | "activate" | "update" | "complete" | "delete", title?, content?, ... })\` — durable strategic direction for the workspace.
 
 Exact tool names vary by client install: a direct MCP registration typically exposes \`checkpoint\`/\`recall\`/\`brief\` under an \`mcp__goldfish__\` prefix, while plugin installs may use a longer namespace. Use whichever goldfish tools your session lists.`;
 

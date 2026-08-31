@@ -5,6 +5,10 @@ description: Use when the user asks for a standup, daily update, progress summar
 
 # Standup
 
+## Workspace binding
+
+For user-level MCP registrations, pass workspace as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and "current" work only with fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots. recall({ workspace: "all" }) is explicit cross-project search, never a fallback; it is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.
+
 ## Core Split
 
 - Goldfish brief explains the direction
@@ -24,7 +28,7 @@ recall({ workspace: "all", days: 1 })      // default: daily standup
 recall({ workspace: "all", since: "1w" })  // e.g. /standup 1w
 ```
 
-2. For active projects, use `recall({ limit: 0 })` or the brief tool to understand current direction.
+2. For active projects, use `recall({ workspace: "/absolute/path/to/project", limit: 0 })` or the brief tool to understand current direction.
 3. Group checkpoint clusters into the few accomplishments that mattered.
 4. Synthesize a short report with done, next, and blocked.
 

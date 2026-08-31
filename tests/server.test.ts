@@ -265,6 +265,49 @@ describe('Tool descriptions', () => {
     }
   });
 
+  it('documents verified workspace binding for user-level calls', async () => {
+    const { getTools } = await import('../src/server');
+
+    const descriptions = getTools()
+      .map(tool => (tool.inputSchema.properties as Record<string, any>).workspace?.description)
+      .filter(Boolean);
+
+    expect(descriptions).toHaveLength(3);
+    expect(new Set(descriptions).size).toBe(1);
+
+    const description = descriptions[0] as string;
+    expect(description).toContain('Host-native absolute project/workspace path');
+    expect(description).toContain('User-level MCP registrations must pass the conversation\'s host-native absolute project root');
+    expect(description).toContain('fixed absolute GOLDFISH_WORKSPACE');
+    expect(description).toContain('supported legacy Roots');
+    expect(description).toContain('GOLDFISH_WORKSPACE');
+    expect(description).toContain('legacy Roots');
+    expect(description).toContain('workspace: "all"');
+    expect(description).toContain('suggestions only');
+    expect(description).toContain('{"workspace":"<absolute-project-root>"}');
+    expect(description).not.toContain('defaults to current');
+    expect(description).not.toContain('defaults to current directory');
+
+    for (const tool of getTools()) {
+      const schema = tool.inputSchema as { required?: string[] };
+      expect(schema.required ?? []).not.toContain('workspace');
+    }
+  });
+
+  it('shows an absolute workspace in current-project recall examples', async () => {
+    const { getTools } = await import('../src/server');
+
+    const description = getTools().find(tool => tool.name === 'recall')!.description!;
+    const examples = description.slice(description.indexOf('Examples'))
+      .match(/recall\(\{[^\n]*\}\)/g) ?? [];
+    const currentProjectExamples = examples.filter(example => !example.includes('workspace: "all"'));
+
+    expect(currentProjectExamples.length).toBeGreaterThan(0);
+    for (const example of currentProjectExamples) {
+      expect(example).toContain('workspace: "/absolute/path/to/project"');
+    }
+  });
+
   it('checkpoint tool exposes structured memory schema fields', async () => {
     const { getTools } = await import('../src/server');
 
@@ -366,6 +409,30 @@ describe('Server instructions', () => {
     expect(instructions).toContain('update it when goals or constraints shift');
     expect(instructions).toContain('complete it when the work lands');
     expect(instructions).toContain('archive it when superseded');
+  });
+
+  it('explains user-level workspace binding and explicit cross-project recall', async () => {
+    const { getInstructions } = await import('../src/server');
+
+    const instructions = getInstructions();
+
+    expect(instructions).toContain('User-level MCP registrations must pass the conversation\'s host-native absolute project root');
+    expect(instructions).toContain('host-native absolute project root');
+    expect(instructions).toContain('fixed absolute GOLDFISH_WORKSPACE');
+    expect(instructions).toContain('supported legacy Roots');
+    expect(instructions).toContain('GOLDFISH_WORKSPACE');
+    expect(instructions).toContain('legacy Roots');
+    expect(instructions).toContain('workspace: "all"');
+    expect(instructions).toContain('suggestions only');
+    expect(instructions).toContain('{"workspace":"<absolute-project-root>"}');
+    expect(instructions).not.toContain('defaults to current workspace');
+    expect(instructions).not.toContain('registry recovery');
+  });
+
+  it('includes an absolute workspace in the brief example', async () => {
+    const { getInstructions } = await import('../src/server');
+
+    expect(getInstructions()).toContain('brief({ workspace: "/absolute/path/to/project", action: "save", title: "...", content: "..." })');
   });
 
   it('defers recall parameter tips to tool description', async () => {
@@ -604,13 +671,13 @@ describe('Server exports', () => {
     expect(marketplaceJson.plugins[0]!.description).not.toContain('Claude Code plugin');
   });
 
-  it('documents VS Code roots support as an optional workspace override', async () => {
+  it('documents VS Code roots support alongside user-level workspace binding', async () => {
     const readme = await Bun.file(new URL('../README.md', import.meta.url)).text();
     const vscodeInstructions = await Bun.file(new URL('../docs/goldfish-checkpoint.instructions-vs-code.md', import.meta.url)).text();
 
-    expect(readme).toContain('`GOLDFISH_WORKSPACE` is optional');
+    expect(readme).toContain('With a user-level VS Code registration, pass `workspace`');
     expect(readme).toContain('agent plugins preview can also load Claude-format plugins');
-    expect(vscodeInstructions).toContain('`GOLDFISH_WORKSPACE` is optional');
+    expect(vscodeInstructions).toContain('User-level calls must pass the conversation\'s host-native absolute project root');
   });
 
   it('keeps standup focused on briefs and checkpoints', async () => {

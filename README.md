@@ -61,7 +61,7 @@ claude --plugin-dir /path/to/goldfish
 
 Once the plugin is loaded, Goldfish works through manual invocation and agent-driven calls:
 
-1. **Session starts** -- run `/recall` (or let the agent call `recall()`) to restore recent checkpoints and the active brief
+1. **Session starts** -- run `/recall` (or let the agent call `recall({ workspace: "/absolute/path/to/project" })`) to restore recent checkpoints and the active brief
 2. **You work** -- checkpoint with `/checkpoint` at meaningful milestones
 3. **Direction persists** -- save a brief with `/brief` when goals, constraints, or success criteria should survive the session
 4. **Next session** -- recall replays the same context
@@ -92,9 +92,9 @@ New-Item -ItemType Junction -Path $pluginPath -Target "C:\path\to\goldfish"
 
 Restart Cursor or run **Developer: Reload Window**, then open **Customize** and verify that Goldfish appears as an installed plugin. The native assets are `.cursor-plugin/plugin.json`, `mcp.json`, `skills/`, and `hooks/cursor-hooks.json`.
 
-Workspace binding depends on the client and configuration. If Goldfish refuses a mutating tool because no workspace signal is available, use the project `.cursor/mcp.json` fallback below. Registry recovery can identify a known project for recall, but it is recall-only and never authorizes writes; do not treat one checkpoint as enabling writes for a newly opened project.
+For a user-level Cursor registration, pass `workspace` as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and `"current"` work only when a fixed absolute `GOLDFISH_WORKSPACE` or supported legacy Roots binds the server. Cwd, registry, and parent-walk candidates are suggestions only. If Goldfish reports an unbound workspace, retry with `{"workspace":"<absolute-project-root>"}`.
 
-For reliable writes, use the project `.cursor/mcp.json` fallback with an explicit workspace:
+For a fixed project-level binding, use the project `.cursor/mcp.json` configuration:
 
 ```json
 {
@@ -128,7 +128,7 @@ The hook is deliberately minimal: it fires once at session start (and after `/cl
 
 **Manual alternative: `.codex/config.toml`.** If you would rather not install the plugin, register the server yourself. Codex shares MCP configuration between the CLI and the IDE extension through `~/.codex/config.toml`, and it discovers repo-local skills from `.agents/skills`.
 
-Codex Desktop does not send MCP roots. If you want Goldfish bound to the current repo, the reliable setup is a project-local `.codex/config.toml` in that repo so you can pass `GOLDFISH_WORKSPACE` for that project.
+Codex Desktop does not send MCP roots. With a user-level registration, pass `workspace` as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. For a project-level registration, set a fixed absolute `GOLDFISH_WORKSPACE` in that project's `.codex/config.toml`.
 
 Add Goldfish to a trusted project-local `.codex/config.toml`:
 
@@ -191,7 +191,7 @@ Create `.vscode/mcp.json`:
 }
 ```
 
-`GOLDFISH_WORKSPACE` is optional in VS Code now that Goldfish can resolve the active workspace from MCP roots. Keep it as an override if you want to pin Goldfish to a different root or you run in a client that does not provide roots:
+With a user-level VS Code registration, pass `workspace` as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. A project-level registration may omit it when `GOLDFISH_WORKSPACE` is fixed to an absolute path or a supported legacy Roots binding supplies it. Set it explicitly when the client does not provide Roots:
 
 ```json
 {
@@ -226,12 +226,13 @@ Goldfish is a standard [MCP](https://modelcontextprotocol.io/) server, so any cl
 Goldfish 7.7.0 uses the split MCP TypeScript SDK v2 and serves both protocol eras through the same stdio command:
 
 - **Legacy 2025-era clients** keep working, including roots discovery for clients that still provide it.
-- **Modern stateless 2026-07-28 clients** do not rely on roots discovery. Pass the `workspace` tool argument or set `GOLDFISH_WORKSPACE` when the client cannot provide a trustworthy project root; the process working directory remains the fallback.
+- **Modern stateless 2026-07-28 clients** require the `workspace` tool argument as a host-native absolute project root for user-level calls. A project-level server may use a fixed absolute `GOLDFISH_WORKSPACE`; process cwd, registry, and parent-walk results never authorize access.
 
 What varies by client:
 
 - **Skills** depend on whether the harness reads repo-local skill files such as `.agents/skills`
-- **Workspace binding** depends on roots support, explicit cwd, or `GOLDFISH_WORKSPACE`
+- **Workspace binding** is per-call for user-level registrations. Pass the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and `"current"` are not user-level identity.
+- **Cross-project recall** uses `recall({ workspace: "all" })` only when requested explicitly. It is never a fallback for missing current-project identity, and `"all"` is invalid for checkpoint and brief.
 
 ### Instruction-Only Harnesses (Zed, Amp, Jules, Cursor rules, Windsurf, Cline, Kiro, ...)
 
@@ -267,24 +268,24 @@ Claude: [auto-recalls checkpoint, picks up where it left off]
 
 ### Recall -- Restore Context
 
-Recall returns recent checkpoints, the active brief, and optional cross-project summaries. Agents call it at session start; users can run `/recall` for targeted queries.
+Recall returns recent checkpoints, the active brief, and optional cross-project summaries. Agents call it when resuming prior work or when earlier decisions matter; users can run `/recall` for targeted queries.
 
 ```
-recall()                                    # Last 5 checkpoints, no date window
-recall({ since: "2h" })                     # Last 2 hours
-recall({ search: "auth bug" })              # BM25 search across descriptions
-recall({ days: 7, limit: 20, full: true })  # Extended history with metadata
+recall({ workspace: "/absolute/path/to/project" })                              # Last 5 checkpoints, no date window
+recall({ workspace: "/absolute/path/to/project", since: "2h" })                 # Last 2 hours
+recall({ workspace: "/absolute/path/to/project", search: "auth bug" })          # BM25 search across descriptions
+recall({ workspace: "/absolute/path/to/project", days: 7, limit: 20, full: true }) # Extended history with metadata
 recall({ workspace: "all", days: 1 })       # Cross-project (for standups)
-recall({ file: "workspace.ts" })            # Intent-blame: who touched this file?
-recall({ symbol: "recoverWorkspace" })      # Intent-blame: who touched this symbol?
-recall({ limit: 0 })                        # Active brief only
+recall({ workspace: "/absolute/path/to/project", file: "workspace.ts" })            # Intent-blame: who touched this file?
+recall({ workspace: "/absolute/path/to/project", symbol: "resolveWorkspace" })      # Intent-blame: who touched this symbol?
+recall({ workspace: "/absolute/path/to/project", limit: 0 })                         # Active brief only
 ```
 
-When you search with `recall({ search: "..." })`, results are compact by default so agents get dense, low-token snippets. Pass `full: true` to return full descriptions and metadata instead.
+When you search with `recall({ workspace: "/absolute/path/to/project", search: "..." })`, results are compact by default so agents get dense, low-token snippets. Pass `full: true` to return full descriptions and metadata instead.
 
 ### Brief -- Track Durable Direction
 
-Briefs are compact strategic markdown documents that survive across sessions. They appear at the top of every `recall()` response.
+Briefs are compact strategic markdown documents that survive across sessions. They appear at the top of every recall response.
 
 ```markdown
 ---
@@ -584,7 +585,7 @@ Benchmarked on Apple Silicon (M-series).
 
 ### Cursor writes are refused
 
-If Goldfish refuses a Cursor write because no workspace signal is available, add the `type: "stdio"` entry with the absolute Bun server path and `GOLDFISH_WORKSPACE: "${workspaceFolder}"` to the project `.cursor/mcp.json`, then reload the window. Registry recovery helps recall known projects, but never authorizes writes.
+If Goldfish refuses a Cursor write because no workspace is bound, pass the conversation's host-native absolute project root as `workspace` on the call. For a project-level server, add the `type: "stdio"` entry with the absolute Bun server path and `GOLDFISH_WORKSPACE: "${workspaceFolder}"` to the project `.cursor/mcp.json`, then reload the window. Registry and parent-walk candidates are suggestions only and never authorize writes.
 
 ### Checkpoints not saving
 
@@ -595,7 +596,7 @@ If Goldfish refuses a Cursor write because no workspace signal is available, add
 ### Recall returns nothing
 
 1. Checkpoints are per-project: each project has its own `.memories/` directory
-2. Default recall returns last 5 checkpoints regardless of age -- try `recall({ days: 7 })` for date-windowed history
+2. Default recall returns last 5 checkpoints regardless of age -- try `recall({ workspace: "/absolute/path/to/project", days: 7 })` for date-windowed history
 3. Verify checkpoints exist: `ls .memories/` in your project root
 
 ### Cross-project recall is empty

@@ -10,11 +10,15 @@ How Goldfish reaches each harness, what was deliberately not done, and where the
 | Codex CLI / Desktop | Full (tools + skills + hooks) | Recommended marketplace plugin bundles the MCP server, 6 skills, and the same SessionStart hook; approve the hook in `/hooks`; project-local `.codex/config.toml` plus `.agents/skills` remains the manual alternative | `.codex-plugin/plugin.json`, `.mcp.json`, `hooks/goldfish-hooks.json`, `README.md` Codex section |
 | OpenCode | Tools + skills | `opencode.json` MCP entry + `.agents/skills` auto-discovery | `opencode.json` (committed, works in this repo as-is) |
 | VS Code + Copilot | Tools + instructions file | `.vscode/mcp.json` + optional repo instructions | `.vscode/mcp.json` (committed), `docs/goldfish-checkpoint.instructions-vs-code.md` |
-| Cursor | Full (tools + skills + native hook, with write-binding quirk) | Native Cursor Plugin from `.cursor-plugin/plugin.json`; bundles `mcp.json`, 6 skills, and lowercase `sessionStart`; repo-local `.agents/skills` is also discoverable; project `.cursor/mcp.json` is the write-binding fallback | `.cursor-plugin/plugin.json`, `mcp.json`, `hooks/cursor-hooks.json`, `hooks/cursor-session-start.ts`, `README.md` Cursor section, `src/workspace-recovery.ts` |
+| Cursor | Full (tools + skills + native hook) | Native Cursor Plugin from `.cursor-plugin/plugin.json`; bundles `mcp.json`, 6 skills, and lowercase `sessionStart`; repo-local `.agents/skills` is also discoverable; user-level calls pass `workspace`, while project `.cursor/mcp.json` can fix `GOLDFISH_WORKSPACE` | `.cursor-plugin/plugin.json`, `mcp.json`, `hooks/cursor-hooks.json`, `hooks/cursor-session-start.ts`, `README.md` Cursor section |
 | Instruction tier (Zed, Amp, Jules, Junie, Windsurf, Cline, Kiro, Cursor rules) | Guidance only | User copies the generated usage ruleset into their repo's instruction surface | `docs/agent-instructions/goldfish-usage.md` (generated from `src/instructions.ts`) |
 | Any MCP client | Baseline tools | Standard stdio server: 3 tools + server instructions | `src/server.ts` |
 
 **Instruction-tier honesty:** those harnesses get behavior rules but not working tools unless the user also registers the MCP server. Say so wherever the tier is advertised; guidance without tools that pretends otherwise is worse than no support.
+
+## Workspace identity
+
+User-level MCP registrations must pass the conversation's host-native absolute project root as `workspace` on every checkpoint, brief, and current-project recall call. A project-level server may omit `workspace` when `GOLDFISH_WORKSPACE` is fixed to an absolute path or a supported legacy Roots binding supplies it. Omission and `"current"` do not bind user-level calls. `recall({ workspace: "all" })` is explicit cross-project search, never a fallback, and `"all"` is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only.
 
 ## Deliberate non-support
 
@@ -28,13 +32,13 @@ Recorded so these decisions stop being re-litigated. Revisit any of them when re
 ## Client-difference handling in code
 
 - **MCP roots negotiated at request time** with a timeout, cached per session (`src/server.ts`) — desktop clients populate roots late or never.
-- **Workspace recovery** without roots: registry lookup plus `.memories/`/`.git/` ancestor walk (`src/workspace-recovery.ts`).
+- **Workspace suggestions** may include registered projects and enclosing `.memories/`/`.git/` roots, but they never authorize access.
 - **Parameter aliasing** for non-Claude clients: `id`/`briefId`/`brief_id`, arrays accepted as JSON strings or comma-separated strings (`src/handlers/*`, `src/types.ts`).
 - **2k char caps** on instructions and tool descriptions enforced by tests (`tests/server.test.ts`) — Claude Code truncates silently beyond that.
 - **Deferred tool loading** hides tool descriptions at session start; the SessionStart hook advertises that the goldfish tools exist and may need loading (`src/hook-context.ts`).
 - **One hooks map, two harnesses** (`hooks/goldfish-hooks.json`): Codex aliases `CLAUDE_PLUGIN_ROOT` to `PLUGIN_ROOT`, and both harnesses inject a hook's raw stdout as context — so the script needs no harness detection.
 - **Cursor has a separate native hook map** (`hooks/cursor-hooks.json`): it uses top-level `version: 1`, lowercase `sessionStart`, one Bun command, and a 5-second timeout. `hooks/cursor-session-start.ts` returns `{ "additional_context": ... }` JSON and reports failures without blocking startup.
-- **Cursor plugin workspace binding has a conditional fallback.** If a mutating tool has no workspace signal, registry recovery can help recall known projects but never authorizes writes. Use the project `.cursor/mcp.json` fallback with `type: "stdio"`, Bun plus an absolute `src/server.ts`, and `GOLDFISH_WORKSPACE=${workspaceFolder}`.
+- **Cursor plugin workspace binding is explicit.** User-level calls pass the conversation's host-native absolute project root as `workspace`. For a project-level server, use the project `.cursor/mcp.json` with `type: "stdio"`, Bun plus an absolute `src/server.ts`, and `GOLDFISH_WORKSPACE=${workspaceFolder}`. Registry and parent-walk candidates remain suggestions only.
 
 ## Drift guards
 

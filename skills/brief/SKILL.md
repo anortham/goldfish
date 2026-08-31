@@ -5,6 +5,10 @@ description: Use when starting multi-session work, capturing approved project di
 
 # Brief
 
+## Workspace binding
+
+For user-level MCP registrations, pass workspace as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. Omission and "current" work only with fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots. recall({ workspace: "all" }) is explicit cross-project search, never a fallback; it is invalid for checkpoint and brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.
+
 ## Core Split
 
 Goldfish brief = durable direction.
@@ -37,6 +41,7 @@ Keep the brief compact and stable:
 
 ```ts
 brief({
+  workspace: "/absolute/path/to/project",
   action: "save",
   title: "Brief API surface around strategic context",
   content: "## Goal\n\nRename the forward-looking artifact to brief.\n\n## Why Now\n\nHarnesses now own execution planning.\n\n## Constraints\n\nKeep one-release compatibility for plan callers.\n\n## Success Criteria\n\nRecall, skills, hooks, and docs all present brief as canonical.\n\n## References\n\n- docs/plans/2026-04-16-brief-repositioning-design.md",
@@ -56,9 +61,9 @@ Only one brief should be active per workspace.
 
 ## Retrieval
 
-- `brief({ action: "get" })` gets the active brief.
-- `brief({ action: "list" })` shows saved briefs.
-- `recall({ limit: 0 })` shows the active brief without loading checkpoints.
+- `brief({ action: "get", workspace: "/absolute/path/to/project" })` gets the active brief.
+- `brief({ action: "list", workspace: "/absolute/path/to/project" })` shows saved briefs.
+- `recall({ workspace: "/absolute/path/to/project", limit: 0 })` shows the active brief without loading checkpoints.
 
 ## Rules
 

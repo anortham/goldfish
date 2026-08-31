@@ -199,12 +199,12 @@
 **Commit mode:** `serial-worker-commit` after lead inline review and focused verification.
 
 **Acceptance criteria:**
-- [ ] All three tools use one workspace parameter description and no longer advertise cwd/current as a safe default.
-- [ ] Static instructions, hook context, and all six skills explain the user-level absolute-path rule without adding dynamic hooks.
-- [ ] README and portability docs distinguish user-level per-call identity from project-level environment configuration and legacy Roots.
-- [ ] Generated mirrors are byte-for-byte current; AGENTS and CLAUDE remain matched.
-- [ ] Tool, server, and hook character caps remain green.
-- [ ] `bun run sync:agent-skills` and `bun test server hooks agent-assets` pass and the reviewed task is committed.
+- [x] All three tools use one workspace parameter description and no longer advertise cwd/current as a safe default.
+- [x] Static instructions, hook context, and all six skills explain the user-level absolute-path rule without adding dynamic hooks.
+- [x] README and portability docs distinguish user-level per-call identity from project-level environment configuration and legacy Roots.
+- [x] Generated mirrors are byte-for-byte current; AGENTS and CLAUDE remain matched.
+- [x] Tool, server, and hook character caps remain green.
+- [x] `bun run sync:agent-skills` and `bun test server hooks agent-assets` pass and the reviewed task is committed.
 
 ## Final integration verification
 

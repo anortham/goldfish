@@ -9,10 +9,16 @@ import { SERVER_VERSION } from '../src/server';
 import { getInstructions } from '../src/instructions';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const ABSOLUTE_WORKSPACE_EXAMPLE = 'workspace: "/absolute/path/to/project"';
 
 async function listSkillDirs(path: string): Promise<string[]> {
   const entries = await readdir(path, { withFileTypes: true });
   return entries.filter(e => e.isDirectory()).map(e => e.name).sort();
+}
+
+function currentProjectExamples(content: string): string[] {
+  const calls = content.match(/(?:checkpoint|brief|recall)\(\)|(?:checkpoint|brief|recall)\(\{[\s\S]*?\}\)/g) ?? [];
+  return calls.filter(call => !call.includes('workspace: "all"'));
 }
 
 describe('version/tag agreement', () => {
@@ -77,5 +83,52 @@ describe('mirrored agent assets stay fresh', () => {
     expect(onDisk).toBe(buildUsageDoc());
     expect(onDisk).toContain(getInstructions());
     expect(onDisk).toContain('tool names vary by client');
+  });
+
+  it('documents absolute workspace binding in every canonical skill', async () => {
+    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
+
+    expect(canonical).toEqual(['brief', 'brief-status', 'checkpoint', 'handoff', 'recall', 'standup']);
+
+    for (const dir of canonical) {
+      const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');
+
+      expect(content).toContain('host-native absolute project root');
+      expect(content).toContain('fixed absolute GOLDFISH_WORKSPACE');
+      expect(content).toContain('supported legacy Roots');
+      expect(content).not.toContain('defaults to current workspace');
+      expect(content).not.toContain('registry recovery');
+    }
+  });
+
+  it('includes an absolute workspace in every current-project example', async () => {
+    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
+    const paths = [
+      'src/tools.ts',
+      'src/instructions.ts',
+      'src/hook-context.ts',
+      'README.md',
+      'docs/goldfish-checkpoint.instructions-vs-code.md',
+      'docs/agent-instructions/goldfish-usage.md',
+      ...canonical.map(dir => join('skills', dir, 'SKILL.md'))
+    ];
+
+    for (const relativePath of paths) {
+      const content = await readFile(join(repoRoot, relativePath), 'utf-8');
+      const examples = currentProjectExamples(content);
+
+      for (const example of examples) {
+        expect(example).toContain(ABSOLUTE_WORKSPACE_EXAMPLE);
+      }
+    }
+  });
+
+  it('describes workspace identity without a current-workspace default', async () => {
+    const content = await readFile(join(repoRoot, 'src', 'types.ts'), 'utf-8');
+
+    expect(content).toContain('workspace?: string;     // Absolute path; user-level calls pass the project root');
+    expect(content).toContain('workspace?: string;     // Absolute path; "all" is explicit cross-project recall');
+    expect(content).not.toContain('Defaults to current workspace');
+    expect(content).not.toContain("'current' | 'all' | specific path");
   });
 });
