@@ -153,7 +153,7 @@ export async function hydrateWorkspaceArguments(
     : await getCachedRoots(cache, sessionId, sendRequest);
 
   const resolved = await resolveWorkspaceWithSource(explicit, {
-    roots,
+    ...(roots !== undefined ? { roots } : {}),
     cwd: process.cwd()
   });
   return {
