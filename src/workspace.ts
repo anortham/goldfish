@@ -222,6 +222,8 @@ async function findEnclosingProjectRoots(workspacePath: string): Promise<string[
 
   const roots: string[] = [];
   for (const candidate of candidates) {
+    if (await hasProjectMarker(candidate, pathOps)) continue;
+
     let current = pathOps.dirname(candidate);
     let guard = 0;
     while (current !== candidate && guard++ <= 128) {

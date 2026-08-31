@@ -322,6 +322,22 @@ describe('verified workspace binding', () => {
     );
   });
 
+  it('accepts an exact nested worktree root with its own .git marker', async () => {
+    delete process.env.GOLDFISH_WORKSPACE;
+    const outer = await makeTmpDir();
+    await Bun.write(join(outer, '.git'), 'gitdir: /shared/main/.git/worktrees/inner');
+    const worktree = join(outer, 'worktrees', 'inner');
+    await mkdir(worktree, { recursive: true });
+    await Bun.write(join(worktree, '.git'), 'gitdir: /shared/main/.git/worktrees/inner');
+    const nestedChild = join(worktree, 'src');
+    await mkdir(nestedChild);
+
+    await expect(resolveWorkspace(worktree)).resolves.toBe(worktree);
+    await expect(resolveWorkspace(nestedChild)).rejects.toThrow(
+      `${WORKSPACE_UNBOUND_RETRY}\nSuggestions only; choose one explicitly:\n- ${worktree}`
+    );
+  });
+
   it.skipIf(process.platform === 'win32')('rejects symlink aliases of the home directory', async () => {
     delete process.env.GOLDFISH_WORKSPACE;
     const home = await makeTmpDir();
