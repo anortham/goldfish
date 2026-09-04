@@ -24,10 +24,12 @@ Goldfish 7.0 removed all hooks after the "hook spam disaster" — a **frequency*
 
 These four facts shape the design; each was verified against the official docs, not assumed:
 
-1. Codex SessionStart hooks accept **plain stdout as developer context** — same as Claude Code. JSON output is optional; common JSON output fields include `systemMessage`. Goldfish uses raw stdout because it is the smallest shared format both harnesses accept.
+1. On 2026-07-16, Codex documentation described SessionStart hooks accepting **plain stdout as developer context** — same as Claude Code. JSON output was optional; common JSON output fields included `systemMessage`. The original design therefore chose raw stdout as the smallest shared format; the 2026-09-04 erratum records the later Codex envelope requirement.
 2. Codex plugin manifests support **`mcpServers`** pointing at an `.mcp.json` server-map file — the Codex tier can bundle tool registration, not just hooks + skills.
 3. Codex sets **`CLAUDE_PLUGIN_ROOT` as a compatibility alias** for `PLUGIN_ROOT` in hook commands — one shared hooks map works verbatim in both harnesses (this is why ponytail's shared map works).
 4. Plugin-bundled hooks are **skipped until the user reviews and trusts them** (`Installing or enabling a plugin doesn't automatically trust its hooks`) — install docs must include the trust step.
+
+> Erratum (2026-09-04): Codex now requires SessionStart hook stdout to use the nested `hookSpecificOutput` envelope; `session-start.ts` emits that shape while preserving the static context.
 
 ## Architecture
 
@@ -173,7 +175,7 @@ Subprocess tests prove output shape, not plugin discovery or trust flow (Codex r
 
 ## Acceptance Criteria
 
-- [x] `bun hooks/session-start.ts` emits the full static guidance as raw stdout, exit 0 (same shape consumed by both harnesses)
+- [x] At design time, `bun hooks/session-start.ts` emitted the full static guidance as raw stdout, exit 0 (the shared shape then documented for both harnesses); current Codex output uses the nested `hookSpecificOutput` envelope recorded in the erratum above.
 - [x] Hook content contains `getInstructions()` verbatim plus: checkpoint-before-commit, all three tool names, deferred-tools warning, WHAT/WHY/HOW/IMPACT, brief lifecycle
 - [x] Hook content stays within the 10,000-character Goldfish safety budget (test-enforced), composed at runtime — no generated payload file
 - [x] Hooks map: exactly one event, one command, matcher `startup|clear|compact` (test-enforced)

@@ -130,14 +130,19 @@ describe('hook context content', () => {
 });
 
 describe('session-start hook script', () => {
-  it('emits the hook context as raw stdout and exits 0', () => {
+  it('emits the Codex SessionStart envelope and exits 0', () => {
     const result = spawnSync(['bun', join(repoRoot, 'hooks', 'session-start.ts')], {
       cwd: repoRoot,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString()).toBe(getHookContext());
+    expect(JSON.parse(result.stdout.toString())).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: getHookContext()
+      }
+    });
   });
 
   it('reports setup failures and still exits 0', async () => {

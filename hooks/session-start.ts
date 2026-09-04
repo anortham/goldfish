@@ -3,9 +3,8 @@
 /**
  * SessionStart hook entrypoint for Claude Code and Codex CLI.
  *
- * Writes the static goldfish guidance to stdout, which both harnesses inject as
- * developer context. Always exits 0 — a broken memory plugin must never block
- * session start.
+ * Writes the static goldfish guidance in the SessionStart hook envelope. Always
+ * exits 0 — a broken memory plugin must never block session start.
  */
 
 function reportError(error: unknown): void {
@@ -27,7 +26,12 @@ process.stdout.on('error', (error: NodeJS.ErrnoException) => {
 
 try {
   const { getHookContext } = await import('../src/hook-context');
-  process.stdout.write(getHookContext());
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext: getHookContext()
+    }
+  }));
 } catch (error) {
   reportError(error);
 }

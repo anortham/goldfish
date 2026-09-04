@@ -4,6 +4,18 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.2] - 2026-09-04
+
+### Added
+
+- Documented Antigravity setup, repo-local skill discovery, and explicit workspace binding in README.md.
+- Documented how to browse Goldfish's markdown memories with generic markdown-database tooling such as Obsidian Bases.
+
+### Fixed
+
+- Codex SessionStart hooks now emit the required nested `hookSpecificOutput` JSON envelope with the Goldfish guidance in `additionalContext`; the hook remains static and exits successfully on setup failures.
+- Cursor's plugin MCP configuration now uses `CURSOR_PLUGIN_ROOT`, so installed Cursor plugins resolve the server from their actual plugin root.
+
 ## [8.0.1] - 2026-08-31
 
 ### Fixed
@@ -87,6 +99,8 @@ Hooks return, narrowly. Harness changes (the 2k server-instruction cap plus defe
 ### Added
 
 - **SessionStart hooks tier** for Claude Code and Codex plugin installs: one shared hooks map (`hooks/goldfish-hooks.json`, matcher `startup|clear|compact` — never `resume`), one branchless `bun` script printing static guidance as raw stdout. The payload (`src/hook-context.ts`) embeds the server instructions verbatim plus what the caps hide: a tool-existence advertisement for deferred loading, the shared tool quick reference, and the WHAT/WHY/HOW/IMPACT checkpoint quality format. Kept within a 10,000-character safety budget, test-enforced
+
+  Erratum (2026-09-04): Codex SessionStart now receives the guidance through its required `hookSpecificOutput` JSON envelope; Cursor's separate payload remains unchanged.
 - **Codex plugin manifest** (`.codex-plugin/plugin.json`) bundling the MCP server (canonical root `.mcp.json`), the 6 skills, and the SessionStart hook — Codex setup is now one marketplace install plus a one-time `/hooks` trust review (documented in README); `.codex/config.toml` remains the manual alternative
 - `.codex-plugin/plugin.json` becomes the sixth synced version surface; `tests/hooks.test.ts` guards hook content invariants, the subprocess stdout contract, failure containment, manifest wiring, and the hooks-map shape (exactly one event, one command)
 

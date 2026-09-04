@@ -56,7 +56,7 @@ Goldfish ships plugin packaging for Claude Code, Codex, and Cursor:
 - **`.claude-plugin/plugin.json`** - Claude Code manifest (MCP server registration + skills + hooks)
 - **`.codex-plugin/plugin.json`** - Codex manifest (skills + hooks + root `.mcp.json` server map)
 - **`skills/`** - 6 skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
-- **`hooks/`** - SessionStart hook shared by both manifests: `goldfish-hooks.json` (one event, one command, matcher `startup|clear|compact`) runs `session-start.ts`, which prints `getHookContext()` (`src/hook-context.ts`) as raw stdout. Static content only, always exit 0, never any other event — the 7.0 hook-spam lesson is enforced by `tests/hooks.test.ts`
+- **`hooks/`** - SessionStart hook shared by both manifests: `goldfish-hooks.json` (one event, one command, matcher `startup|clear|compact`) runs `session-start.ts`, which emits Codex's SessionStart JSON envelope containing `getHookContext()` (`src/hook-context.ts`). Static content only, always exit 0, never any other event — the 7.0 hook-spam lesson is enforced by `tests/hooks.test.ts`
 
 ### Cursor Native Plugin
 

@@ -209,7 +209,7 @@ goldfish/
 
 ### SessionStart Hook
 
-Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `SessionStart` event, matcher `startup|clear|compact` (never `resume` — a resumed transcript already contains the prior injection), one `bun` command with a PowerShell `commandWindows` variant. The script is branchless — both harnesses inject a hook's raw stdout as context, so no harness detection is needed. Payload composition lives in `src/hook-context.ts`, embeds `getInstructions()` verbatim, and stays within Goldfish's 10,000-character safety budget enforced by `tests/hooks.test.ts`. Static content only; the hook makes no tool calls and writes no state.
+Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `SessionStart` event, matcher `startup|clear|compact` (never `resume` — a resumed transcript already contains the prior injection), one `bun` command with a PowerShell `commandWindows` variant. The script is branchless and emits Codex's required SessionStart JSON envelope with the static context in `additionalContext`; Cursor uses its separate hook script. Payload composition lives in `src/hook-context.ts`, embeds `getInstructions()` verbatim, and stays within Goldfish's 10,000-character safety budget enforced by `tests/hooks.test.ts`. Static content only; the hook makes no tool calls and writes no state.
 
 ### Cursor Native Hook
 
