@@ -2,7 +2,7 @@
 
 An evidence ledger for AI coding sessions. Checkpoints capture what changed and why; briefs hold durable strategic direction; recall pulls both back when the next session needs context. Everything lives as markdown in your repo, so it travels with the code, diffs in PRs, and outlasts any single harness.
 
-Goldfish is a cross-client MCP memory system. Claude Code, Codex, and Cursor can install it as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
+Goldfish is a cross-client MCP memory system. Claude Code, Codex, and Cursor can install it as a plugin — tools, skills, and a session-start hook that loads Goldfish's guidance into each new session. OpenCode and Antigravity can discover repo-local Goldfish skills from `.agents/skills`, and VS Code with GitHub Copilot can use the MCP server plus repo instructions.
 
 **Version 8.0.1** -- Fail-closed explicit workspace identity: user-level MCP registrations bind checkpoint, brief, and current-project recall calls to the conversation's host-native absolute project root; ambiguous candidates never authorize access. See CHANGELOG.md for details.
 
@@ -167,6 +167,27 @@ OpenCode walks up the repository and loads matching `.agents/skills/*/SKILL.md`,
 
 This repository ships a working `opencode.json` (paths relative to the repo root) you can copy as a starting point.
 
+### Antigravity
+
+Antigravity (Google Antigravity CLI and IDE) loads MCP servers from `~/.gemini/config/mcp_config.json` and automatically discovers repo rules (`AGENTS.md`) and repo-local skills from `.agents/skills`.
+
+Add Goldfish to your `~/.gemini/config/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "goldfish": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/goldfish/src/server.ts"]
+    }
+  }
+}
+```
+
+Antigravity walks up from your current working directory to the repository root and discovers `.agents/skills/*/SKILL.md`, so the checked-in Goldfish skills (`/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/standup`) and `AGENTS.md` instructions are available automatically.
+
+With a user-level Antigravity registration, pass `workspace` as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call: `recall({ workspace: "/absolute/path/to/project" })`.
+
 ### VS Code with GitHub Copilot
 
 VS Code supports project-level MCP config in `.vscode/mcp.json`, supports the full MCP feature set, and can pair Goldfish with repo instructions for better memory habits.
@@ -326,7 +347,7 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 6 skills. Claude Code, Codex, and Cursor plugin installs expose them directly; OpenCode (and Codex or Cursor without the plugin) discovers the same skill content from `.agents/skills/`.
+Goldfish ships 6 skills. Claude Code, Codex, and Cursor plugin installs expose them directly; OpenCode and Antigravity (and Codex or Cursor without the plugin) discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
@@ -479,7 +500,7 @@ What v7 subtracted, and why:
 ```
 goldfish/
   .agents/
-    skills/               # Repo-local skill mirror for Codex/OpenCode
+    skills/               # Repo-local skill mirror for Codex/OpenCode/Antigravity
   .claude-plugin/
     plugin.json           # Claude Code plugin manifest
   .codex-plugin/

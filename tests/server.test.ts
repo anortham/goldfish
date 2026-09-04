@@ -650,6 +650,8 @@ describe('Server exports', () => {
     expect(readme).toContain('native hook');
     expect(readme).toContain('project `.cursor/mcp.json`');
     expect(readme).toContain('### OpenCode');
+    expect(readme).toContain('### Antigravity');
+    expect(readme).toContain('~/.gemini/config/mcp_config.json');
     expect(readme).toContain('### VS Code with GitHub Copilot');
   });
 
