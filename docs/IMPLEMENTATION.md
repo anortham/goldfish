@@ -215,7 +215,7 @@ Both plugin manifests point at the same `hooks/goldfish-hooks.json`: one `Sessio
 
 Cursor uses a separate native hook map rather than the Claude/Codex compatibility map. `hooks/cursor-hooks.json` declares top-level `version: 1` and exactly one lowercase `sessionStart` command with a 5-second timeout. `hooks/cursor-session-start.ts` wraps `getHookContext()` as JSON `{ "additional_context": "..." }`, reports import or setup failures to stderr, and exits successfully so startup is never blocked.
 
-The Cursor Plugin manifest (`.cursor-plugin/plugin.json`) points to `skills/`, `hooks/cursor-hooks.json`, and `mcp.json`. The MCP map is stdio: Bun launches `${PLUGIN_ROOT}/src/server.ts`. User-level Cursor calls pass the conversation's host-native absolute project root as `workspace`. A project `.cursor/mcp.json` entry with an absolute server path and `GOLDFISH_WORKSPACE=${workspaceFolder}` provides a fixed project-level binding; registry and parent-walk candidates never authorize access.
+The Cursor Plugin manifest (`.cursor-plugin/plugin.json`) points to `skills/`, `hooks/cursor-hooks.json`, and `mcp.json`. The MCP map is stdio: Bun launches `${CURSOR_PLUGIN_ROOT}/src/server.ts`. Cursor expands that placeholder; `${PLUGIN_ROOT}` is left literal and the server never starts. User-level Cursor calls pass the conversation's host-native absolute project root as `workspace`. A project `.cursor/mcp.json` entry with an absolute server path and `GOLDFISH_WORKSPACE=${workspaceFolder}` provides a fixed project-level binding; registry and parent-walk candidates never authorize access.
 
 ---
 

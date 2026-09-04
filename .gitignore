@@ -46,3 +46,6 @@ test-goldfish-data/
 
 # Local Codex CLI config (machine-specific MCP commands + absolute paths)
 .codex/
+
+# Local Claude Code overrides (machine-specific)
+.claude/settings.local.json

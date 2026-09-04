@@ -228,7 +228,7 @@ describe('Cursor plugin assets', () => {
 
     expect(server.type).toBe('stdio');
     expect(server.command).toBe('bun');
-    expect(server.args.join(' ')).toContain('${PLUGIN_ROOT}/src/server.ts');
+    expect(server.args.join(' ')).toContain('${CURSOR_PLUGIN_ROOT}/src/server.ts');
   });
 });
 

@@ -3,7 +3,7 @@
     "goldfish": {
       "type": "stdio",
       "command": "bun",
-      "args": ["run", "${PLUGIN_ROOT}/src/server.ts"]
+      "args": ["run", "${CURSOR_PLUGIN_ROOT}/src/server.ts"]
     }
   }
 }
