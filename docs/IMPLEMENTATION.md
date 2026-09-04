@@ -2,7 +2,7 @@
 
 ## Design Philosophy
 
-**Radical Simplicity**: Everything is markdown. No database, no derived caches. Let the agent's intelligence handle complexity, we just provide transparent storage and retrieval.
+**Radical Simplicity**: Everything persisted is markdown. There is no database or derived state on disk; fingerprint-validated in-memory caches avoid repeated parsing and indexing. Let the agent's intelligence handle complexity, we just provide transparent storage and retrieval.
 
 **Test-Driven Development**: Write tests first. Every feature starts with a failing test.
 

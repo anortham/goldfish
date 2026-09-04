@@ -186,4 +186,91 @@ describe('Search index cache', () => {
 
     expect(results.every(c => c.id === 'cp_cache_b')).toBe(true);
   });
+
+  it('returns distinct checkpoints that share a persisted id', async () => {
+    const duplicates: Checkpoint[] = [
+      {
+        id: 'cp_duplicate',
+        timestamp: '2026-01-01T10:00:00.000Z',
+        description: 'Alpha payment retry investigation'
+      },
+      {
+        id: 'cp_duplicate',
+        timestamp: '2026-01-02T10:00:00.000Z',
+        description: 'Beta payment retry resolution'
+      }
+    ];
+
+    const results = await searchCheckpoints('payment retry', duplicates);
+
+    expect(results).toHaveLength(2);
+    expect(results.map(checkpoint => checkpoint.id)).toEqual([
+      'cp_duplicate',
+      'cp_duplicate'
+    ]);
+    expect(results.map(checkpoint => checkpoint.description).sort()).toEqual([
+      'Alpha payment retry investigation',
+      'Beta payment retry resolution'
+    ]);
+  });
+
+  it('finds the selected duplicate from a copied subset on a cache hit', async () => {
+    const key = { scope: '/tmp/ws-cache-duplicate-subset', fingerprint: 'fp-duplicate' };
+    const corpus: Checkpoint[] = [
+      {
+        id: 'cp_duplicate_subset',
+        timestamp: '2026-01-01T10:00:00.000Z',
+        description: 'needle'
+      },
+      {
+        id: 'cp_duplicate_subset',
+        timestamp: '2026-01-02T10:00:00.000Z',
+        description: 'needle appears in a much longer checkpoint description with extra context'
+      }
+    ];
+
+    await searchCheckpoints('needle', corpus, key);
+    const selected = [{ ...corpus[1]! }];
+    const results = await searchCheckpoints('needle', selected, key);
+
+    expect(results).toEqual(selected);
+  });
+
+  it('falls back to a partial match when cached exact hits are outside the subset', async () => {
+    const key = { scope: '/tmp/ws-cache-subset-fallback', fingerprint: 'fp-fallback' };
+    const corpus: Checkpoint[] = [
+      {
+        id: 'cp_exact',
+        timestamp: '2026-01-01T10:00:00.000Z',
+        description: 'payment retry'
+      },
+      {
+        id: 'cp_partial',
+        timestamp: '2026-01-02T10:00:00.000Z',
+        description: 'payment investigation'
+      }
+    ];
+
+    await searchCheckpoints('payment retry', corpus, key);
+    const selected = [{ ...corpus[1]! }];
+    const results = await searchCheckpoints('payment retry', selected, key);
+
+    expect(results).toEqual(selected);
+  });
+
+  it('preserves identical repeated checkpoints as separate results', async () => {
+    const repeated: Checkpoint = {
+      id: 'cp_identical',
+      timestamp: '2026-01-01T10:00:00.000Z',
+      description: 'Identical payment retry record'
+    };
+
+    const results = await searchCheckpoints('payment retry', [
+      { ...repeated },
+      { ...repeated }
+    ]);
+
+    expect(results).toHaveLength(2);
+    expect(results.every(checkpoint => checkpoint.id === 'cp_identical')).toBe(true);
+  });
 });

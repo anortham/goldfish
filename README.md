@@ -364,7 +364,7 @@ Goldfish ships 6 skills. Claude Code, Codex, and Cursor plugin installs expose t
 
 ## Storage Format
 
-Markdown in `.memories/` is the source of truth. Goldfish does not maintain derived caches; search runs over the markdown corpus on demand.
+Markdown in `.memories/` is the source of truth. Goldfish writes no derived state to disk. Small in-memory caches reuse parsed checkpoints and search indexes only while directory fingerprints match.
 
 Because every checkpoint and brief is plain markdown with YAML frontmatter, `.memories/` also works with generic markdown-database tools. For example, open your project in [Obsidian](https://obsidian.md) and point a [Base](https://help.obsidian.md/bases) at `.memories/` to browse checkpoints as a sortable, filterable table — no Goldfish code involved.
 

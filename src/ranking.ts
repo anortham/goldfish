@@ -77,9 +77,53 @@ interface SearchDocument {
   files: string
 }
 
-function toSearchDocument(checkpoint: Checkpoint): SearchDocument {
+function checkpointSearchIdentity(checkpoint: Checkpoint): string {
+  return Bun.hash(JSON.stringify([
+    checkpoint.id,
+    checkpoint.timestamp,
+    checkpoint.description,
+    checkpoint.workspace,
+    checkpoint.type,
+    checkpoint.context,
+    checkpoint.decision,
+    checkpoint.alternatives,
+    checkpoint.impact,
+    checkpoint.evidence,
+    checkpoint.symbols,
+    checkpoint.next,
+    checkpoint.confidence,
+    checkpoint.unknowns,
+    checkpoint.tags,
+    checkpoint.git?.branch,
+    checkpoint.git?.commit,
+    checkpoint.git?.files,
+    checkpoint.git?.worktree,
+    checkpoint.actor?.harness,
+    checkpoint.actor?.model,
+    checkpoint.actor?.session,
+    checkpoint.actor?.user,
+    checkpoint.actor?.git_user,
+    checkpoint.actor?.git_email,
+    checkpoint.summary,
+    checkpoint.briefId,
+    checkpoint.planId,
+    checkpoint.filePath
+  ])).toString(36)
+}
+
+function getSearchDocumentIds(checkpoints: Checkpoint[]): string[] {
+  const occurrences = new Map<string, number>()
+  return checkpoints.map(checkpoint => {
+    const identity = checkpointSearchIdentity(checkpoint)
+    const occurrence = occurrences.get(identity) ?? 0
+    occurrences.set(identity, occurrence + 1)
+    return `${identity}:${occurrence}`
+  })
+}
+
+function toSearchDocument(checkpoint: Checkpoint, documentId: string): SearchDocument {
   return {
-    id: checkpoint.id,
+    id: documentId,
     description: checkpoint.description,
     type: checkpoint.type ?? '',
     brief: checkpoint.briefId ?? checkpoint.planId ?? '',
@@ -116,8 +160,9 @@ async function buildIndex(checkpoints: Checkpoint[]) {
     }
   })
 
-  for (const checkpoint of checkpoints) {
-    await insert(db, toSearchDocument(checkpoint))
+  const documentIds = getSearchDocumentIds(checkpoints)
+  for (let index = 0; index < checkpoints.length; index++) {
+    await insert(db, toSearchDocument(checkpoints[index]!, documentIds[index]!))
   }
 
   return db
@@ -125,9 +170,13 @@ async function buildIndex(checkpoints: Checkpoint[]) {
 
 type OramaInstance = Awaited<ReturnType<typeof buildIndex>>
 
-interface IndexCacheEntry {
-  fingerprint: string
+interface SearchIndex {
   db: OramaInstance
+  documentCount: number
+}
+
+interface IndexCacheEntry extends SearchIndex {
+  fingerprint: string
 }
 
 const indexCache = new Map<string, IndexCacheEntry>()
@@ -141,19 +190,25 @@ export function __getSearchIndexCacheStatsForTests(): { hits: number; misses: nu
   return { hits: indexCacheHits, misses: indexCacheMisses }
 }
 
-async function getIndex(checkpoints: Checkpoint[], cacheKey?: SearchCacheKey): Promise<OramaInstance> {
+async function getIndex(checkpoints: Checkpoint[], cacheKey?: SearchCacheKey): Promise<SearchIndex> {
   if (!cacheKey) {
-    return buildIndex(checkpoints)
+    return {
+      db: await buildIndex(checkpoints),
+      documentCount: checkpoints.length
+    }
   }
 
   const cached = indexCache.get(cacheKey.scope)
   if (cached && cached.fingerprint === cacheKey.fingerprint) {
     indexCacheHits += 1
-    return cached.db
+    return cached
   }
 
   indexCacheMisses += 1
-  const db = await buildIndex(checkpoints)
+  const index = {
+    db: await buildIndex(checkpoints),
+    documentCount: checkpoints.length
+  }
 
   if (!indexCache.has(cacheKey.scope) && indexCache.size >= INDEX_CACHE_MAX_SCOPES) {
     const oldestScope = indexCache.keys().next().value
@@ -161,9 +216,9 @@ async function getIndex(checkpoints: Checkpoint[], cacheKey?: SearchCacheKey): P
       indexCache.delete(oldestScope)
     }
   }
-  indexCache.set(cacheKey.scope, { fingerprint: cacheKey.fingerprint, db })
+  indexCache.set(cacheKey.scope, { fingerprint: cacheKey.fingerprint, ...index })
 
-  return db
+  return index
 }
 
 export async function searchCheckpoints(
@@ -175,13 +230,12 @@ export async function searchCheckpoints(
     return checkpoints
   }
 
-  const db = await getIndex(checkpoints, cacheKey)
+  const { db, documentCount } = await getIndex(checkpoints, cacheKey)
 
-  // Hits are mapped back through this set, so even a cached index holding
-  // documents outside the passed checkpoints can never leak them out.
   const checkpointsById = new Map<string, Checkpoint>()
-  for (const checkpoint of checkpoints) {
-    checkpointsById.set(checkpoint.id, checkpoint)
+  const documentIds = getSearchDocumentIds(checkpoints)
+  for (let index = 0; index < checkpoints.length; index++) {
+    checkpointsById.set(documentIds[index]!, checkpoints[index]!)
   }
 
   // Two-pass strategy: prefer documents that contain all query terms within
@@ -201,34 +255,34 @@ export async function searchCheckpoints(
       properties: '*',
       boost: SEARCH_BOOSTS,
       threshold,
-      limit: checkpoints.length
+      limit: documentCount
     })
     return results.hits as Array<{ id: string; score: number; document: SearchDocument }>
   }
 
-  let hits = await runSearch(0)
+  let hits = (await runSearch(0)).filter(hit => checkpointsById.has(hit.document.id))
   if (hits.length === 0) {
-    hits = await runSearch(1)
+    hits = (await runSearch(1)).filter(hit => checkpointsById.has(hit.document.id))
   }
 
   const ranked: Checkpoint[] = []
   const seen = new Set<string>()
-  const hitScores = new Map<string, number>()
+  const hitScores = new Map<Checkpoint, number>()
 
   for (const hit of hits) {
     const checkpoint = checkpointsById.get(hit.document.id)
-    if (!checkpoint || seen.has(checkpoint.id)) {
+    if (!checkpoint || seen.has(hit.document.id)) {
       continue
     }
 
-    seen.add(checkpoint.id)
-    hitScores.set(checkpoint.id, hit.score)
+    seen.add(hit.document.id)
+    hitScores.set(checkpoint, hit.score)
     ranked.push(checkpoint)
   }
 
   ranked.sort((a, b) => {
-    const scoreA = hitScores.get(a.id) ?? 0
-    const scoreB = hitScores.get(b.id) ?? 0
+    const scoreA = hitScores.get(a) ?? 0
+    const scoreB = hitScores.get(b) ?? 0
     if (scoreB !== scoreA) {
       return scoreB - scoreA
     }
