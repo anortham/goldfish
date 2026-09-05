@@ -4,6 +4,14 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.3] - 2026-09-04
+
+### Fixed
+
+- Prevented duplicate checkpoint IDs from crashing Orama search index creation; duplicate checkpoints remain recallable through unique internal document IDs.
+- Fixed cached searches that omitted valid filtered results or failed to fall back to partial matches when exact matches were outside the selected subset.
+- Corrected the storage documentation to distinguish fingerprint-validated in-memory caches from the markdown source of truth persisted on disk.
+
 ## [8.0.2] - 2026-09-04
 
 ### Added
