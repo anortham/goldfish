@@ -80,9 +80,10 @@ describe('mirrored agent assets stay fresh', () => {
       join(repoRoot, 'docs', 'agent-instructions', 'goldfish-usage.md'),
       'utf-8'
     );
-    expect(onDisk).toBe(buildUsageDoc());
-    expect(onDisk).toContain(getInstructions());
-    expect(onDisk).toContain('tool names vary by client');
+    const normalized = onDisk.replace(/\r\n/g, '\n');
+    expect(normalized).toBe(buildUsageDoc());
+    expect(normalized).toContain(getInstructions());
+    expect(normalized).toContain('tool names vary by client');
   });
 
   it('documents absolute workspace binding in every canonical skill', async () => {

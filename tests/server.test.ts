@@ -652,6 +652,8 @@ describe('Server exports', () => {
     expect(readme).toContain('### OpenCode');
     expect(readme).toContain('### Antigravity');
     expect(readme).toContain('~/.gemini/config/mcp_config.json');
+    expect(readme).toContain('~/.gemini/config/skills.json');
+    expect(readme).toContain('agy mcp add');
     expect(readme).toContain('### VS Code with GitHub Copilot');
   });
 
@@ -866,7 +868,7 @@ describe('Request-time workspace hydration', () => {
         expect(result.isError).toBe(true);
         expect(text).toContain(WORKSPACE_UNBOUND_MESSAGE);
         expect(text).toContain('Suggestions only; choose one explicitly:');
-        expect(text).toContain(project);
+        expect(text).toContain(project.replace(/\\/g, '/'));
         expect(text).not.toContain('recovered');
       } finally {
         await Promise.all([client.close(), server.close()]);

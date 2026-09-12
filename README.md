@@ -184,7 +184,23 @@ Add Goldfish to your `~/.gemini/config/mcp_config.json`:
 }
 ```
 
-Antigravity walks up from your current working directory to the repository root and discovers `.agents/skills/*/SKILL.md`, so the checked-in Goldfish skills (`/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/standup`) and `AGENTS.md` instructions are available automatically.
+Or add it using the Antigravity CLI:
+
+```bash
+agy mcp add goldfish bun run /absolute/path/to/goldfish/src/server.ts
+```
+
+Antigravity walks up from your current working directory to the repository root and discovers `.agents/skills/*/SKILL.md` when working inside this repository. To use the six Goldfish skills (`/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/standup`) across all your projects, register them in `~/.gemini/config/skills.json`:
+
+```json
+{
+  "entries": [
+    {
+      "path": "/absolute/path/to/goldfish/skills"
+    }
+  ]
+}
+```
 
 With a user-level Antigravity registration, pass `workspace` as the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call: `recall({ workspace: "/absolute/path/to/project" })`.
 
