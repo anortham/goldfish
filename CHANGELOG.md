@@ -4,6 +4,17 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.4] - 2026-09-12
+
+### Added
+
+- Documented Antigravity global skills discovery (`~/.gemini/config/skills.json`) and CLI configuration (`agy mcp add`) in `README.md` and `docs/agent-portability.md`.
+
+### Fixed
+
+- Fixed path separator mismatch in `tests/server.test.ts` when asserting workspace suggestions on Windows.
+- Fixed line ending mismatch in `tests/agent-assets.test.ts` when comparing generated usage ruleset on Windows.
+
 ## [8.0.3] - 2026-09-04
 
 ### Fixed
