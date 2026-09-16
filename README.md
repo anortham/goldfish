@@ -122,6 +122,14 @@ codex plugin add goldfish@goldfish
 
 This same install covers the Codex desktop app: restart it after installing and it picks up the plugin.
 
+**Updating.** `codex plugin remove` deletes the installed copy but keeps the marketplace snapshot, so a plain remove-and-add reinstalls the same version. Refresh the snapshot first:
+
+```bash
+codex plugin marketplace upgrade
+codex plugin remove goldfish@goldfish
+codex plugin add goldfish@goldfish
+```
+
 **One-time hook trust review.** Installing or enabling a plugin does not automatically trust its hooks — Codex skips them until you approve. Run `codex`, open `/hooks`, review and trust Goldfish's SessionStart hook, then start a new thread. Until you do, tools and skills work but the session-start guidance stays silent.
 
 The hook is deliberately minimal: it fires once at session start (and after `/clear` or a compact), prints static guidance, makes no tool calls, and writes no state.
