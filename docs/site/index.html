@@ -360,7 +360,18 @@ Expired sessions logged users out mid-task.
 
     <section id="install" class="section">
       <h2>Install</h2>
-      <p class="prereq">Goldfish runs on <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a> 1.0 or later. Install Bun first.</p>
+      <p class="prereq">Goldfish runs on <a href="https://bun.com" target="_blank" rel="noopener">Bun</a> 1.0 or later. Install Bun first. Claude Code, Codex, and Cursor do not install it for you.</p>
+      <div class="bun-install">
+        <div>
+          <p class="os">macOS and Linux</p>
+          <div class="code-wrap"><pre class="code-block">curl -fsSL https://bun.com/install | bash</pre><button class="copy-btn" type="button">Copy</button></div>
+        </div>
+        <div>
+          <p class="os">Windows (PowerShell)</p>
+          <div class="code-wrap"><pre class="code-block">powershell -c "irm bun.sh/install.ps1|iex"</pre><button class="copy-btn" type="button">Copy</button></div>
+        </div>
+      </div>
+      <p class="prereq-after">Open a new terminal, then check with <code>bun --version</code>.</p>
 
       <div class="tabs" role="tablist" aria-label="Clients">
         <button role="tab" id="t-claude" aria-controls="p-claude" aria-selected="true">Claude Code</button>

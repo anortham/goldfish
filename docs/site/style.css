@@ -346,6 +346,9 @@ td:last-child { color: var(--reed); }
 .tab-panel > p + p { margin-top: 0.6rem; }
 
 .prereq { margin-top: 1.5rem; color: var(--reed); }
+.bun-install { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 1rem; max-width: 36rem; }
+.os { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.4rem; }
+.prereq-after { margin-top: 0.75rem; color: var(--reed); }
 
 .code-wrap { position: relative; }
 .code-wrap .code-block { padding-right: 5.5rem; }
