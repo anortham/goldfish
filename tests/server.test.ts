@@ -277,6 +277,7 @@ describe('Tool descriptions', () => {
 
     const description = descriptions[0] as string;
     expect(description).toContain('Host-native absolute project/workspace path');
+    expect(description).toContain('In a git worktree, pass the worktree path, not the main checkout.');
     expect(description).toContain('User-level MCP registrations must pass the conversation\'s host-native absolute project root');
     expect(description).toContain('fixed absolute GOLDFISH_WORKSPACE');
     expect(description).toContain('supported legacy Roots');
@@ -418,6 +419,7 @@ describe('Server instructions', () => {
 
     expect(instructions).toContain('User-level MCP registrations must pass the conversation\'s host-native absolute project root');
     expect(instructions).toContain('host-native absolute project root');
+    expect(instructions).toContain('In a git worktree, pass the worktree path, not the main checkout.');
     expect(instructions).toContain('fixed absolute GOLDFISH_WORKSPACE');
     expect(instructions).toContain('supported legacy Roots');
     expect(instructions).toContain('GOLDFISH_WORKSPACE');
@@ -751,8 +753,6 @@ describe('Request-time workspace hydration', () => {
       await expect(hydrateWorkspaceArguments(
         'recall',
         { limit: 1 },
-        new Map(),
-        'modern',
         false,
         async () => {
           rootsCalls += 1;
@@ -778,8 +778,6 @@ describe('Request-time workspace hydration', () => {
     const recall = await hydrateWorkspaceArguments(
       'recall',
       { workspace: 'all', limit: 1 },
-      new Map(),
-      'modern',
       false,
       sendRoots
     );
@@ -789,8 +787,6 @@ describe('Request-time workspace hydration', () => {
       await expect(hydrateWorkspaceArguments(
         name,
         { workspace: 'all' },
-        new Map(),
-        'modern',
         false,
         sendRoots
       )).rejects.toThrow(`workspace="all" is only valid for recall, not ${name}`);
@@ -813,8 +809,6 @@ describe('Request-time workspace hydration', () => {
         await expect(hydrateWorkspaceArguments(
           'checkpoint',
           { workspace },
-          new Map(),
-          'modern',
           true,
           sendRoots
         )).rejects.toThrow(WORKSPACE_UNBOUND_MESSAGE);
@@ -823,8 +817,6 @@ describe('Request-time workspace hydration', () => {
         await expect(hydrateWorkspaceArguments(
           'checkpoint',
           { workspace },
-          new Map(),
-          'modern',
           true,
           sendRoots
         )).rejects.toThrow(WORKSPACE_UNBOUND_MESSAGE);
@@ -924,7 +916,7 @@ describe('Request-time workspace hydration', () => {
       expect(secondCheckpoint.isError).not.toBe(true);
 
       expect((await stat(join(rootDir, '.memories'))).isDirectory()).toBe(true);
-      expect(connection.rootsCalls).toBe(1);
+      expect(connection.rootsCalls).toBe(2);
 
       const recall = await connection.client.callTool({
         name: 'recall',
@@ -940,7 +932,7 @@ describe('Request-time workspace hydration', () => {
     }
   });
 
-  it('refreshes cached roots after notifications/roots/list_changed', async () => {
+  it('follows a roots change that arrives without notifications/roots/list_changed', async () => {
     const rootDirA = await mkdtemp(join(tmpdir(), 'test-server-root-a-'));
     const rootDirB = await mkdtemp(join(tmpdir(), 'test-server-root-b-'));
     let activeRoot = rootDirA;
@@ -957,7 +949,6 @@ describe('Request-time workspace hydration', () => {
       expect(connection.rootsCalls).toBe(1);
 
       activeRoot = rootDirB;
-      await connection.client.notification({ method: 'notifications/roots/list_changed' });
 
       const secondCheckpoint = await connection.client.callTool({
         name: 'checkpoint',

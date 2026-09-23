@@ -424,7 +424,6 @@ tags:
 git:
   branch: fix/jwt-timeout
   commit: abc1234
-  worktree: /home/user/source/project/.worktrees/jwt-timeout
   files:
     - src/auth/jwt.ts
     - tests/auth.test.ts
@@ -443,9 +442,9 @@ was inverted expiry check in validateToken(). Added test coverage for
 the edge case and verified the fix prevents token reuse attacks.
 ```
 
-`git.worktree` is the absolute path of the git worktree the checkpoint was saved from. It only appears when the save ran from a worktree of the workspace repository; saves from the main checkout omit it.
+Git context comes from the `workspace` path of the call. When you work in a git worktree, pass the worktree path: the checkpoint lands in that worktree's `.memories/` and records the worktree branch. Older checkpoints may carry a `git.worktree` field; new saves do not write it.
 
-`actor` records who and what saved the checkpoint, observed by the server itself — never from tool arguments. `GOLDFISH_HARNESS`, `GOLDFISH_MODEL`, and `GOLDFISH_SESSION` env vars beat MCP-observed values; `user` is the OS username; `git_user` and `git_email` come from `git config` where git was queried. Fields that cannot be observed are omitted, and the block disappears entirely when nothing is observable.
+`actor` records who and what saved the checkpoint, observed by the server itself — never from tool arguments. `GOLDFISH_HARNESS`, `GOLDFISH_MODEL`, and `GOLDFISH_SESSION` env vars beat MCP-observed values; `user` is the OS username; `git_user` and `git_email` come from `git config` in the workspace. Fields that cannot be observed are omitted, and the block disappears entirely when nothing is observable.
 
 ### Cross-Project Registry
 

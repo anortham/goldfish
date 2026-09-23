@@ -11,7 +11,7 @@ import { readFile, writeFile, readdir, rename, unlink, mkdir, stat } from 'fs/pr
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { Actor, Checkpoint, CheckpointInput, ObservedActor } from './types';
 import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
-import { getGitContext, getGitIdentity, resolveGitCaptureCwd } from './git';
+import { getGitContext, getGitIdentity } from './git';
 import { withLock } from './lock';
 import { generateSummary } from './summary';
 import { registerProject } from './registry';
@@ -20,7 +20,6 @@ import { getLogger } from './logger';
 
 interface CheckpointDependencies {
   getGitContext: (cwd?: string) => import('./types').GitContext | Promise<import('./types').GitContext>;
-  getCallerCwd?: () => string;
   getOsUsername?: () => string | undefined;
   getGitIdentity?: (cwd?: string) => Promise<{ name?: string; email?: string }> | { name?: string; email?: string };
 }
@@ -489,24 +488,7 @@ export async function saveCheckpoint(
 
   // Create checkpoint with current timestamp
   const timestamp = new Date().toISOString();
-  let capture: { cwd: string; worktree?: string } = { cwd: projectPath };
-  try {
-    const callerCwd = checkpointDependencies.getCallerCwd?.() ?? process.cwd();
-    capture = await resolveGitCaptureCwd(projectPath, callerCwd);
-  } catch {
-    capture = { cwd: projectPath };
-  }
-  if (capture.worktree) {
-    try {
-      getLogger().info(`git.capture cwd=${capture.cwd} workspace=${projectPath}`);
-    } catch {
-      // Logging must never fail the save
-    }
-  }
-  const gitContext = await checkpointDependencies.getGitContext(capture.cwd);
-  if (capture.worktree) {
-    gitContext.worktree = capture.worktree;
-  }
+  const gitContext = await checkpointDependencies.getGitContext(projectPath);
 
   // Generate deterministic ID
   const id = generateCheckpointId(timestamp, input.description);
@@ -546,7 +528,7 @@ export async function saveCheckpoint(
 
     let identity: { name?: string; email?: string } = {};
     try {
-      identity = (await checkpointDependencies.getGitIdentity?.(capture.cwd)) ?? {};
+      identity = (await checkpointDependencies.getGitIdentity?.(projectPath)) ?? {};
     } catch {
       identity = {};
     }

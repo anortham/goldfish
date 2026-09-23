@@ -95,6 +95,7 @@ describe('mirrored agent assets stay fresh', () => {
       const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');
 
       expect(content).toContain('host-native absolute project root');
+      expect(content).toContain('In a git worktree, pass the worktree path, not the main checkout.');
       expect(content).toContain('fixed absolute GOLDFISH_WORKSPACE');
       expect(content).toContain('supported legacy Roots');
       expect(content).not.toContain('defaults to current workspace');

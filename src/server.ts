@@ -33,10 +33,6 @@ const ROOTS_LIST_TIMEOUT_MS = 500;
 // Re-export for backward compatibility with tests
 export { getTools, getInstructions, handleCheckpoint, handleRecall, handleBrief };
 
-function getSessionKey(sessionId?: string): string {
-  return sessionId ?? DEFAULT_SESSION_KEY;
-}
-
 /**
  * Read the MCP client name for the request's protocol era. On 2026-07-28 the
  * client's identity rides on every request's `_meta` envelope under
@@ -92,15 +88,9 @@ function asObject(value: unknown): Record<string, unknown> {
   return {};
 }
 
-async function getCachedRoots(
-  cache: Map<string, Root[] | null | undefined>,
-  sessionId: string,
+async function requestRoots(
   sendRequest: (request: { method: 'roots/list' }) => Promise<{ roots: Root[] }>
 ): Promise<Root[] | undefined> {
-  if (cache.has(sessionId)) {
-    return cache.get(sessionId) ?? undefined;
-  }
-
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
@@ -109,13 +99,7 @@ async function getCachedRoots(
         timeout = setTimeout(() => resolve(undefined), ROOTS_LIST_TIMEOUT_MS);
       })
     ]);
-    if (!result) {
-      return undefined;
-    }
-    if (result.roots.length > 0) {
-      cache.set(sessionId, result.roots);
-    }
-    return result.roots;
+    return result?.roots;
   } catch {
     return undefined;
   } finally {
@@ -125,11 +109,13 @@ async function getCachedRoots(
   }
 }
 
+/**
+ * Claude Code updates roots/list after EnterWorktree but sends no
+ * notifications/roots/list_changed, so roots are requested on every call.
+ */
 export async function hydrateWorkspaceArguments(
   name: string,
   rawArgs: unknown,
-  cache: Map<string, Root[] | null | undefined>,
-  sessionId: string,
   canRequestRoots: boolean,
   sendRequest: (request: { method: 'roots/list' }) => Promise<{ roots: Root[] }>
 ): Promise<{ args: Record<string, unknown> }> {
@@ -150,7 +136,7 @@ export async function hydrateWorkspaceArguments(
   const fixedEnv = process.env.GOLDFISH_WORKSPACE;
   const roots = explicit !== undefined || fixedEnv?.trim() || !canRequestRoots
     ? undefined
-    : await getCachedRoots(cache, sessionId, sendRequest);
+    : await requestRoots(sendRequest);
 
   const resolved = await resolveWorkspaceWithSource(explicit, {
     ...(roots !== undefined ? { roots } : {}),
@@ -177,12 +163,6 @@ export function createServer() {
       instructions: getInstructions()
     }
   );
-  const rootsCache = new Map<string, Root[] | null | undefined>();
-
-  server.setNotificationHandler('notifications/roots/list_changed', () => {
-    rootsCache.clear();
-  });
-
   server.setRequestHandler('tools/list', async () => {
     return { tools: getTools() };
   });
@@ -196,8 +176,6 @@ export function createServer() {
       const { args: hydratedArgs } = await hydrateWorkspaceArguments(
         name,
         args,
-        rootsCache,
-        getSessionKey(ctx.sessionId),
         ctx.mcpReq.envelope === undefined,
         request => ctx.mcpReq.send(request)
       );

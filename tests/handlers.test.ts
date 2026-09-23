@@ -563,14 +563,16 @@ describe('Readable markdown responses', () => {
       expect(checkpoints[0]!.unknowns).toEqual(['Whether the rollout needs a flag']);
     });
 
-    it('shows the saved file path with a commit reminder', async () => {
+    it('shows the absolute saved file path with a commit reminder', async () => {
       const result = await handleCheckpoint({
         description: 'Path test',
         workspace: TEST_DIR
       });
 
       const text = result.content[0]!.text;
-      expect(text).toMatch(/Saved: \.memories\/\d{4}-\d{2}-\d{2}\/\d{6}_[0-9a-f]+\.md/);
+      const savedLine = text.split('\n').find((line) => line.startsWith('Saved: '))!;
+      expect(savedLine).toMatch(/[\\/]\.memories[\\/]\d{4}-\d{2}-\d{2}[\\/]\d{6}_[0-9a-f]+\.md /);
+      expect(savedLine.slice('Saved: '.length)).toStartWith(join(TEST_DIR, '.memories'));
       expect(text).toContain('include this file in your git commit');
     });
 

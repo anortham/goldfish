@@ -140,7 +140,7 @@ export interface GitContext {
   branch?: string;
   commit?: string;
   files?: string[];       // Changed files
-  worktree?: string;      // Absolute worktree toplevel when git was captured outside the workspace checkout
+  worktree?: string;      // Legacy: written by 7.9-8.0.4 saves; new saves never set it
 }
 
 /**
@@ -152,8 +152,8 @@ export interface Actor {
   model?: string;         // GOLDFISH_MODEL only
   session?: string;       // GOLDFISH_SESSION, else MCP session id (never 'default')
   user?: string;          // OS username
-  git_user?: string;      // git config user.name at the git query cwd
-  git_email?: string;     // git config user.email at the git query cwd
+  git_user?: string;      // git config user.name in the workspace
+  git_email?: string;     // git config user.email in the workspace
 }
 
 /** Identity extracted from MCP request context in src/server.ts only. */

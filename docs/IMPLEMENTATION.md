@@ -60,7 +60,6 @@ tags:
 git:
   branch: main
   commit: abc1234
-  worktree: /home/user/source/project/.worktrees/jwt-fix
   files:
     - src/auth/jwt.ts
 actor:
@@ -76,9 +75,9 @@ summary: "Fixed JWT validation bug"
 Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check.
 ```
 
-`git.worktree` is the absolute toplevel of the git worktree the checkpoint was saved from. It is a machine-local path and only appears when that toplevel differs from the workspace path; saves from the main checkout omit it.
+Git context is always read from the workspace path the call passed, never from the server's launch directory. A save from a git worktree passes the worktree path, so the file lands in that worktree's `.memories/` and `git.branch` is the worktree branch. `git.worktree` is a legacy field: older checkpoints may carry it, and parsing keeps it, but new saves never write it.
 
-`actor` is server-observed identity: `GOLDFISH_HARNESS`/`GOLDFISH_MODEL`/`GOLDFISH_SESSION` env vars beat MCP-observed values, `user` is the OS username, and `git_user`/`git_email` come from `git config` at the git query cwd. It is never taken from tool arguments. Empty fields are omitted and the whole block disappears when nothing is observable.
+`actor` is server-observed identity: `GOLDFISH_HARNESS`/`GOLDFISH_MODEL`/`GOLDFISH_SESSION` env vars beat MCP-observed values, `user` is the OS username, and `git_user`/`git_email` come from `git config` in the workspace. It is never taken from tool arguments. Empty fields are omitted and the whole block disappears when nothing is observable.
 
 ### Brief Format
 

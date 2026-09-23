@@ -4,6 +4,18 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Checkpoints saved with a git worktree as `workspace` recorded the main checkout's branch and commit. The server read git from its own launch directory, which does not follow Claude Code `EnterWorktree`. Git context now always comes from the `workspace` path. New saves no longer write `git.worktree`; old files still parse.
+- MCP roots were cached for the life of the server. Claude Code updates `roots/list` after `EnterWorktree` but sends no `notifications/roots/list_changed`, so a call without `workspace` kept the old root. The server now asks for roots on every call that needs them.
+
+### Changed
+
+- The checkpoint save reply prints the absolute path of the saved file, so a save to the wrong root is visible at once.
+- Server instructions, the `workspace` parameter, the SessionStart hook, and all six skills now say: in a git worktree, pass the worktree path, not the main checkout.
+
 ## [8.0.4] - 2026-09-12
 
 ### Added

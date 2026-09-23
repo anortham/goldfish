@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'fs/promises';
-import { isAbsolute, join, relative, sep } from 'path';
+import { isAbsolute, join } from 'path';
 import { getBrief } from '../briefs.js';
 import { formatActorLine, saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
@@ -127,8 +127,7 @@ export async function handleCheckpoint(args: CheckpointArgs, observed?: Observed
 
   lines.push(`${getFishEmoji()} Checkpoint saved: ${checkpoint.id}`);
   if (checkpoint.filePath) {
-    const relPath = relative(ws, checkpoint.filePath).split(sep).join('/');
-    lines.push(`Saved: ${relPath} — include this file in your git commit.`);
+    lines.push(`Saved: ${checkpoint.filePath} — include this file in your git commit.`);
   }
   lines.push(`Time: ${checkpoint.timestamp}`);
 

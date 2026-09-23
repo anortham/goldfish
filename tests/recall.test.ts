@@ -1376,11 +1376,13 @@ describe('recall with minimal metadata', () => {
       { harness: 'recall-harness', session: 'sess99' }
     );
 
-    const compact = await recall({ workspace: TEST_DIR_A, limit: 1 });
-    expect(compact.checkpoints[0]!.actor).toBeUndefined();
+    const isObserved = (checkpoint: Checkpoint) => checkpoint.description === 'Checkpoint with observed actor';
 
-    const full = await recall({ workspace: TEST_DIR_A, limit: 1, full: true });
-    expect(full.checkpoints[0]!.actor).toEqual({
+    const compact = await recall({ workspace: TEST_DIR_A, limit: 10 });
+    expect(compact.checkpoints.find(isObserved)!.actor).toBeUndefined();
+
+    const full = await recall({ workspace: TEST_DIR_A, limit: 10, full: true });
+    expect(full.checkpoints.find(isObserved)!.actor).toEqual({
       harness: 'recall-harness',
       session: 'sess99'
     });

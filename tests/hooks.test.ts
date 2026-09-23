@@ -114,6 +114,7 @@ describe('hook context content', () => {
 
     expect(context).toContain('User-level MCP registrations must pass the conversation\'s host-native absolute project root');
     expect(context).toContain('host-native absolute project root');
+    expect(context).toContain('In a git worktree, pass the worktree path, not the main checkout.');
     expect(context).toContain('fixed absolute GOLDFISH_WORKSPACE');
     expect(context).toContain('supported legacy Roots');
     expect(context).toContain('GOLDFISH_WORKSPACE');

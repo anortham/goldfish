@@ -20,7 +20,7 @@ import { listRegisteredProjects, unregisterProject } from '../src/registry';
 import { getGitContext } from '../src/git';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { rm, readdir, readFile, writeFile, mkdir, mkdtemp, realpath, stat, utimes } from 'fs/promises';
+import { rm, readdir, readFile, writeFile, mkdir, mkdtemp, stat, utimes } from 'fs/promises';
 
 const WORKSPACE_UNBOUND_RETRY = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
 
@@ -1302,8 +1302,8 @@ describe('saveCheckpoint', () => {
     }
   });
 
-  it('saveCheckpoint from a worktree writes under the main workspace .memories/ with the worktree branch', async () => {
-    const baseDir = await mkdtemp(join(tmpdir(), 'g2-save-worktree-'));
+  it('saveCheckpoint in a linked worktree records the worktree branch while the server runs in the main checkout', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'save-worktree-'));
     const mainDir = join(baseDir, 'main');
     const worktreeDir = join(baseDir, 'wt');
     await mkdir(mainDir, { recursive: true });
@@ -1315,58 +1315,28 @@ describe('saveCheckpoint', () => {
     await gitIn(mainDir, ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'init']);
     await gitIn(mainDir, ['worktree', 'add', worktreeDir, '-b', 'wt-branch']);
 
-    const restore = __setCheckpointDependenciesForTests({
-      getGitContext,
-      getCallerCwd: () => worktreeDir
-    });
+    const restore = __setCheckpointDependenciesForTests({ getGitContext });
+    const serverCwd = process.cwd();
+    process.chdir(mainDir);
 
     try {
       const checkpoint = await saveCheckpoint({
-        description: 'Saved from a sibling worktree',
-        workspace: mainDir
+        description: 'Saved from a linked worktree',
+        workspace: worktreeDir
       });
 
       expect(checkpoint.git?.branch).toBe('wt-branch');
-      expect(checkpoint.git?.worktree).toBeDefined();
-      expect(await realpath(checkpoint.git!.worktree!)).toBe(await realpath(worktreeDir));
+      expect(checkpoint.git?.worktree).toBeUndefined();
 
       const date = checkpoint.timestamp.split('T')[0]!;
-      const savedFiles = await readdir(join(getMemoriesDir(mainDir), date));
-      expect(savedFiles).toHaveLength(1);
+      expect(await readdir(join(getMemoriesDir(worktreeDir), date))).toHaveLength(1);
+      await expect(stat(getMemoriesDir(mainDir))).rejects.toThrow();
     } finally {
+      process.chdir(serverCwd);
       restore();
-      await unregisterProject(mainDir);
+      await unregisterProject(worktreeDir);
       await gitIn(mainDir, ['worktree', 'remove', '--force', worktreeDir]);
       await rm(baseDir, { recursive: true, force: true });
-    }
-  });
-
-  it('saveCheckpoint does not throw when resolveGitCaptureCwd throws', async () => {
-    let receivedCwd: string | undefined;
-    let callerCwdCalls = 0;
-    const restore = __setCheckpointDependenciesForTests({
-      getGitContext: (cwd?: string) => {
-        receivedCwd = cwd;
-        return { branch: 'main', commit: 'abc1234' };
-      },
-      getCallerCwd: () => {
-        callerCwdCalls += 1;
-        throw new Error('caller cwd unavailable');
-      }
-    });
-
-    try {
-      const checkpoint = await saveCheckpoint({
-        description: 'Capture resolution failure',
-        workspace: tempDir
-      });
-
-      expect(callerCwdCalls).toBe(1);
-      expect(receivedCwd).toBe(tempDir);
-      expect(checkpoint.git?.branch).toBe('main');
-      expect(checkpoint.git?.worktree).toBeUndefined();
-    } finally {
-      restore();
     }
   });
 
@@ -1452,7 +1422,7 @@ describe('saveCheckpoint', () => {
     expect(afterRestore.actor).toBeUndefined();
   });
 
-  it('saveCheckpoint reads git identity at the git query cwd', async () => {
+  it('saveCheckpoint reads git identity in the workspace', async () => {
     let identityCwd: string | undefined;
     const restore = __setCheckpointDependenciesForTests({
       getGitIdentity: async (cwd?: string) => {
@@ -1473,7 +1443,7 @@ describe('saveCheckpoint', () => {
     }
   });
 
-  it('saveCheckpoint does not throw when actor assembly throws and still records worktree git', async () => {
+  it('saveCheckpoint does not throw when actor assembly throws and still records the worktree branch', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'g1-actor-throw-'));
     const mainDir = join(baseDir, 'main');
     const worktreeDir = join(baseDir, 'wt');
@@ -1488,7 +1458,6 @@ describe('saveCheckpoint', () => {
 
     const restore = __setCheckpointDependenciesForTests({
       getGitContext,
-      getCallerCwd: () => worktreeDir,
       getGitIdentity: async () => {
         throw new Error('identity unavailable');
       }
@@ -1496,7 +1465,7 @@ describe('saveCheckpoint', () => {
 
     try {
       const checkpoint = await saveCheckpoint(
-        { description: 'Actor assembly failure keeps worktree git', workspace: mainDir },
+        { description: 'Actor assembly failure keeps worktree git', workspace: worktreeDir },
         { harness: 'unit-harness' }
       );
 
@@ -1504,11 +1473,9 @@ describe('saveCheckpoint', () => {
       expect(checkpoint.actor?.git_user).toBeUndefined();
       expect(checkpoint.actor?.git_email).toBeUndefined();
       expect(checkpoint.git?.branch).toBe('wt-actor-branch');
-      expect(checkpoint.git?.worktree).toBeDefined();
-      expect(await realpath(checkpoint.git!.worktree!)).toBe(await realpath(worktreeDir));
     } finally {
       restore();
-      await unregisterProject(mainDir);
+      await unregisterProject(worktreeDir);
       await gitIn(mainDir, ['worktree', 'remove', '--force', worktreeDir]);
       await rm(baseDir, { recursive: true, force: true });
     }

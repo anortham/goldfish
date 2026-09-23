@@ -6,7 +6,7 @@
 
 import type { Tool } from '@modelcontextprotocol/server';
 
-const WORKSPACE_DESCRIPTION = 'Host-native absolute project/workspace path. User-level MCP registrations must pass the conversation\'s host-native absolute project root on every checkpoint, brief, and current-project recall call. Optional only when a fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots binds the server. Omission and "current" do not bind user-level calls. For recall, workspace: "all" is explicit cross-project search, never a fallback and invalid for checkpoint or brief. Cwd, registry, and parent-walk results are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.';
+const WORKSPACE_DESCRIPTION = 'Host-native absolute project/workspace path. User-level MCP registrations must pass the conversation\'s host-native absolute project root on every checkpoint, brief, and current-project recall call. In a git worktree, pass the worktree path, not the main checkout. Change it when you enter or leave a worktree or switch projects. Optional only when a fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots binds the server. Omission and "current" do not bind user-level calls. For recall, workspace: "all" is explicit cross-project search, never a fallback and invalid for checkpoint or brief. Cwd, registry, and parent-walk results are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.';
 
 /**
  * Get tool definitions

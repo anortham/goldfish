@@ -13,7 +13,7 @@ export function getInstructions(): string {
 
 ## Workspace binding
 
-User-level MCP registrations must pass the conversation's host-native absolute project root as workspace on every checkpoint, brief, and current-project recall call. Project-level servers may omit workspace with fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots. Omission and "current" do not bind user-level calls. recall({ workspace: "all" }) is explicit cross-project search, not a fallback; invalid for checkpoint or brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.
+User-level MCP registrations must pass the conversation's host-native absolute project root as workspace on every checkpoint, brief, and current-project recall call. Project-level servers may omit workspace with fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots. In a git worktree, pass the worktree path, not the main checkout. recall({ workspace: "all" }) is explicit cross-project search, not a fallback; invalid for checkpoint or brief. Cwd, registry, and parent-walk candidates are suggestions only. If unbound, retry with {"workspace":"<absolute-project-root>"}.
 
 ## Checkpointing
 
