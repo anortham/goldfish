@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goldfish — memory for AI coding agents</title>
+  <meta name="description" content="Goldfish gives AI coding agents a memory that lives in your repo. Checkpoints record what changed and why, briefs hold the direction, and recall brings both back in the next session. Plain markdown, committed with your code.">
+  <link rel="canonical" href="https://anortham.github.io/goldfish/">
+  <meta name="theme-color" content="#eaf2f1">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐠</text></svg>">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Goldfish — memory for AI coding agents">
+  <meta property="og:description" content="Your agent forgets. Your repo doesn't. Goldfish keeps a markdown record of decisions and progress in your repo, so every new session starts where the last one stopped.">
+  <meta property="og:url" content="https://anortham.github.io/goldfish/">
+  <meta name="twitter:card" content="summary">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <nav class="site-nav" aria-label="Site">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 40 24" aria-hidden="true"><path d="M3 12c5-8 16-10 24-4l9-6-2 10 2 10-9-6c-8 6-19 4-24-4z" fill="#e8641b"/><circle cx="10" cy="10.5" r="1.8" fill="#0e2f3a"/></svg>
+      Goldfish
+    </a>
+    <div class="nav-links">
+      <a href="#why">Why</a>
+      <a href="#how">How it works</a>
+      <a href="#benefits">Benefits</a>
+      <a href="#practices">Best practices</a>
+      <a href="#skills">Skills</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/anortham/goldfish" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div>
+      <h1>Your agent forgets.<span class="second-line">Your repo doesn't.</span></h1>
+      <p class="lede">
+        Goldfish gives AI coding agents a memory that lives in your project.
+        <strong>Checkpoints</strong> record what changed and why.
+        <strong>Briefs</strong> hold the direction.
+        <strong>Recall</strong> brings both back when a new session starts.
+        Everything is plain markdown, committed with your code.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#install">Install Goldfish</a>
+        <a class="btn btn-secondary" href="#practices">Read the best practices</a>
+        <a class="btn btn-secondary" href="https://github.com/anortham/goldfish">View on GitHub</a>
+      </div>
+      <p class="clients">
+        Plugins for Claude Code, Codex, and Cursor. Works with OpenCode, Antigravity, VS Code, and any MCP client.
+      </p>
+    </div>
+
+    <section class="tank" aria-label="Example: memory across two sessions">
+      <div class="tank-steps" role="tablist" aria-label="Session steps">
+        <button role="tab" id="tab-save" aria-controls="pane-save" aria-selected="true">Work and save</button>
+        <button role="tab" id="tab-wipe" aria-controls="pane-wipe" aria-selected="false" tabindex="-1">Context lost</button>
+        <button role="tab" id="tab-recall" aria-controls="pane-recall" aria-selected="false" tabindex="-1">Pick it up</button>
+      </div>
+
+      <div class="tank-pane" id="pane-save" role="tabpanel" aria-labelledby="tab-save">
+        <p class="say"><span class="who">You</span>Fix the login timeout bug.</p>
+        <p class="say"><span class="who agent">Agent</span>Found it: the token had no refresh path. Fixed and tested. Saving a checkpoint before the commit.</p>
+<pre>🐠 Checkpoint saved: checkpoint_a1b2c3d4
+Saved: <span class="file">.memories/2026-09-22/143022_a1b2.md</span> — include this file in your git commit.
+Branch: fix/jwt-timeout @ 3f9c21e
+Tags: bug-fix, auth
+
+## Fixed JWT timeout with refresh-token rotation
+- **Why:** tokens were single-use with no renewal path
+- **How:** added RefreshTokenStore, 7-day expiry
+- **Impact:** unblocks the auth PR; admin SSO untouched</pre>
+      </div>
+
+      <div class="tank-pane" id="pane-wipe" role="tabpanel" aria-labelledby="tab-wipe" hidden>
+        <div class="wiped">
+          <strong>The conversation is gone.</strong>
+          The context window filled up and compacted, or you closed the laptop, or you moved to a different tool.
+        </div>
+<pre>$ git log --oneline -1
+3f9c21e Fix JWT timeout with refresh-token rotation
+
+$ ls .memories/2026-09-22/
+<span class="file">143022_a1b2.md</span></pre>
+        <p class="tank-note">The memory is a file in your repo. It survives anything the chat does not.</p>
+      </div>
+
+      <div class="tank-pane" id="pane-recall" role="tabpanel" aria-labelledby="tab-recall" hidden>
+        <p class="say"><span class="who">You</span>Where did we leave the auth work?</p>
+<pre>🐠 Recalled 1 checkpoint
+
+## Active Brief: Auth System Redesign (active)
+Goal: durable refresh-token sessions.
+Constraint: do not break admin SSO.
+
+### 2026-09-22 14:30 checkpoint_a1b2c3d4
+Tags: bug-fix, auth
+Fixed JWT timeout with refresh-token rotation</pre>
+        <p class="say"><span class="who agent">Agent</span>The timeout fix landed on <code>fix/jwt-timeout</code>. Next up under the brief is session revocation. I'll start there.</p>
+      </div>
+    </section>
+  </header>
+
+  <main>
+
+    <section id="why" class="section">
+      <h2>Agents are great at the task. They lose the story.</h2>
+      <p class="intro">
+        Coding agents plan, write, and test well inside one session. They do not keep a record of
+        <em>why</em> the project moved the way it did. That record usually lives in one chat, and chats do not last.
+      </p>
+      <ul class="losses">
+        <li>
+          <h3>Compaction</h3>
+          <p>A long session fills the context window. The harness summarizes it, and the reasons behind early decisions drop out.</p>
+        </li>
+        <li>
+          <h3>New sessions</h3>
+          <p>Tomorrow's session starts blank. You spend the first ten minutes explaining what you already explained yesterday.</p>
+        </li>
+        <li>
+          <h3>Switching tools</h3>
+          <p>You move from Claude Code to Codex or Cursor. Each tool keeps its own history, and none of them read the others'.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section id="how" class="section">
+      <h2>Three tools. Markdown underneath.</h2>
+      <p class="intro">
+        Goldfish is an MCP server with three tools. The agent calls them; the files land in a
+        <code>.memories/</code> folder in your project; git carries them everywhere the code goes.
+      </p>
+
+      <div class="tools">
+        <div class="tool">
+          <div>
+            <p class="tool-name">checkpoint</p>
+            <h3>Save what happened and why</h3>
+            <p>
+              At each milestone the agent writes a short structured note: what changed, why, how, and what it unblocks.
+              Goldfish adds the time, branch, commit, and changed files for you.
+            </p>
+          </div>
+<pre class="code-block">---
+id: checkpoint_a1b2c3d4
+timestamp: 2026-09-22T14:30:22.000Z
+tags: [bug-fix, auth]
+git:
+  branch: fix/jwt-timeout
+  commit: 3f9c21e
+  files: [src/auth/jwt.ts, tests/auth.test.ts]
+symbols: [RefreshTokenStore, validateToken]
+---
+
+## Fixed JWT timeout with refresh-token rotation
+...</pre>
+        </div>
+
+        <div class="tool">
+          <div>
+            <p class="tool-name">brief</p>
+            <h3>Keep the direction steady</h3>
+            <p>
+              A brief is a short document with the goal, the constraints, and what success looks like.
+              It sits at the top of every recall, so each session starts pointed the same way.
+            </p>
+          </div>
+<pre class="code-block">---
+id: auth-system-redesign
+title: Auth System Redesign
+status: active
+---
+
+## Goal
+Redesign auth around durable refresh-token sessions.
+
+## Constraints
+- Keep one-release compatibility for old clients
+- Do not break admin SSO</pre>
+        </div>
+
+        <div class="tool">
+          <div>
+            <p class="tool-name">recall</p>
+            <h3>Bring it back when it matters</h3>
+            <p>
+              Recall returns the active brief and recent checkpoints. It can also search by keyword,
+              filter by date, tag, or type, and answer "who touched this file, and why?"
+            </p>
+          </div>
+<pre class="code-block"><span class="c"># the last 5 checkpoints and the active brief</span>
+recall({ workspace: "/path/to/project" })
+
+<span class="c"># keyword search, ranked by relevance</span>
+recall({ workspace, search: "auth timeout" })
+
+<span class="c"># why did this file change?</span>
+recall({ workspace, file: "jwt.ts" })
+
+<span class="c"># every project, for a standup</span>
+recall({ workspace: "all", days: 1 })</pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="benefits" class="section">
+      <h2>What you get</h2>
+      <dl class="benefits">
+        <div>
+          <dt>Memory that travels with the code</dt>
+          <dd>Checkpoints are committed files. Clone the repo on another machine and the history comes with it.</dd>
+        </div>
+        <div>
+          <dt>Reviewable in pull requests</dt>
+          <dd>A checkpoint shows up in the diff next to the code it explains. Reviewers see the reasoning, not only the result.</dd>
+        </div>
+        <div>
+          <dt>One memory for every tool</dt>
+          <dd>Claude Code, Codex, Cursor, and other MCP clients read and write the same <code>.memories/</code> folder. Switch tools without losing the thread.</dd>
+        </div>
+        <div>
+          <dt>Readable without Goldfish</dt>
+          <dd>Every entry is markdown with a small header. Open it in any editor, grep it, or browse it as a table in Obsidian.</dd>
+        </div>
+        <div>
+          <dt>Answers "why is it like this?"</dt>
+          <dd>Filter recall by file or function name to find the decision behind a line of code, like <code>git blame</code> for intent.</dd>
+        </div>
+        <div>
+          <dt>Standups and handoffs for free</dt>
+          <dd><code>/standup</code> summarizes work across all your projects. <code>/handoff</code> writes a resume note for the next agent or the next you.</dd>
+        </div>
+        <div>
+          <dt>Fast and small</dt>
+          <dd>A save takes about 10 ms. A week of recall takes about 30 ms. No database, no background service, three runtime dependencies.</dd>
+        </div>
+        <div>
+          <dt>Quiet by design</dt>
+          <dd>One static note loads when a session starts. No hooks fire during your work, and nothing phones home.</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section id="practices" class="section">
+      <h2>Best practices</h2>
+      <p class="intro">
+        Goldfish stores what the agent writes, and nothing smarter. The value of your memory depends on the quality
+        of each entry. These habits make the difference.
+      </p>
+
+      <div class="compare">
+        <figure class="weak">
+          <figcaption>A checkpoint nobody can use</figcaption>
+<pre class="code-block">Fixed auth bug.</pre>
+        </figure>
+        <figure class="strong">
+          <figcaption>A checkpoint the next session can act on</figcaption>
+<pre class="code-block">## Fixed JWT timeout with refresh-token rotation
+
+Expired sessions logged users out mid-task.
+
+- **What:** added RefreshTokenStore, 7-day expiry
+- **Why:** tokens were single-use, no renewal path
+- **How:** rotate on each refresh; rejected sliding
+  expiry because it breaks admin SSO
+- **Impact:** unblocks the auth PR. Next: revocation</pre>
+        </figure>
+      </div>
+
+      <div class="practices">
+        <div class="practice">
+          <h3>Write what, why, how, and impact</h3>
+          <p>
+            A future session reads only these words. Name the files and functions you touched, the reason for the change,
+            the options you rejected, and what comes next. Add <code>symbols</code> so file and function searches find it later.
+          </p>
+        </div>
+        <div class="practice">
+          <h3>Checkpoint at milestones, not every step</h3>
+          <div>
+            <p>One checkpoint per meaningful unit of progress. Good moments:</p>
+            <ul class="triggers">
+              <li>A feature, fix, or refactor step is done</li>
+              <li>You made a key decision or found something surprising</li>
+              <li>You are about to stop for the day</li>
+              <li>The context window is about to compact</li>
+            </ul>
+          </div>
+        </div>
+        <div class="practice">
+          <h3>Checkpoint before you commit</h3>
+          <p>
+            Save the checkpoint first, then commit. The checkpoint file goes into the same commit as the code it describes,
+            so the two never drift apart.
+          </p>
+        </div>
+        <div class="practice">
+          <h3>Always commit <code>.memories/</code></h3>
+          <p>
+            The folder is a project record, like docs or tests. Never add it to <code>.gitignore</code>.
+            Each checkpoint is its own file, so teammates and parallel agents do not get merge conflicts.
+          </p>
+        </div>
+        <div class="practice">
+          <h3>Use briefs for direction, not task lists</h3>
+          <p>
+            Your harness already plans the steps of a session. A brief holds what outlasts a session: the goal,
+            the constraints, and the finish line. Link to detailed plans instead of pasting them in.
+          </p>
+        </div>
+        <div class="practice">
+          <h3>Keep the brief honest</h3>
+          <p>
+            Update the brief when goals or constraints change. Complete it when the work lands. Archive it when a new direction replaces it.
+            Goldfish warns you when an active brief goes stale.
+          </p>
+        </div>
+        <div class="practice">
+          <h3>Recall when the past matters</h3>
+          <p>
+            Recall when you resume earlier work, after a compaction, or when an old decision affects the task.
+            A quick question in a new session does not need it.
+          </p>
+        </div>
+        <div class="practice">
+          <h3>Treat recalled facts as history</h3>
+          <p>
+            Keep the decisions. Check the details that change over time, such as file paths, versions, and test counts,
+            against the current code before you rely on them.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="skills" class="section">
+      <h2>Six skills for the common jobs</h2>
+      <p class="intro">
+        The plugins add slash commands that wrap the three tools in good habits. Clients that read <code>.agents/skills/</code> get them too.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>/checkpoint</code></td><td>Save a well-structured checkpoint with tags</td></tr>
+            <tr><td><code>/recall</code></td><td>Restore context from recent checkpoints and the active brief</td></tr>
+            <tr><td><code>/brief</code></td><td>Create or update the direction for multi-session work</td></tr>
+            <tr><td><code>/brief-status</code></td><td>Check progress against the active brief, with evidence</td></tr>
+            <tr><td><code>/handoff</code></td><td>Write a resume summary for a returning or different agent</td></tr>
+            <tr><td><code>/standup</code></td><td>Report recent work across all your projects</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="install" class="section">
+      <h2>Install</h2>
+      <p class="prereq">Goldfish runs on <a href="https://bun.sh" target="_blank" rel="noopener">Bun</a> 1.0 or later. Install Bun first.</p>
+
+      <div class="tabs" role="tablist" aria-label="Clients">
+        <button role="tab" id="t-claude" aria-controls="p-claude" aria-selected="true">Claude Code</button>
+        <button role="tab" id="t-codex" aria-controls="p-codex" aria-selected="false" tabindex="-1">Codex</button>
+        <button role="tab" id="t-cursor" aria-controls="p-cursor" aria-selected="false" tabindex="-1">Cursor</button>
+        <button role="tab" id="t-opencode" aria-controls="p-opencode" aria-selected="false" tabindex="-1">OpenCode</button>
+        <button role="tab" id="t-agy" aria-controls="p-agy" aria-selected="false" tabindex="-1">Antigravity</button>
+        <button role="tab" id="t-vscode" aria-controls="p-vscode" aria-selected="false" tabindex="-1">VS Code</button>
+        <button role="tab" id="t-other" aria-controls="p-other" aria-selected="false" tabindex="-1">Other clients</button>
+      </div>
+
+      <div class="tab-panel" id="p-claude" role="tabpanel" aria-labelledby="t-claude">
+        <p>Install the plugin from inside Claude Code. You get the tools, the six skills, and a start-of-session note that reminds the agent how to use them.</p>
+        <div class="code-wrap"><pre class="code-block">/plugin marketplace add anortham/goldfish
+/plugin install goldfish@goldfish</pre><button class="copy-btn" type="button">Copy</button></div>
+        <p>Start a new session after the install. Run <code>/hooks</code> to see the Goldfish session-start entry.</p>
+      </div>
+
+      <div class="tab-panel" id="p-codex" role="tabpanel" aria-labelledby="t-codex" hidden>
+        <p>One plugin install covers the Codex CLI and the Codex desktop app.</p>
+        <div class="code-wrap"><pre class="code-block">codex plugin marketplace add anortham/goldfish
+codex plugin add goldfish@goldfish</pre><button class="copy-btn" type="button">Copy</button></div>
+        <p>Codex does not run plugin hooks until you trust them. Run <code>codex</code>, open <code>/hooks</code>, trust the Goldfish SessionStart hook, then start a new thread.</p>
+        <p>To update later, refresh the marketplace first, then remove and add the plugin:</p>
+        <div class="code-wrap"><pre class="code-block">codex plugin marketplace upgrade
+codex plugin remove goldfish@goldfish
+codex plugin add goldfish@goldfish</pre><button class="copy-btn" type="button">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" id="p-cursor" role="tabpanel" aria-labelledby="t-cursor" hidden>
+        <p>Cursor loads Goldfish as a local plugin. Clone the repo, install dependencies, and link it into Cursor's plugin folder.</p>
+        <div class="code-wrap"><pre class="code-block">git clone https://github.com/anortham/goldfish.git
+cd goldfish &amp;&amp; bun install
+mkdir -p ~/.cursor/plugins/local
+ln -s "$PWD" ~/.cursor/plugins/local/goldfish</pre><button class="copy-btn" type="button">Copy</button></div>
+        <p>Reload the window, then check that Goldfish shows under <strong>Customize</strong>. On Windows, use a junction or a copy instead of the symlink. The <a href="https://github.com/anortham/goldfish#cursor">README</a> has the PowerShell commands and the per-project config.</p>
+      </div>
+
+      <div class="tab-panel" id="p-opencode" role="tabpanel" aria-labelledby="t-opencode" hidden>
+        <p>Clone the repo and run <code>bun install</code>. Then add the server to <code>opencode.json</code>. OpenCode finds the skills in <code>.agents/skills/</code> on its own.</p>
+        <div class="code-wrap"><pre class="code-block">{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "goldfish": {
+      "type": "local",
+      "command": ["bun", "run", "/absolute/path/to/goldfish/src/server.ts"],
+      "enabled": true
+    }
+  }
+}</pre><button class="copy-btn" type="button">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" id="p-agy" role="tabpanel" aria-labelledby="t-agy" hidden>
+        <p>Clone the repo and run <code>bun install</code>. Then register the server with the Antigravity CLI:</p>
+        <div class="code-wrap"><pre class="code-block">agy mcp add goldfish bun run /absolute/path/to/goldfish/src/server.ts</pre><button class="copy-btn" type="button">Copy</button></div>
+        <p>To use the six skills in every project, add the skills folder to <code>~/.gemini/config/skills.json</code>:</p>
+        <div class="code-wrap"><pre class="code-block">{ "entries": [ { "path": "/absolute/path/to/goldfish/skills" } ] }</pre><button class="copy-btn" type="button">Copy</button></div>
+      </div>
+
+      <div class="tab-panel" id="p-vscode" role="tabpanel" aria-labelledby="t-vscode" hidden>
+        <p>Clone the repo and run <code>bun install</code>. Then add the server to <code>.vscode/mcp.json</code> in your project:</p>
+        <div class="code-wrap"><pre class="code-block">{
+  "servers": {
+    "Goldfish": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/goldfish/src/server.ts"],
+      "env": { "GOLDFISH_WORKSPACE": "${workspaceFolder}" }
+    }
+  }
+}</pre><button class="copy-btn" type="button">Copy</button></div>
+        <p>For good Copilot habits, copy <a href="https://github.com/anortham/goldfish/blob/main/docs/goldfish-checkpoint.instructions-vs-code.md">the ready-made instructions file</a> into <code>.github/instructions/</code>.</p>
+      </div>
+
+      <div class="tab-panel" id="p-other" role="tabpanel" aria-labelledby="t-other" hidden>
+        <p>Goldfish is a standard stdio MCP server. Any client that can start a local server can use it:</p>
+        <div class="code-wrap"><pre class="code-block">bun run /absolute/path/to/goldfish/src/server.ts</pre><button class="copy-btn" type="button">Copy</button></div>
+        <p>If the server is registered for your user rather than one project, the agent must pass the project's absolute path as <code>workspace</code> on each call.</p>
+        <p>Harnesses that read only an instruction file, such as Zed, Windsurf, Cline, or Kiro, can use <a href="https://github.com/anortham/goldfish/blob/main/docs/agent-instructions/goldfish-usage.md">the Goldfish usage rules</a>. The tools still need the MCP server.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Goldfish is open source under the MIT license. Fifth time's the charm.</p>
+    <p><a href="https://github.com/anortham/goldfish">Source</a> · <a href="https://github.com/anortham/goldfish/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/anortham/goldfish/issues">Issues</a></p>
+  </footer>
+
+  <script>
+    (function () {
+      'use strict';
+
+      function wireTabs(list) {
+        var tabs = Array.prototype.slice.call(list.querySelectorAll('[role=tab]'));
+        function select(tab) {
+          tabs.forEach(function (t) {
+            var on = t === tab;
+            t.setAttribute('aria-selected', on);
+            t.tabIndex = on ? 0 : -1;
+            document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+          });
+        }
+        tabs.forEach(function (tab, i) {
+          tab.addEventListener('click', function () { select(tab); });
+          tab.addEventListener('keydown', function (e) {
+            var step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+            if (!step) return;
+            var next = tabs[(i + step + tabs.length) % tabs.length];
+            select(next);
+            next.focus();
+          });
+        });
+      }
+
+      document.querySelectorAll('[role=tablist]').forEach(wireTabs);
+
+      document.querySelectorAll('.copy-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var text = btn.previousElementSibling.textContent;
+          navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = 'Copied';
+            setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+          });
+        });
+      });
+    }());
+  </script>
+</body>
+</html>
