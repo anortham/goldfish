@@ -58,11 +58,10 @@ handoffs across agents and sessions.
   - 1,151 checkpoint writes against 227 recall calls; 70% of written
     checkpoints never appeared in any recall result. Agents also grep or cat
     `.memories/` directly (not judged), so "never recalled" is not "never read".
-  - The audit reports 208 recalls with results. Its listed outcome categories
-    account for 206: 46 changed what the agent did, 80 only oriented it,
-    80 went unused, and 0 were classified as misleading. Two outcomes remain
-    unreconciled in the audit record; treat these model-judged counts as
-    provisional until the underlying classifications are reconciled.
+  - Of 208 recalls with results: 46 changed what the agent did, 80 only
+    oriented it, 80 went unused, 2 were unknown (the text after the recall was
+    too short or cut off to judge), and 0 misled it. The judges were models,
+    so treat the counts as a direction, not a precise measure.
   - What changed decisions: the `next` handoff line (24), decisions (11),
     status notes (11), failures (5). Handoff content is the strongest trigger.
   - Targeted searches did worst (40 of 74 unused): dotted versions tokenized
@@ -75,7 +74,8 @@ handoffs across agents and sessions.
     ranks by the number of query words matched. Cost: an uncached index build
     is about 45% slower (1.0 s to 1.5 s at 1,950 checkpoints). The cached index
     is still reused, but each multiword search now performs additional per-term
-    queries. Cached-query latency needs its own measurement.
+    queries: cached queries on 1,709 checkpoints went from 11.7-19.6 ms to
+    12.4-21.4 ms (2-9% slower).
   - 950+ stored checkpoints had `summary: WHAT` (a `## WHAT` first line), so
     compact recall showed nothing; fixed in `src/summary.ts`, `src/digests.ts`,
     and the checkpoint parser.

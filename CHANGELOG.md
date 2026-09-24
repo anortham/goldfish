@@ -4,12 +4,12 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [8.0.6] - 2026-09-24
 
 ### Changed
 
 - Checkpoint guidance is selective. Checkpoint a consequential decision (with the rejected option), a surprising failure (with evidence), or unfinished work (with `next`). "When in doubt, checkpoint" and the before-every-commit trigger are gone: a routine edit or commit needs no checkpoint, and a warranted checkpoint is still written before its commit. A transcript audit found commit-time checkpoints were 35% of saves but only 16% of those that changed a later decision.
-- Recall guidance is conditional: resume, context loss, or a past decision that matters, not every session start. After recall, agents recover the goal, constraints, and `next` line and check drift-prone facts against the live tree. Handoff no longer cites the `summary` field, which recall output never includes. Briefs exclude git logs and command output.
+- Recall guidance is conditional: resume, context loss, or a past decision that matters, not every session start. After recall, agents recover the goal, constraints, and `next` line and check drift-prone facts against the live tree. Handoff no longer cites the `summary` field, which recall output never includes, and its default window is the last 3 days (up to 10 checkpoints) instead of an unimplemented branch-based window. Briefs exclude git logs and command output.
 
 ### Fixed
 
