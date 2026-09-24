@@ -219,7 +219,11 @@ describe('Tool descriptions', () => {
     const tools = getTools();
 
     const checkpointTool = tools.find(t => t.name === 'checkpoint');
-    expect(checkpointTool!.description).toContain('When in doubt, checkpoint');
+    expect(checkpointTool!.description).toContain('consequential decision');
+    expect(checkpointTool!.description).toContain('surprising failure');
+    expect(checkpointTool!.description).toContain('unfinished work');
+    expect(checkpointTool!.description).toContain('BEFORE the commit');
+    expect(checkpointTool!.description).not.toContain('When in doubt');
     expect(checkpointTool!.description).toContain('one per logical milestone');
     expect(checkpointTool!.description).toContain('WHAT');
 
@@ -457,9 +461,11 @@ describe('Server instructions', () => {
 
     const instructions = getInstructions();
 
-    // Nudge 1: checkpoint BEFORE git commits, not after, so the checkpoint
-    // file is included in the commit and travels to other machines.
-    expect(instructions).toContain('BEFORE a git commit');
+    expect(instructions).toContain('consequential decision');
+    expect(instructions).toContain('surprising failure');
+    expect(instructions).toContain('unfinished work');
+    expect(instructions).not.toContain('When in doubt');
+    expect(instructions).toContain('BEFORE the commit');
     expect(instructions).toContain('other machines');
 
     // Nudge 2: always commit .memories/, never gitignore it. Already present

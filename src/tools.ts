@@ -15,13 +15,14 @@ export function getTools(): Tool[] {
   return [
     {
       name: 'checkpoint',
-      description: `Save a checkpoint to developer memory so future sessions have context. When in doubt, checkpoint, a few extra checkpoints are better than lost context.
+      description: `Save a checkpoint to developer memory when a future session will need what you know now.
 
 Checkpoint when:
-- Completing a feature, bug fix, or refactor step
-- Making a key decision or discovery
-- Reaching a natural stopping point
-- **Before a git commit** (so the checkpoint file is included in the commit)
+- You make a consequential decision (record the rejected alternative)
+- A surprising failure teaches something (record the evidence)
+- You stop with unfinished work, or context compaction is near (record the next step in \`next\`)
+
+A routine edit or commit needs no checkpoint. When a checkpoint is warranted and a commit follows, write it **BEFORE the commit** so the checkpoint file is included in the commit.
 
 Space out checkpoints so each captures distinct progress, one per logical milestone. If you've already checkpointed in this conversation, capture only what's new: progress, decisions, and discoveries since your last checkpoint.
 

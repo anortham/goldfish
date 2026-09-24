@@ -17,16 +17,16 @@ User-level MCP registrations must pass the conversation's host-native absolute p
 
 ## Checkpointing
 
-Checkpoint work for sessions. **When in doubt, checkpoint**. Don't ask permission, do it.
+Checkpoint what a future session will need. Don't ask permission, do it.
 
 **Checkpoint when:**
-- Completing a feature, fix, or refactor step
-- Key decision/discovery
-- Stopping point
-- Before compaction
-- **BEFORE a git commit, not after**. The checkpoint file must be included in the commit so it's available on other machines
+- A consequential decision (note the rejected option)
+- A surprising failure (with evidence)
+- Stopping with unfinished work, or before compaction (set \`next\`)
 
-One checkpoint per milestone. See the checkpoint tool description.
+Routine edits and commits need none. If a commit follows, checkpoint **BEFORE the commit** so it ships to other machines.
+
+See the checkpoint tool description.
 
 ## Briefs
 

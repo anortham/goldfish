@@ -9,12 +9,13 @@ Tracker: [Goldfish on Linear](https://linear.app/breakingdevelopment/project/gol
 
 ## Selective memory follow-up (2026-09-23)
 
-Local backlog from the tooling assessment; implementation has not started.
+Local backlog from the tooling assessment; selective guidance is implemented locally.
+The controlled handoff comparison has not started.
 Expand BRE-19 and BRE-20 with the work below rather than creating duplicate issues.
 The goal is to preserve current direction, consequential decisions, and useful
 handoffs across agents and sessions.
 
-- [ ] Replace routine checkpoint triggers with information-value triggers.
+- [x] Replace routine checkpoint triggers with information-value triggers.
   Update `src/instructions.ts`, `src/tools.ts`, `src/hook-context.ts`, and
   `skills/checkpoint/SKILL.md`, then synchronize the distributed agent assets.
   Save a checkpoint for a consequential decision, a surprising failure with
@@ -24,6 +25,10 @@ handoffs across agents and sessions.
   metadata is captured and the memory travels with the change.
   Acceptance: an ordinary completed edit needs no memory artifact; an important
   rejected alternative and an unfinished session each produce a useful one.
+  Done 2026-09-24 from the audit evidence below: three triggers (consequential
+  decision, surprising failure, unfinished work with `next`), no "when in
+  doubt", no commit trigger. Matches Razorback's selective policy, which
+  already drops routine commit and phase-boundary checkpoints.
 - [x] Align brief, recall, and handoff guidance around selective retrieval.
   Review `skills/brief/SKILL.md`, `skills/recall/SKILL.md`, and
   `skills/handoff/SKILL.md`. Keep one current brief for direction; use checkpoints
@@ -53,8 +58,11 @@ handoffs across agents and sessions.
   - 1,151 checkpoint writes against 227 recall calls; 70% of written
     checkpoints never appeared in any recall result. Agents also grep or cat
     `.memories/` directly (not judged), so "never recalled" is not "never read".
-  - Of 208 recalls with results: 46 changed what the agent did, 80 only
-    oriented it, 80 went unused, 0 misled it.
+  - The audit reports 208 recalls with results. Its listed outcome categories
+    account for 206: 46 changed what the agent did, 80 only oriented it,
+    80 went unused, and 0 were classified as misleading. Two outcomes remain
+    unreconciled in the audit record; treat these model-judged counts as
+    provisional until the underlying classifications are reconciled.
   - What changed decisions: the `next` handoff line (24), decisions (11),
     status notes (11), failures (5). Handoff content is the strongest trigger.
   - Targeted searches did worst (40 of 74 unused): dotted versions tokenized
@@ -65,8 +73,9 @@ handoffs across agents and sessions.
   - Follow-up search gaps also fixed: parts of hyphenated and snake_case
     words now match, checkpoint IDs are searchable, and the any-term fallback
     ranks by the number of query words matched. Cost: an uncached index build
-    is about 45% slower (1.0 s to 1.5 s at 1,950 checkpoints); cached queries
-    are unchanged.
+    is about 45% slower (1.0 s to 1.5 s at 1,950 checkpoints). The cached index
+    is still reused, but each multiword search now performs additional per-term
+    queries. Cached-query latency needs its own measurement.
   - 950+ stored checkpoints had `summary: WHAT` (a `## WHAT` first line), so
     compact recall showed nothing; fixed in `src/summary.ts`, `src/digests.ts`,
     and the checkpoint parser.

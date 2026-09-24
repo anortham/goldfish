@@ -110,12 +110,9 @@ File paths the receiving agent can read deeper from:
 
 The skill takes one optional argument: a time window (`--since 2d`, `--since 4h`).
 
-Default behaviour:
-
-1. If the current branch has commits, start from the last commit on this branch and expand backwards until you have at least 5 checkpoints or hit the 3-day cap.
-2. Otherwise default to the last 3 days.
-
-Users who want a fixed window should pass `--since`.
+Default to the last 3 days with at most 10 checkpoints, as shown in Step 2.
+An explicit `--since` replaces that window. Git state validates the retrieved
+history; the last commit does not create an implicit branch or date filter.
 
 ## Why This Skill Exists
 

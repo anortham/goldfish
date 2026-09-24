@@ -259,13 +259,13 @@ Keep documentation honest: do not hardcode stale test counts or module line coun
 MCP tool descriptions are **directive about quality, encouraging about frequency**.
 
 - **Quality guidance stays strong**: checkpoint descriptions must be structured markdown with WHAT/WHY/HOW/IMPACT. Lazy descriptions are unacceptable.
-- **Frequency guidance is positive**: "when in doubt, checkpoint" with concrete triggers (after committing, at stopping points). No "Do NOT" lists.
+- **Frequency guidance is selective and positive**: three concrete triggers — a consequential decision, a surprising failure, unfinished work (stopping point or compaction, with `next`). A routine edit or commit needs no checkpoint; a warranted checkpoint is still written before its commit. No "Do NOT" lists.
 - **Recall is invoked manually and conditionally**: agents call `recall()` when resuming prior work, after context loss or compaction, or when earlier decisions are relevant — not reflexively at every session start; users can also invoke `/recall` for targeted queries. Recalled context is historical evidence: preserve its decisions, verify drift-prone facts.
-- **Intent-blame filters**: `file` and `symbol` params query already-captured frontmatter; encourage `symbols` on checkpoints and checkpoint-before-commit for file coverage.
+- **Intent-blame filters**: `file` and `symbol` params query already-captured frontmatter; encourage `symbols` on checkpoints, and writing a warranted checkpoint before its commit for file coverage.
 - **Brief lifecycle nudges**: recall suppresses an active brief with no activity for 7+ days (a stale notice appears in its place), and surfaces a refresh warning when the brief text hasn't been updated in 14+ days even though recent checkpoints keep it active.
 - **Briefs keep strong language**: brief persistence genuinely matters and the directive tone is warranted there.
 
-Recalibrated twice (first overuse, then underuse) before landing here. The lesson: positive triggers drive adoption better than prohibitions.
+Recalibrated three times: first overuse, then underuse, then (8.0.6) selective triggers after a transcript audit of 208 recalls. The audit found that commit-time checkpoints were 35% of saves but only 16% of the checkpoints that changed a later decision, while the `next` line drove the most decisions. The lesson: positive, specific triggers drive adoption better than prohibitions or "when in doubt".
 
 ### Character Limits (Claude Code MCP Cap)
 
@@ -274,7 +274,7 @@ Claude Code enforces a **2,000 character cap** on both server instructions (`get
 - **Server instructions** carry behavioral framing (when/why to use tools). Detailed "how to use" guidance belongs in tool descriptions.
 - **Tool descriptions** carry usage details, parameter tips, and examples for their specific tool.
 - Don't duplicate content between instructions and tool descriptions. If instructions reference a tool's quality guidance, point to the tool description ("see the checkpoint tool description") rather than repeating it.
-- Deliberate exception: the checkpoint trigger list (including checkpoint-before-commit) appears in both surfaces because non-Claude MCP clients may never show server instructions — the tool description is the only behavioral surface they see.
+- Deliberate exception: the checkpoint trigger list (including the write-before-commit rule) appears in both surfaces because non-Claude MCP clients may never show server instructions — the tool description is the only behavioral surface they see.
 - The SessionStart hook uses a Goldfish safety budget of **10,000 characters** (enforced by `tests/hooks.test.ts`). The hook payload embeds `getInstructions()` verbatim plus what the 2k cap and deferred tool loading hide (tool advertisement, quick reference, checkpoint quality format) — extend it in `src/hook-context.ts`, never by forking the instruction text.
 
 ---

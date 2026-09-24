@@ -220,9 +220,9 @@ The Cursor Plugin manifest (`.cursor-plugin/plugin.json`) points to `skills/`, `
 
 ## Behavioral Language Strategy
 
-Tool descriptions are **directive about quality, encouraging about frequency**. Quality guidance is strong (structured markdown, WHAT/WHY/HOW/IMPACT). Frequency guidance is positive ("when in doubt, checkpoint") with concrete triggers, not "Do NOT" lists.
+Tool descriptions are **directive about quality, encouraging about frequency**. Quality guidance is strong (structured markdown, WHAT/WHY/HOW/IMPACT). Frequency guidance is selective and positive: checkpoint a consequential decision, a surprising failure, or unfinished work (with `next`), not routine edits or commits. A warranted checkpoint is still written before its commit. No "Do NOT" lists.
 
-The rule was recalibrated twice: aggressive language caused overuse (100+ checkpoints/day), then a defensive "Do NOT" list caused underuse. The current balance lands between those failure modes.
+The rule was recalibrated three times: aggressive language caused overuse (100+ checkpoints/day), then a defensive "Do NOT" list caused underuse, then a 2026-09 transcript audit showed that commit-time checkpoints were rarely the ones that changed later decisions.
 
 ### Recall Tool
 

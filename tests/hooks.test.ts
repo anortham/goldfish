@@ -61,8 +61,17 @@ describe('hook context content', () => {
     expect(getHookContext()).toContain(getInstructions());
   });
 
-  it('carries the checkpoint-before-commit trigger', () => {
-    expect(getHookContext()).toContain('BEFORE a git commit, not after');
+  it('carries the rule to write a warranted checkpoint before its commit', () => {
+    expect(getHookContext()).toContain('BEFORE the commit');
+  });
+
+  it('carries only the selective checkpoint triggers', () => {
+    const context = getHookContext();
+
+    expect(context).toContain('consequential decision');
+    expect(context).toContain('surprising failure');
+    expect(context).toContain('unfinished work');
+    expect(context).not.toContain('When in doubt');
   });
 
   it('advertises all three goldfish tools', () => {

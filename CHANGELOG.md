@@ -6,6 +6,11 @@ All notable changes to Goldfish are documented in this file. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Checkpoint guidance is selective. Checkpoint a consequential decision (with the rejected option), a surprising failure (with evidence), or unfinished work (with `next`). "When in doubt, checkpoint" and the before-every-commit trigger are gone: a routine edit or commit needs no checkpoint, and a warranted checkpoint is still written before its commit. A transcript audit found commit-time checkpoints were 35% of saves but only 16% of those that changed a later decision.
+- Recall guidance is conditional: resume, context loss, or a past decision that matters, not every session start. After recall, agents recover the goal, constraints, and `next` line and check drift-prone facts against the live tree. Handoff no longer cites the `summary` field, which recall output never includes. Briefs exclude git logs and command output.
+
 ### Fixed
 
 - Checkpoint summaries were the single word "WHAT" when a description started with a `## WHAT` heading, so compact recall showed nothing useful. Summaries and compact search headings now skip one-word section labels, and stored label-only summaries are rebuilt from the body on read.

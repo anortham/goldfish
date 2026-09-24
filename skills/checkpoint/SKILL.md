@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: Save developer context to Goldfish memory — checkpoint at meaningful milestones, not after every action
+description: Save developer context to Goldfish memory — checkpoint consequential decisions, surprising failures, and unfinished work, not routine edits or commits
 ---
 
 # Checkpoint — Save Developer Memory
@@ -11,17 +11,15 @@ For user-level MCP registrations, pass workspace as the conversation's host-nati
 
 ## When to Checkpoint
 
-**When in doubt, checkpoint** — a few extra checkpoints are better than lost context.
+Checkpoint when a future session will need what you know now:
 
-- **Completed a deliverable** — feature slice, bug fix, refactor step
-- **Made a key decision** — architecture, tradeoffs, approach choices that future sessions must follow
-- **About to commit** — checkpoint BEFORE the commit so the checkpoint file rides along in it
-- **Reaching a stopping point** — end of a work session or switching tasks
-- **Before context compaction** — preserve active state
-- **Found something non-obvious** — blockers, root causes, discoveries worth preserving
-- **User shared requirements/constraints** — preserve what future work must honor
+- **Consequential decision** — an architecture, tradeoff, or approach choice that future sessions must follow. Record the option you rejected and why.
+- **Surprising failure** — a root cause, blocker, or discovery that cost real investigation. Record the evidence.
+- **Unfinished work** — a stopping point, a task switch, or context compaction ahead while work remains. Record the next step in `next`.
 
-Space out checkpoints so each one captures a distinct piece of progress — one per logical milestone is the right cadence.
+A routine edit or commit needs no checkpoint; git already records it. When a checkpoint is warranted and a commit follows, write the checkpoint BEFORE the commit so the checkpoint file rides along in it.
+
+Set `next` whenever work continues: it is the field a resuming session uses most. Space out checkpoints so each one captures a distinct piece of progress — one per logical milestone is the right cadence.
 
 ## How to Write Good Descriptions
 
@@ -106,6 +104,6 @@ You don't need to include these — Goldfish captures them:
 - **Changed files** — files modified since last commit (`.memories/` excluded)
 - **Timestamp** — UTC, always
 
-`git.files` reflects the working tree at checkpoint time. **Checkpoint before committing** so captured paths match what you just changed; committed-only changes are not in the diff snapshot.
+`git.files` reflects the working tree at checkpoint time. When a commit follows, **checkpoint first** so captured paths match what you just changed; committed-only changes are not in the diff snapshot.
 
 Focus your description on the MEANING, not the mechanics.
