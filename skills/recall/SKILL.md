@@ -1,6 +1,6 @@
 ---
 name: recall
-description: Use when starting a new session, after context loss, searching for prior work, or when the user asks what happened previously and needs Goldfish memory restored
+description: Use when resuming prior work, after context loss or compaction, searching for a past decision, or when the user asks what happened previously and needs Goldfish memory restored
 ---
 
 # Recall
@@ -11,7 +11,7 @@ For user-level MCP registrations, pass workspace as the conversation's host-nati
 
 ## When To Use
 
-Call recall when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions and cross-project context are relevant.
+Call recall when resuming prior work, after context loss or compaction, when the user asks, or when earlier decisions and cross-project context are relevant. Do not call it by reflex at every session start, or to re-read a checkpoint you saved in this session.
 
 ```ts
 recall({ workspace: "/absolute/path/to/project" })
@@ -46,5 +46,7 @@ Treat the active brief as direction, not as an execution checklist. If you need 
 
 ## After Recall
 
-- Summarize the active brief or recent checkpoint thread when it exists.
+- Recover three things: the goal and key constraints from the active brief, and the next action from the most recent relevant checkpoint's `next` line.
 - Continue from the recalled context instead of re-deriving it.
+- Treat recalled content as historical evidence. Keep its decisions, but check drift-prone facts (versions, branches, file paths, test counts, "done" claims) against the current code and git state before you act on them.
+- If the compact result is not enough, search for the specific decision or pass `full: true`. Do not read the whole `.memories/` history.

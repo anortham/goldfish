@@ -36,6 +36,7 @@ Keep the brief compact and stable:
 - File by file implementation notes
 - A mirrored `ExitPlanMode` plan blob
 - Session noise that belongs in checkpoints
+- Git logs, command output, or test transcripts (name the commit or doc instead)
 
 ## Save A Brief
 

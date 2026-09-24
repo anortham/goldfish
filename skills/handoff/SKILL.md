@@ -85,7 +85,7 @@ Keep this compact. Three bullets maximum.
 
 Last 5-10 checkpoints, dense format. Group adjacent checkpoints into logical milestones when they tell a continuous story; otherwise list chronologically. For each checkpoint include:
 
-- One-line summary (use the checkpoint's `summary` field)
+- One-line summary (the checkpoint's title or first sentence)
 - Associated commit or tag if the git context identifies one
 
 When clustering, lead the cluster with a one-line milestone header, then nest the supporting checkpoints beneath it.
@@ -127,3 +127,4 @@ Native harness memory does not survive harness switches. Goldfish's evidence led
 - Lead each section with the signal, not the mechanics.
 - If a section is empty (no brief, no unknowns, clean tree), say so in one line and move on.
 - Keep the whole document short enough to read in one pass.
+- Checkpoints are historical. Before you state a checkpoint claim as current (a version, a passing test, a finished task), check it against the live tree and git state, or mark it as "as of" the checkpoint date.

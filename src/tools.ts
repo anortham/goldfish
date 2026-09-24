@@ -131,7 +131,7 @@ Relative paths resolve against the workspace; use / separators. The file is not 
       description: `Retrieve prior context from developer memory. Use when you need session history or past work.
 
 When to use:
-- Starting a new session and need prior context (user invokes /recall)
+- Resuming prior work in a new session, or the user invokes /recall
 - After context compaction
 - Searching for past decisions
 - Cross-project standup reports

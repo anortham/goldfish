@@ -24,7 +24,7 @@ handoffs across agents and sessions.
   metadata is captured and the memory travels with the change.
   Acceptance: an ordinary completed edit needs no memory artifact; an important
   rejected alternative and an unfinished session each produce a useful one.
-- [ ] Align brief, recall, and handoff guidance around selective retrieval.
+- [x] Align brief, recall, and handoff guidance around selective retrieval.
   Review `skills/brief/SKILL.md`, `skills/recall/SKILL.md`, and
   `skills/handoff/SKILL.md`. Keep one current brief for direction; use checkpoints
   for historical evidence. Retrieve relevant history on resume or when a prior
@@ -32,6 +32,10 @@ handoffs across agents and sessions.
   plans, Git logs, and command transcripts into memory.
   Acceptance: a fresh session can recover the goal, key constraints, and next
   action without reading the entire memory corpus.
+  Done 2026-09-24: recall is conditional (skill description and tool
+  trigger), recall recovers goal, constraints, and the `next` line and checks
+  drift-prone facts, handoff no longer cites the hidden `summary` field and
+  marks historical claims, and briefs exclude git logs and command output.
 - [ ] Measure the value of memory using a small handoff comparison.
   Start with existing transcripts and a sample of recent checkpoints. Record
   which entries were retrieved and whether they changed a decision or avoided
