@@ -232,7 +232,7 @@ The rule was recalibrated twice: aggressive language caused overuse (100+ checkp
 
 **Recall flow:**
 1. Load markdown checkpoints from `.memories/` and build compact retrieval digests.
-2. When `search` is supplied, run an Orama BM25 query over those digests with field-weighted ranking (description body, summary, tags, git metadata).
+2. When `search` is supplied, run an Orama BM25 query with field-weighted ranking (checkpoint ID, description body, structured fields, tags, git metadata). Dotted versions index as whole terms, and words joined by `-` or `_` also index as their parts. Checkpoints that contain every query word come first; when none do, results rank by the number of query words matched, then by score.
 3. Present compact search descriptions by default; `full: true` returns the original markdown body and metadata.
 4. Aggregate the active brief and (when `workspace: "all"`) results from peer projects discovered through the registry.
 
@@ -269,7 +269,7 @@ We achieve this through:
 - Individual file writes (no append locking needed)
 - Smart caching of workspace list
 - Efficient YAML frontmatter parsing
-- Orama BM25 ranking built fresh per query over compact digests
+- Orama BM25 index reused across calls until the corpus fingerprint changes; filtered subsets build a fresh index
 
 ---
 

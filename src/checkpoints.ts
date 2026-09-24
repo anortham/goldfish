@@ -13,7 +13,7 @@ import type { Actor, Checkpoint, CheckpointInput, ObservedActor } from './types'
 import { getMemoriesDir, ensureMemoriesDir, resolveWorkspace } from './workspace';
 import { getGitContext, getGitIdentity } from './git';
 import { withLock } from './lock';
-import { generateSummary } from './summary';
+import { generateSummary, isSectionLabel } from './summary';
 import { registerProject } from './registry';
 import { getActiveBrief } from './briefs';
 import { getLogger } from './logger';
@@ -404,7 +404,11 @@ export function parseCheckpointFile(content: string): Checkpoint {
   if (git) checkpoint.git = git;
   const actor = normalizeActor(frontmatter.actor);
   if (actor) checkpoint.actor = actor;
-  if (frontmatter.summary) checkpoint.summary = String(frontmatter.summary);
+  if (frontmatter.summary) {
+    const stored = String(frontmatter.summary);
+    const summary = isSectionLabel(stored) ? generateSummary(body) : stored;
+    if (summary) checkpoint.summary = summary;
+  }
   const affinityId = typeof frontmatter.briefId === 'string'
     ? frontmatter.briefId
     : typeof frontmatter.planId === 'string'

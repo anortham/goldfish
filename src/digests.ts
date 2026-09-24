@@ -1,4 +1,5 @@
 import type { Checkpoint } from './types'
+import { isSectionLabel } from './summary'
 
 export const DIGEST_VERSION = 1
 
@@ -24,11 +25,15 @@ export function truncate(value: string, maxLength: number): string {
 function extractDescriptionParts(description: string): { heading?: string; lines: string[] } {
   const lines = description
     .split('\n')
+    .filter(line => !isSectionLabel(line))
     .map(line => normalizeWhitespace(line.replace(/^#{1,6}\s+/, '')))
     .filter(Boolean)
 
-  const headingMatch = description.match(/^#{1,6}\s+(.+)$/m)
-  const heading = headingMatch?.[1] ? normalizeWhitespace(headingMatch[1]) : undefined
+  const headingText = description
+    .split('\n')
+    .map(line => line.match(/^#{1,6}\s+(.+)$/)?.[1])
+    .find(text => text && !isSectionLabel(text))
+  const heading = headingText ? normalizeWhitespace(headingText) : undefined
 
   if (!heading) {
     return { lines }

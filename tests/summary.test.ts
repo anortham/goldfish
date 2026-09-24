@@ -74,5 +74,27 @@ Added refresh token support and improved error handling.`;
       expect(summary).toBeDefined();
       expect(summary).toBe('Refactored authentication system to use JWT tokens');
     });
+
+    it('skips a one-word section heading such as ## WHAT', () => {
+      const description = `## WHAT
+Assessed the personal agent workflow using two evidence reviews and lead verification. No workflow edits.
+
+## WHY
+User requested an assessment of conflicts, mistakes, and gaps.`;
+
+      expect(generateSummary(description)).toBe(
+        'Assessed the personal agent workflow using two evidence reviews and lead verification'
+      );
+    });
+
+    it('skips blank lines and a label heading with a colon', () => {
+      const description = `## What:
+
+Implemented standalone family-store completion checkpoints in CLI store dispatch. The new completion module follows the earlier approved plan.`;
+
+      expect(generateSummary(description)).toBe(
+        'Implemented standalone family-store completion checkpoints in CLI store dispatch'
+      );
+    });
   });
 });

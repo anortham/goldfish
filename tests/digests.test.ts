@@ -121,6 +121,26 @@ describe('digests', () => {
     expect(compact.length).toBeLessThanOrEqual(220)
   })
 
+  it('uses the first multi-word heading, not a one-word section label', () => {
+    const checkpoint: Checkpoint = {
+      id: 'checkpoint_label',
+      timestamp: '2026-09-13T01:11:54.000Z',
+      description: [
+        '## WHAT',
+        '',
+        'Completed the qualified-context correction.',
+        '',
+        '## Callee lookup now uses resolved symbol IDs'
+      ].join('\n'),
+      decision: 'Resolve callees by target symbol ID'
+    }
+
+    const segments = buildCompactSearchDescription(checkpoint).split(' | ')
+
+    expect(segments).not.toContain('WHAT')
+    expect(segments).toContain('Callee lookup now uses resolved symbol IDs')
+  })
+
   it('drops parts contained in other parts instead of repeating them', () => {
     const checkpoint: Checkpoint = {
       id: 'checkpoint_dedup',

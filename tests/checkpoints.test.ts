@@ -419,6 +419,24 @@ Fixed JWT validation bug where expired tokens were accepted.
     expect(checkpoint.description).toBe('Fixed JWT validation bug where expired tokens were accepted.');
   });
 
+  it('replaces a stored one-word section-label summary with one derived from the body', () => {
+    const content = `---
+id: checkpoint_5a5a5a5a
+timestamp: "2026-09-08T13:29:28.000Z"
+summary: WHAT
+---
+
+## WHAT
+Assessed the personal agent workflow using two evidence reviews and lead verification. No workflow edits were made, and the existing skill change was preserved.
+`;
+
+    const checkpoint = parseCheckpointFile(content);
+
+    expect(checkpoint.summary).toBe(
+      'Assessed the personal agent workflow using two evidence reviews and lead verification'
+    );
+  });
+
   it('parses checkpoint with minimal fields', () => {
     const content = `---
 id: checkpoint_deadbeef

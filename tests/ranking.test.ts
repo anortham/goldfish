@@ -133,6 +133,213 @@ describe('Checkpoint search (Orama BM25)', () => {
   });
 });
 
+describe('Multi-word search', () => {
+  const checkpoints: Checkpoint[] = [
+    {
+      id: 'checkpoint_mw000001',
+      timestamp: '2026-09-01T10:00:00.000Z',
+      description: 'Decided auth token storage moves to the authentication service'
+    },
+    {
+      id: 'checkpoint_mw000002',
+      timestamp: '2026-09-02T10:00:00.000Z',
+      description: 'Rotated the auth token'
+    },
+    {
+      id: 'checkpoint_mw000003',
+      timestamp: '2026-09-03T10:00:00.000Z',
+      description: 'Token bucket rate limiter'
+    }
+  ];
+
+  it('keeps an all-words match whose query word also prefixes another word in the field', async () => {
+    const results = await searchCheckpoints('auth token', checkpoints);
+
+    expect(results.map(c => c.id).sort()).toEqual(['checkpoint_mw000001', 'checkpoint_mw000002']);
+  });
+});
+
+describe('Partial-match fallback', () => {
+  const checkpoints: Checkpoint[] = [
+    {
+      id: 'checkpoint_c1902f4f',
+      timestamp: '2026-09-01T10:00:00.000Z',
+      description: 'Fixed JVM source identity across overloads in the extractor output'
+    },
+    {
+      id: 'checkpoint_b0000001',
+      timestamp: '2026-09-02T10:00:00.000Z',
+      description: 'Mapping notes: mapping tables and mapping keys'
+    },
+    {
+      id: 'checkpoint_b0000002',
+      timestamp: '2026-09-03T10:00:00.000Z',
+      description: 'Mapping source'
+    }
+  ];
+
+  it('ranks a checkpoint ID match above an equal count of repeated plain words', async () => {
+    const results = await searchCheckpoints('jvm source identity c1902f4f', [
+      {
+        id: 'checkpoint_c1902f4f',
+        timestamp: '2026-09-01T10:00:00.000Z',
+        description: 'Fixed JVM source handling across overloads in the extractor output for later review'
+      },
+      {
+        id: 'checkpoint_b0000003',
+        timestamp: '2026-09-02T10:00:00.000Z',
+        description: 'JVM source identity: JVM source identity for JVM source'
+      }
+    ]);
+
+    expect(results[0]!.id).toBe('checkpoint_c1902f4f');
+  });
+
+  it('ranks the checkpoint matching the most query words first when none match them all', async () => {
+    const results = await searchCheckpoints('jvm source identity mapping c1902f4f', checkpoints);
+
+    expect(results.map(c => c.id)).toEqual([
+      'checkpoint_c1902f4f',
+      'checkpoint_b0000002',
+      'checkpoint_b0000001'
+    ]);
+  });
+});
+
+describe('Compound word and ID search', () => {
+  const checkpoints: Checkpoint[] = [
+    {
+      id: 'checkpoint_c1902f4f',
+      timestamp: '2026-09-01T10:00:00.000Z',
+      description: 'Mapped JVM source identity'
+    },
+    {
+      id: 'checkpoint_6ff64812',
+      timestamp: '2026-09-02T10:00:00.000Z',
+      description: 'Simplified the model selection policy',
+      briefId: 'agent-tier-delegation-gate-policy-feedback'
+    },
+    {
+      id: 'checkpoint_a0000001',
+      timestamp: '2026-09-03T10:00:00.000Z',
+      description: 'Repinned julie-extract for the reader'
+    },
+    {
+      id: 'checkpoint_a0000002',
+      timestamp: '2026-09-04T10:00:00.000Z',
+      description: 'Extract method refactor in the parser'
+    },
+    {
+      id: 'checkpoint_a0000003',
+      timestamp: '2026-09-05T10:00:00.000Z',
+      description: 'Renamed get_symbol_body in the reader'
+    }
+  ];
+
+  const ids = async (query: string) => (await searchCheckpoints(query, checkpoints)).map(c => c.id).sort();
+
+  it('finds a checkpoint by the hash part of its ID', async () => {
+    expect(await ids('c1902f4f')).toEqual(['checkpoint_c1902f4f']);
+  });
+
+  it('finds a checkpoint by its full ID', async () => {
+    expect(await ids('checkpoint_c1902f4f')).toEqual(['checkpoint_c1902f4f']);
+  });
+
+  it('finds words inside a hyphenated brief ID', async () => {
+    expect(await ids('delegation gate')).toEqual(['checkpoint_6ff64812']);
+  });
+
+  it('finds one part of a hyphenated word', async () => {
+    expect(await ids('extract')).toEqual(['checkpoint_a0000001', 'checkpoint_a0000002']);
+  });
+
+  it('requires every part of a hyphenated query word', async () => {
+    expect(await ids('julie-extract')).toEqual(['checkpoint_a0000001']);
+  });
+
+  it('finds one part of a snake_case identifier', async () => {
+    expect(await ids('symbol body')).toEqual(['checkpoint_a0000003']);
+  });
+});
+
+describe('Version number search', () => {
+  const checkpoints: Checkpoint[] = [
+    {
+      id: 'checkpoint_v0000331',
+      timestamp: '2026-09-01T10:00:00.000Z',
+      description: 'Released the Qt extractor 3.3.1',
+      tags: ['release']
+    },
+    {
+      id: 'checkpoint_v0000330',
+      timestamp: '2026-09-01T09:00:00.000Z',
+      description: 'Bumped the extractor pin to 3.3.0 and published release notes for the 3.3.0 tag',
+      tags: ['release', 'v3.3.0']
+    },
+    {
+      id: 'checkpoint_v0002333',
+      timestamp: '2026-09-02T10:00:00.000Z',
+      description: 'Released 2.33.3 with parser fixes',
+      tags: ['release']
+    },
+    {
+      id: 'checkpoint_v0000031',
+      timestamp: '2026-09-03T10:00:00.000Z',
+      description: 'Bumped the schema to 3.1 after 3 review rounds',
+      tags: ['schema']
+    },
+    {
+      id: 'checkpoint_v0024110',
+      timestamp: '2026-09-04T10:00:00.000Z',
+      description: 'Repinned the julie dependency',
+      tags: ['julie-2.41.1']
+    },
+    {
+      id: 'checkpoint_v0024111',
+      timestamp: '2026-09-04T11:00:00.000Z',
+      description: 'Verified Julie 2.41.1 against the lockfile',
+      tags: ['verify']
+    },
+    {
+      id: 'checkpoint_v0000200',
+      timestamp: '2026-09-05T10:00:00.000Z',
+      description: 'Shipped the new tools surface',
+      tags: ['v2.0.0']
+    }
+  ];
+
+  const ids = (results: Checkpoint[]) => results.map(c => c.id);
+
+  it('matches a dotted version as a whole, not as separate digits', async () => {
+    expect(ids(await searchCheckpoints('3.3.1', checkpoints))).toEqual(['checkpoint_v0000331']);
+  });
+
+  it('matches every patch release from a major.minor query', async () => {
+    const results = ids(await searchCheckpoints('3.3', checkpoints));
+
+    expect(results.sort()).toEqual(['checkpoint_v0000330', 'checkpoint_v0000331']);
+  });
+
+  it('finds a version inside a hyphenated tag', async () => {
+    expect(ids(await searchCheckpoints('2.41.1', checkpoints)).sort()).toEqual([
+      'checkpoint_v0024110',
+      'checkpoint_v0024111'
+    ]);
+  });
+
+  it('matches a hyphenated name-version query against the name and version written apart', async () => {
+    expect(ids(await searchCheckpoints('julie-2.41.1', checkpoints)).sort()).toEqual([
+      'checkpoint_v0024110',
+      'checkpoint_v0024111'
+    ]);
+  });
+
+  it('matches a v-prefixed patch release from its major.minor prefix', async () => {
+    expect(ids(await searchCheckpoints('2.0 tools', checkpoints))).toEqual(['checkpoint_v0000200']);
+  });
+});
+
 describe('Search index cache', () => {
   const corpus: Checkpoint[] = [
     {

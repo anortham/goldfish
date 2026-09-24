@@ -1,4 +1,5 @@
 import { create, insert, search } from '@orama/orama'
+import { tokenizer as oramaTokenizer } from '@orama/orama/components'
 import type { Checkpoint } from './types'
 
 
@@ -13,11 +14,19 @@ import type { Checkpoint } from './types'
  *
  * The English tokenizer with stemming handles morphological variants
  * (e.g., "tuning" -> "tuned") that fuse.js silently missed on conversational
- * recall queries. Boost weights mirror the previous fuse field weights so
+ * recall queries. Dotted versions ("2.41.1", "v2.0.0") index as whole tokens,
+ * because the default splitter reduces them to bare digits that match
+ * unrelated releases; Orama's prefix matching lets "2.0" still find "2.0.0".
+ * Words joined by "-" or "_" (brief IDs, snake_case symbols, checkpoint IDs)
+ * index whole and as parts, so "delegation" finds "agent-tier-delegation".
+ * The checkpoint ID field has the highest boost: an ID in a query names one
+ * checkpoint, so it outranks repeated plain words.
+ * Boost weights mirror the previous fuse field weights so
  * the migration only changes the matching algorithm, not the field priorities.
  */
 const SEARCH_SCHEMA = {
   id: 'string',
+  checkpoint: 'string',
   description: 'string',
   type: 'string',
   brief: 'string',
@@ -36,6 +45,7 @@ const SEARCH_SCHEMA = {
 
 const SEARCH_BOOSTS = {
   description: 2.0,
+  checkpoint: 5.0,
   type: 1.0,
   brief: 1.0,
   decision: 1.5,
@@ -61,6 +71,7 @@ function joinList(values?: string[]): string {
 
 interface SearchDocument {
   id: string
+  checkpoint: string
   description: string
   type: string
   brief: string
@@ -124,6 +135,7 @@ function getSearchDocumentIds(checkpoints: Checkpoint[]): string[] {
 function toSearchDocument(checkpoint: Checkpoint, documentId: string): SearchDocument {
   return {
     id: documentId,
+    checkpoint: checkpoint.id,
     description: checkpoint.description,
     type: checkpoint.type ?? '',
     brief: checkpoint.briefId ?? checkpoint.planId ?? '',
@@ -152,11 +164,47 @@ export interface SearchCacheKey {
   fingerprint: string
 }
 
+const VERSION_PATTERN = /-?\bv?(\d+(?:\.\d+)+)\b/gi
+
+function splitVersions(text: string): { versions: string[]; rest: string } {
+  return {
+    versions: [...text.matchAll(VERSION_PATTERN)].map(match => match[1]!),
+    rest: text.replace(VERSION_PATTERN, ' ')
+  }
+}
+
+const COMPOUND_SEPARATOR = /[-_]+/g
+const COMPOUND_WORD = /\S*[-_]\S*/g
+
+function compoundParts(text: string): string {
+  return (text.match(COMPOUND_WORD) ?? []).join(' ').replace(COMPOUND_SEPARATOR, ' ')
+}
+
+function createSearchTokenizer() {
+  const tokenizer = oramaTokenizer.createTokenizer({ language: 'english', stemming: true })
+  const tokenizeWords = tokenizer.tokenize.bind(tokenizer)
+  tokenizer.tokenize = (raw, language, prop, withCache) => {
+    const { versions, rest } = splitVersions(raw)
+    return [...new Set([
+      ...tokenizeWords(rest, language, prop, withCache),
+      ...tokenizeWords(compoundParts(rest), language, prop, withCache),
+      ...versions
+    ])]
+  }
+  return tokenizer
+}
+
+function queryTerms(query: string): string[] {
+  const { versions, rest } = splitVersions(query)
+  const words = rest.replace(COMPOUND_SEPARATOR, ' ').split(/\s+/).filter(word => /\w/.test(word))
+  return [...new Set([...words, ...versions])]
+}
+
 async function buildIndex(checkpoints: Checkpoint[]) {
   const db = await create({
     schema: SEARCH_SCHEMA,
     components: {
-      tokenizer: { language: 'english', stemming: true }
+      tokenizer: createSearchTokenizer()
     }
   })
 
@@ -238,9 +286,8 @@ export async function searchCheckpoints(
     checkpointsById.set(documentIds[index]!, checkpoints[index]!)
   }
 
-  // Two-pass strategy: prefer documents that contain all query terms within
-  // a single property (threshold=0, AND semantics), and fall back to OR
-  // semantics (threshold=1) when no document hits all terms together.
+  // Two-pass strategy: prefer documents that contain every query term, and
+  // fall back to any-term matches when no document contains them all.
   //
   // Why: Orama stores TF as `frequency / fieldLength`, so its BM25 already
   // applies length normalization once before the formula's own b-parameter
@@ -249,25 +296,50 @@ export async function searchCheckpoints(
   // docs. The two-pass fallback keeps multi-term matches sharp without
   // losing partial-match recall on conversational queries where signal is
   // spread across description / decision / impact / tags.
-  const runSearch = async (threshold: 0 | 1) => {
+  //
+  // When no document has every term, the fallback ranks documents that match
+  // more terms first, so one rare term repeated in a short document cannot
+  // outrank a document that matches most of the query.
+  //
+  // The all-terms pass runs one search per term instead of Orama's
+  // threshold=0: that mode counts matched index words, not query terms, so a
+  // term that prefix-matches two words in one field ("auth" in "auth" and
+  // "authentication") drops the document it matches best.
+  const runSearch = async (term: string) => {
     const results = await search(db, {
-      term: query,
+      term,
       properties: '*',
       boost: SEARCH_BOOSTS,
-      threshold,
+      threshold: 1,
       limit: documentCount
     })
-    return results.hits as Array<{ id: string; score: number; document: SearchDocument }>
+    return (results.hits as Array<{ id: string; score: number; document: SearchDocument }>)
+      .filter(hit => checkpointsById.has(hit.document.id))
   }
 
-  let hits = (await runSearch(0)).filter(hit => checkpointsById.has(hit.document.id))
-  if (hits.length === 0) {
-    hits = (await runSearch(1)).filter(hit => checkpointsById.has(hit.document.id))
+  let hits = await runSearch(query)
+  const terms = queryTerms(query)
+  const matchedTermCounts = new Map<string, number>()
+  if (terms.length > 1) {
+    const termMatches = await Promise.all(
+      terms.map(async term => new Set((await runSearch(term)).map(hit => hit.document.id)))
+    )
+    for (const hit of hits) {
+      matchedTermCounts.set(
+        hit.document.id,
+        termMatches.filter(matches => matches.has(hit.document.id)).length
+      )
+    }
+    const allTermHits = hits.filter(hit => matchedTermCounts.get(hit.document.id) === terms.length)
+    if (allTermHits.length > 0) {
+      hits = allTermHits
+    }
   }
 
   const ranked: Checkpoint[] = []
   const seen = new Set<string>()
   const hitScores = new Map<Checkpoint, number>()
+  const hitTermCounts = new Map<Checkpoint, number>()
 
   for (const hit of hits) {
     const checkpoint = checkpointsById.get(hit.document.id)
@@ -277,10 +349,15 @@ export async function searchCheckpoints(
 
     seen.add(hit.document.id)
     hitScores.set(checkpoint, hit.score)
+    hitTermCounts.set(checkpoint, matchedTermCounts.get(hit.document.id) ?? 0)
     ranked.push(checkpoint)
   }
 
   ranked.sort((a, b) => {
+    const termCountDifference = (hitTermCounts.get(b) ?? 0) - (hitTermCounts.get(a) ?? 0)
+    if (termCountDifference !== 0) {
+      return termCountDifference
+    }
     const scoreA = hitScores.get(a) ?? 0
     const scoreB = hitScores.get(b) ?? 0
     if (scoreB !== scoreA) {

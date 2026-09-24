@@ -4,6 +4,17 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Checkpoint summaries were the single word "WHAT" when a description started with a `## WHAT` heading, so compact recall showed nothing useful. Summaries and compact search headings now skip one-word section labels, and stored label-only summaries are rebuilt from the body on read.
+- Search split dotted versions into bare digits, so "3.3.1" matched any checkpoint with a 3 and a 1. Versions ("2.41.1", "v2.0.0", "julie-2.41.1") now index as whole terms, and "2.0" still finds "2.0.0".
+- Search could not find one part of a word joined by `-` or `_`: "delegation" missed the brief ID `agent-tier-delegation-gate-policy-feedback`, and "extract" missed "julie-extract". These words now index whole and as parts. A hyphenated query word still requires every part.
+- Checkpoint IDs were not searchable. The ID now has its own search field with the highest boost, so "c1902f4f" or "checkpoint_c1902f4f" finds that checkpoint.
+- When no checkpoint matched every query word, results were ordered by score alone, so one repeated word could outrank a checkpoint that matched most of the query. The fallback now ranks by the number of query words matched first.
+- Multi-word search dropped the best matches. Orama's all-terms mode counts matched index words, so a term that also prefixes another word in the same field ("auth" in "authentication") excluded the document. Goldfish now checks each query term with its own search.
+
 ## [8.0.5] - 2026-09-23
 
 ### Fixed
