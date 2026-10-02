@@ -49,3 +49,6 @@ test-goldfish-data/
 
 # Local Claude Code overrides (machine-specific)
 .claude/settings.local.json
+
+# Plugin eval runs
+evals/results/

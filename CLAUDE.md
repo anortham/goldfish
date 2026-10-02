@@ -350,9 +350,22 @@ Run the group matching your change instead of the full suite. Use the full suite
 | Handlers | `bun test handlers` | MCP tool handler responses |
 | Server & registry | `bun test server registry` | Server startup, cross-project registry |
 | Hooks | `bun test hooks` | Shared and Cursor hook payloads, session-start scripts, manifest wiring |
-| Agent assets | `bun test agent-assets` | Skill mirror, AGENTS.md, usage-doc freshness, version-tag guard |
+| Agent assets | `bun test agent-assets` | Skill mirror, AGENTS.md, usage-doc freshness, version-tag guard, skill limits, eval suite shape |
 
 These work because bun matches filenames containing the given substring.
+
+### Skill Evals
+
+`evals/` holds `claude plugin eval` cases: at least three per skill, tagged with the skill name. Each case checks that the skill fired, that the goldfish tool got the right input, and the quality of the result. The `goldfish` MCP server is mocked from `evals/mocks/goldfish/`, so a run never touches real memory. `bun run sync:agent-skills` regenerates `_tools.json` from `src/tools.ts`.
+
+Eval runs call models and cost money. Run them when you change a skill or a tool description, not as part of `bun test`:
+
+```bash
+claude plugin eval . --tag recall --model claude-haiku-4-5   # one skill, one model
+claude plugin eval . --model claude-sonnet-5 --max-cost-usd 20
+```
+
+The skill authoring guide asks for tests on Haiku, Sonnet, and Opus. Results go to `evals/results/` (git-ignored).
 
 **Every feature MUST have tests. No exceptions.**
 

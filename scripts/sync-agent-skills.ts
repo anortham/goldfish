@@ -69,3 +69,9 @@ const usageDocDir = join(repoRoot, 'docs', 'agent-instructions');
 await mkdir(usageDocDir, { recursive: true });
 await writeAtomically(join(usageDocDir, 'goldfish-usage.md'), buildUsageDoc());
 console.log('Generated docs/agent-instructions/goldfish-usage.md from src/instructions.ts');
+
+const { getTools } = await import('../src/tools');
+const evalMocksDir = join(repoRoot, 'evals', 'mocks', 'goldfish');
+await mkdir(evalMocksDir, { recursive: true });
+await writeAtomically(join(evalMocksDir, '_tools.json'), JSON.stringify({ tools: getTools() }, null, 2) + '\n');
+console.log('Generated evals/mocks/goldfish/_tools.json from src/tools.ts');

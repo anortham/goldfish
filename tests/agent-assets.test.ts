@@ -159,6 +159,65 @@ describe('mirrored agent assets stay fresh', () => {
     }
   });
 
+  it('gives every canonical skill at least three plugin eval cases', async () => {
+    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
+    const caseDirs = (await listSkillDirs(join(repoRoot, 'evals'))).filter(dir => dir !== 'mocks' && dir !== 'results');
+    const casesPerSkill = new Map<string, number>();
+
+    for (const dir of caseDirs) {
+      const prompt = await readFile(join(repoRoot, 'evals', dir, 'prompt.md'), 'utf-8');
+      const frontmatter = parseYaml(prompt.match(/^---\n([\s\S]*?)\n---\n/)![1]!) as { tags: string[] };
+      const graders = await readdir(join(repoRoot, 'evals', dir, 'graders'));
+
+      expect(graders.filter(name => name.endsWith('.md')).length).toBeGreaterThan(0);
+      for (const tag of frontmatter.tags) casesPerSkill.set(tag, (casesPerSkill.get(tag) ?? 0) + 1);
+    }
+
+    for (const skill of canonical) {
+      expect(casesPerSkill.get(skill) ?? 0).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('writes eval graders and mocks the plugin eval runner accepts', async () => {
+    const graderTypes = ['regex', 'tool_used', 'tool_order', 'file_exists', 'llm', 'baseline'];
+    const mockKeys = ['type', 'expect', 'error', 'abort_when'];
+    const evalFiles = Array.from(new Bun.Glob('**/*.md').scanSync({ cwd: join(repoRoot, 'evals'), dot: true }));
+    const mocksDir = join(repoRoot, 'evals', 'mocks', 'goldfish');
+    const frontmatterOf = (content: string) =>
+      parseYaml(content.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '') as Record<string, unknown>;
+
+    for (const file of evalFiles.filter(path => path.includes('/graders/'))) {
+      const grader = frontmatterOf(await readFile(join(repoRoot, 'evals', file), 'utf-8'));
+
+      expect(graderTypes).toContain(grader.type as string);
+      if (typeof grader.input_match === 'string') expect(() => new RegExp(grader.input_match as string)).not.toThrow();
+    }
+
+    for (const file of evalFiles.filter(path => /mocks\/goldfish\/[^/]+\.md$/.test(path))) {
+      const mock = frontmatterOf(await readFile(join(repoRoot, 'evals', file), 'utf-8'));
+
+      for (const key of Object.keys(mock)) expect(mockKeys).toContain(key);
+    }
+
+    const briefMock = frontmatterOf(await readFile(join(mocksDir, 'brief.md'), 'utf-8')) as { expect: { action: string[] } };
+    for (const action of briefMock.expect.action) {
+      expect(await Bun.file(join(mocksDir, 'fixtures', `brief-${action}.md`)).exists()).toBe(true);
+    }
+  });
+
+  it('keeps the eval mock tool definitions in sync with the server', async () => {
+    const { getTools } = await import('../src/tools');
+    const onDisk = await readFile(join(repoRoot, 'evals', 'mocks', 'goldfish', '_tools.json'), 'utf-8');
+
+    expect(JSON.parse(onDisk)).toEqual({ tools: getTools() });
+  });
+
+  it('keeps plugin eval results out of git', async () => {
+    const gitignore = await readFile(join(repoRoot, '.gitignore'), 'utf-8');
+
+    expect(gitignore).toContain('evals/results/');
+  });
+
   it('includes an absolute workspace in every current-project example', async () => {
     const canonical = await listSkillDirs(join(repoRoot, 'skills'));
     const paths = [

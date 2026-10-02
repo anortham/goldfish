@@ -130,6 +130,8 @@ bun test --watch
 bun test --coverage
 ```
 
+Skill changes also have model-graded evals in `evals/` (`claude plugin eval .`). They cost money to run; see "Skill Evals" in `CLAUDE.md`.
+
 ---
 
 ## Architecture Quick Reference

@@ -1,0 +1,253 @@
+{
+  "tools": [
+    {
+      "name": "checkpoint",
+      "description": "Save a checkpoint to developer memory when a future session will need what you know now.\n\nCheckpoint when:\n- You make a consequential decision (record the rejected alternative)\n- A surprising failure teaches something (record the evidence)\n- You stop with unfinished work, or context compaction is near (record the next step in `next`)\n\nA routine edit or commit needs no checkpoint. When a checkpoint is warranted and a commit follows, write it **BEFORE the commit** so the checkpoint file is included in the commit.\n\nSpace out checkpoints so each captures distinct progress, one per logical milestone. If you've already checkpointed in this conversation, capture only what's new: progress, decisions, and discoveries since your last checkpoint.\n\nWrite descriptions in MARKDOWN with structure (headers, bullets). Include WHAT, WHY, HOW, and IMPACT. Descriptions power recall and search, make them findable.\n\nFor long descriptions (over ~2KB), write the markdown to a file in the workspace and pass `description_file` instead of `description` — large inline text with `\\` paths or real newlines can break tool-call JSON before the server runs.\n\nAutomatically captures git context (branch, commit, changed files), timestamp (UTC), tags, and observed actor identity.\n\nClassify with `type` for better recall:\n- `type: \"decision\"` → include `decision` + `alternatives`\n- `type: \"incident\"` → include `context` + `evidence`\n- `type: \"learning\"` → include `impact`\n\nReturns: Confirmation with checkpoint details and captured context.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Checkpoint description in MARKDOWN format. This becomes the body of a .md file, format it properly.\n\nYour description powers recall and search. Future you needs context.\n\nMUST INCLUDE (use markdown structure):\n- WHAT - The change/accomplishment\n- WHY - Problem solved or goal achieved\n- HOW - Key approach, decision, or discovery\n- IMPACT - What unblocked, what improved, what you learned\n\nGOOD (markdown formatted):\n\"## Fixed JWT validation bug\\n\\nExpired tokens were being accepted due to inverted expiry check in `validateToken()`.\\n\\n- **Root cause:** Comparison operator was flipped\\n- **Fix:** Corrected the expiry comparison, added test coverage\\n- **Impact:** Unblocks the auth PR\"\n\nBAD (wall of text): \"Fixed JWT validation bug where expired tokens were accepted. Root cause was inverted expiry check in validateToken(). Added test coverage for edge case. This was blocking the auth PR.\"\n\nBAD (no context): \"Fixed auth bug\"\n\nFor long bodies use description_file instead. Use / path separators inside the text, even on Windows."
+          },
+          "description_file": {
+            "type": "string",
+            "description": "Path to a UTF-8 markdown file whose content becomes the checkpoint description. Use INSTEAD of description (exactly one of the two) for long writeups — the file content skips tool-call JSON, so escaping cannot break it.\n\nRelative paths resolve against the workspace; use / separators. The file is not deleted — delete your draft after the save succeeds."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checkpoint",
+              "decision",
+              "incident",
+              "learning"
+            ],
+            "description": "Optional memory type for stronger retrieval: checkpoint, decision, incident, or learning."
+          },
+          "context": {
+            "type": "string",
+            "description": "Optional context: what problem/state triggered this work."
+          },
+          "decision": {
+            "type": "string",
+            "description": "Optional decision statement: the chosen approach (one sentence)."
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional rejected alternatives and why they were not chosen."
+          },
+          "impact": {
+            "type": "string",
+            "description": "Optional impact: what changed, improved, unblocked, or what risk was introduced."
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional verification evidence (tests, metrics, logs, PRs, benchmarks)."
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional symbols touched/affected (e.g., [\"AuthMiddleware.handle\", \"refreshToken\"])."
+          },
+          "next": {
+            "type": "string",
+            "description": "Optional concrete next step or open question."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Optional confidence score from 1 (low) to 5 (high)."
+          },
+          "unknowns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional unresolved uncertainties or risks."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional tags for categorization (e.g., [\"bug-fix\", \"auth\", \"critical\"])"
+          },
+          "workspace": {
+            "type": "string",
+            "description": "Host-native absolute project/workspace path. User-level MCP registrations must pass the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. In a git worktree, pass the worktree path, not the main checkout. Change it when you enter or leave a worktree or switch projects. Optional only when a fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots binds the server. Omission and \"current\" do not bind user-level calls. For recall, workspace: \"all\" is explicit cross-project search, never a fallback and invalid for checkpoint or brief. Cwd, registry, and parent-walk results are suggestions only. If unbound, retry with {\"workspace\":\"<absolute-project-root>\"}."
+          }
+        }
+      }
+    },
+    {
+      "name": "recall",
+      "description": "Retrieve prior context from developer memory. Use when you need session history or past work.\n\nWhen to use:\n- Resuming prior work in a new session, or the user invokes /recall\n- After context compaction\n- Searching for past decisions\n- Cross-project standup reports\n\nTreat recalled context as historical evidence: preserve decisions, but verify current or drift-prone facts against live sources.\n\nKey parameters (all optional):\n- limit: Max checkpoints (default: 5)\n- since: Human-friendly span (\"2h\", \"30m\", \"3d\", \"1w\") or ISO timestamp\n- days: Look back N days\n- from/to: Explicit date range\n- search: Query over descriptions, tags, branches, and files\n- type: Checkpoint type\n- tags: All listed tags\n- file: Git file suffix\n- symbol: Exact symbol\n- full: Full descriptions + metadata (default: false)\n- workspace: Absolute path; \"all\" for explicit cross-project recall\n- briefId: Filter by brief\n\nExamples (pass an absolute workspace for current-project calls):\n- recall({ workspace: \"/absolute/path/to/project\" }) - last 5 checkpoints\n- recall({ workspace: \"/absolute/path/to/project\", since: \"2h\" }) - recent history\n- recall({ workspace: \"/absolute/path/to/project\", search: \"auth\", full: true }) - full search results\n- recall({ workspace: \"/absolute/path/to/project\", limit: 0 }) - active brief only\n- recall({ workspace: \"all\", days: 1 }) - cross-project standup\n\nReturns: Active brief + chronological checkpoints + optional workspace summaries.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of checkpoints to return (default: 5). Use lower values for leaner context. Set to 0 to return the active brief only."
+          },
+          "since": {
+            "type": "string",
+            "description": "Human-friendly time span or ISO timestamp. Examples: \"2h\" (last 2 hours), \"30m\" (last 30 minutes), \"3d\" (last 3 days), \"1w\" (last week), or \"2025-10-14T15:30:00Z\" (since specific time). Takes priority over days parameter."
+          },
+          "days": {
+            "type": "number",
+            "description": "Number of days to look back. When set, enables date-window mode instead of last-N mode. Ignored if since is provided."
+          },
+          "from": {
+            "type": "string",
+            "description": "Start date/time (YYYY-MM-DD or ISO 8601). Use with to for explicit range."
+          },
+          "to": {
+            "type": "string",
+            "description": "End date/time (YYYY-MM-DD or ISO 8601). Use with from for explicit range."
+          },
+          "search": {
+            "type": "string",
+            "description": "Search query over descriptions, tags, branches, and files. Optional - omit to see all checkpoints in range."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "checkpoint",
+              "decision",
+              "incident",
+              "learning"
+            ],
+            "description": "Filter to a single checkpoint type. Untyped checkpoints count as \"checkpoint\". Combines with search and tags."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter to checkpoints that contain ALL of these tags (case-insensitive AND match). Combines with type and search."
+          },
+          "file": {
+            "type": "string",
+            "description": "Filter to checkpoints whose git.files match this path suffix (case-insensitive, /-boundary). Combines with other filters."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Filter to checkpoints listing this exact symbol name (case-insensitive). Combines with other filters."
+          },
+          "full": {
+            "type": "boolean",
+            "description": "Return full checkpoint details including files, git metadata (default: false for minimal token usage)."
+          },
+          "workspace": {
+            "type": "string",
+            "description": "Host-native absolute project/workspace path. User-level MCP registrations must pass the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. In a git worktree, pass the worktree path, not the main checkout. Change it when you enter or leave a worktree or switch projects. Optional only when a fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots binds the server. Omission and \"current\" do not bind user-level calls. For recall, workspace: \"all\" is explicit cross-project search, never a fallback and invalid for checkpoint or brief. Cwd, registry, and parent-walk results are suggestions only. If unbound, retry with {\"workspace\":\"<absolute-project-root>\"}."
+          },
+          "briefId": {
+            "type": "string",
+            "description": "Filter to checkpoints created while a specific brief was active. Use to see progress on a particular direction."
+          }
+        }
+      }
+    },
+    {
+      "name": "brief",
+      "description": "Briefs capture durable strategic context for the current workspace.\n\nUse a brief when project direction changes, architectural decisions need to survive, or future sessions need a compact \"what matters now\" document.\n\nBriefs are NOT execution plans. Do not copy every harness plan into Goldfish.\n\nBriefs:\n- Survive context compaction and crashes\n- Appear automatically at the top of recall results\n- Guide work across multiple sessions\n- Stay small enough to remain legible\n- Get saved as markdown files with YAML frontmatter\n\nActions:\n- save: Create a new brief. Active-status saves become active unless you pass activate: false.\n- get: Retrieve a specific brief. Falls back to the active brief if no id provided.\n- list: See all briefs (filterable by status)\n- activate: Set as active brief (shows in recall). Only ONE brief can be active per workspace.\n- update: Update brief content or status. Pass fields in an updates object, or directly as top-level parameters (title, content, status, tags). Falls back to the active brief if no id provided.\n- complete: Mark a brief as done (sets status to 'completed'). Falls back to the active brief if no id provided.\n- delete: Delete a brief; requires an id and has no active-brief fallback.\n\nIMPORTANT: Only ONE brief can be active per workspace. Saving an active brief makes it active by default, and activate: false preserves the opt-out. Completed or archived saves do not replace the current active brief. Briefs are saved to {project}/.memories/briefs/ as markdown files with YAML frontmatter.\n\nReturns: Brief details, status updates, or list of briefs.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "save",
+              "get",
+              "list",
+              "activate",
+              "update",
+              "complete",
+              "delete"
+            ],
+            "description": "Action to perform"
+          },
+          "id": {
+            "type": "string",
+            "description": "Brief ID (auto-generated from title if not provided). Required for activate/delete. Alias: briefId"
+          },
+          "briefId": {
+            "type": "string",
+            "description": "Alias for id. Prefer briefId for new callers."
+          },
+          "title": {
+            "type": "string",
+            "description": "Brief title (required for save)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Brief content in markdown (required for save)"
+          },
+          "workspace": {
+            "type": "string",
+            "description": "Host-native absolute project/workspace path. User-level MCP registrations must pass the conversation's host-native absolute project root on every checkpoint, brief, and current-project recall call. In a git worktree, pass the worktree path, not the main checkout. Change it when you enter or leave a worktree or switch projects. Optional only when a fixed absolute GOLDFISH_WORKSPACE or supported legacy Roots binds the server. Omission and \"current\" do not bind user-level calls. For recall, workspace: \"all\" is explicit cross-project search, never a fallback and invalid for checkpoint or brief. Cwd, registry, and parent-walk results are suggestions only. If unbound, retry with {\"workspace\":\"<absolute-project-root>\"}."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional tags for categorization (e.g., [\"milestone\", \"auth\"]). Used with save action."
+          },
+          "activate": {
+            "type": "boolean",
+            "description": "Activate brief after saving. Defaults to true for active-status saves; pass false to keep the current active brief unchanged."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "archived"
+            ],
+            "description": "Brief status (for filtering)"
+          },
+          "updates": {
+            "type": "object",
+            "description": "Updates to apply (for update action). Accepts: title (string), content (string), status (\"active\" | \"completed\" | \"archived\"), tags (string[])",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "completed",
+                  "archived"
+                ]
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    }
+  ]
+}
