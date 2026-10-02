@@ -1,9 +1,11 @@
 ---
 name: handoff
-description: Use when returning to a project after time away, switching harnesses, or handing work off to another agent, to produce a structured session-resumption summary from the active brief, recent checkpoints, and git delta.
+description: Produces a structured session-resumption summary for one project from the active brief, recent checkpoints, and git state. Use when returning to a project after time away, switching harnesses, or handing work off to another agent
 ---
 
 # Handoff
+
+The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools. The host can add a prefix to these names (for example `mcp__plugin_goldfish_goldfish__recall`). If the tools are not in your tool list, search for them before you conclude they are unavailable.
 
 ## Workspace binding
 
@@ -51,6 +53,8 @@ recall({ workspace: "/absolute/path/to/project", since: "2d", limit: 10, full: t
 
 `full: true` is required so you see `next`, `unknowns`, and git context.
 
+Git state validates the retrieved history. The last commit does not create an implicit branch or date filter.
+
 ### 3. Capture git state
 
 ```bash
@@ -58,8 +62,6 @@ git rev-parse --abbrev-ref HEAD
 git status -s
 git log -1 --oneline
 ```
-
-Three short commands, three short outputs. No fancy flags.
 
 ### 4. Synthesize the document
 
@@ -105,18 +107,6 @@ File paths the receiving agent can read deeper from:
 - The active brief file (`.memories/briefs/<id>.md`)
 - The 2-3 most recent checkpoint files (`.memories/<date>/<time>_<hash>.md`)
 - Any `docs/plans/` documents referenced by the brief or a recent checkpoint
-
-## Time Scoping
-
-The skill takes one optional argument: a time window (`--since 2d`, `--since 4h`).
-
-Default to the last 3 days with at most 10 checkpoints, as shown in Step 2.
-An explicit `--since` replaces that window. Git state validates the retrieved
-history; the last commit does not create an implicit branch or date filter.
-
-## Why This Skill Exists
-
-Native harness memory does not survive harness switches. Goldfish's evidence ledger (briefs plus checkpoints) does, and `/handoff` turns that ledger into a portable resumption document. It is the explicit answer to "how does work resume on a different harness or a different agent?"
 
 ## Rules
 

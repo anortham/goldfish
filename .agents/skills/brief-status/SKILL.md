@@ -1,9 +1,11 @@
 ---
 name: brief-status
-description: Use when the user asks for progress against current project direction, wants a status check on the active brief, or needs evidence-backed assessment across briefs, checkpoints, and docs/plans
+description: Reports progress against the active Goldfish brief, with checkpoints and docs/plans as evidence. Use when the user asks for progress against current project direction, wants a status check on the active brief, or needs evidence-backed assessment across briefs, checkpoints, and docs/plans
 ---
 
 # Brief Status
+
+The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools. The host can add a prefix to these names (for example `mcp__plugin_goldfish_goldfish__recall`). If the tools are not in your tool list, search for them before you conclude they are unavailable.
 
 ## Workspace binding
 

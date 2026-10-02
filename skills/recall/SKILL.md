@@ -1,9 +1,11 @@
 ---
 name: recall
-description: Use when resuming prior work, after context loss or compaction, searching for a past decision, or when the user asks what happened previously and needs Goldfish memory restored
+description: Restores the active brief and prior checkpoints from Goldfish memory, filtered by time, search, type, tags, file, or symbol. Use when resuming prior work, after context loss or compaction, searching for a past decision, or when the user asks what happened previously
 ---
 
 # Recall
+
+The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools. The host can add a prefix to these names (for example `mcp__plugin_goldfish_goldfish__recall`). If the tools are not in your tool list, search for them before you conclude they are unavailable.
 
 ## Workspace binding
 

@@ -1,9 +1,11 @@
 ---
 name: checkpoint
-description: Save developer context to Goldfish memory — checkpoint consequential decisions, surprising failures, and unfinished work, not routine edits or commits
+description: Saves developer context to Goldfish memory as a structured markdown checkpoint. Use when a consequential decision, a surprising failure, or unfinished work must survive the session, not for routine edits or commits
 ---
 
 # Checkpoint — Save Developer Memory
+
+The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools. The host can add a prefix to these names (for example `mcp__plugin_goldfish_goldfish__recall`). If the tools are not in your tool list, search for them before you conclude they are unavailable.
 
 ## Workspace binding
 
@@ -41,14 +43,14 @@ checkpoint({
 ```
 ## Fixed race condition in checkpoint writes
 
-Concurrent saves could corrupt the daily markdown file.
+Concurrent saves could corrupt a checkpoint file.
 
 - **Root cause:** Non-atomic write pattern
 - **Fix:** Switched to write-tmp-then-rename with file locking
 - **Verified:** Reproduced with parallel test, confirmed fix
 ```
 
-**BAD (no structure):** "Fixed race condition in checkpoint file writes where concurrent saves could corrupt the daily markdown file. Root cause was non-atomic write pattern."
+**BAD (no structure):** "Fixed race condition in checkpoint file writes where concurrent saves could corrupt a checkpoint file. Root cause was non-atomic write pattern."
 
 **BAD (no context):** "Fixed file writing bug"
 
@@ -76,14 +78,14 @@ Populate `symbols` with the key functions, classes, or modules you touched (e.g.
 
 ## Tags — Think About Future Search
 
-Tags power fuzzy search recall. Write them for **discoverability** — how would future-you search for this?
+Recall search (BM25 ranking) indexes tags. Write them for **discoverability** — how would future-you search for this?
 
 **Category tags** (1-2):
 - **Type:** `feature`, `bug-fix`, `refactor`, `docs`, `test`
 - **Area:** `auth`, `api`, `ui`, `database`, `build`
 - **Status:** `wip`, `blocked`, `discovery`, `decision`
 
-**Concept tags** (2-5) — the important part:
+**Concept tags** (3-6) — the important part:
 - Include **synonyms and related terms** for the core topic
 - Include **the problem domain**, not just the solution
 - Think: "what words might I use when searching for this later?"

@@ -1,9 +1,11 @@
 ---
 name: standup
-description: Use when the user asks for a standup, daily update, progress summary, or cross-project report built from Goldfish briefs and checkpoints
+description: Builds a short done, next, and blocked report from Goldfish briefs and checkpoints across projects. Use when the user asks for a standup, daily update, progress summary, or cross-project report
 ---
 
 # Standup
+
+The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools. The host can add a prefix to these names (for example `mcp__plugin_goldfish_goldfish__recall`). If the tools are not in your tool list, search for them before you conclude they are unavailable.
 
 ## Workspace binding
 

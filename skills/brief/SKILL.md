@@ -1,9 +1,11 @@
 ---
 name: brief
-description: Use when starting multi-session work, capturing approved project direction, updating goals or constraints, or when the user asks for durable strategic context that should persist across sessions
+description: Saves and maintains the durable Goldfish brief for a project (goal, constraints, success criteria, status). Use when starting multi-session work, capturing approved project direction, updating goals or constraints, or when the user asks for durable strategic context that should persist across sessions
 ---
 
 # Brief
+
+The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools. The host can add a prefix to these names (for example `mcp__plugin_goldfish_goldfish__recall`). If the tools are not in your tool list, search for them before you conclude they are unavailable.
 
 ## Workspace binding
 

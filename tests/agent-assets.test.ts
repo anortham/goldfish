@@ -3,6 +3,7 @@ import { readdir, readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'bun';
+import { parse as parseYaml } from 'yaml';
 import { checkVersionAgainstTags } from '../scripts/version-tag-check';
 import { buildUsageDoc } from '../scripts/build-usage-doc';
 import { SERVER_VERSION } from '../src/server';
@@ -100,6 +101,61 @@ describe('mirrored agent assets stay fresh', () => {
       expect(content).toContain('supported legacy Roots');
       expect(content).not.toContain('defaults to current workspace');
       expect(content).not.toContain('registry recovery');
+    }
+  });
+
+  it('keeps every canonical skill inside the published Agent Skills limits', async () => {
+    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
+
+    for (const dir of canonical) {
+      const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');
+      const frontmatter = content.match(/^---\n([\s\S]*?)\n---\n/);
+      expect(frontmatter).not.toBeNull();
+      const name = frontmatter![1]!.match(/^name: (.+)$/m)?.[1] ?? '';
+      const description = frontmatter![1]!.match(/^description: (.+)$/m)?.[1] ?? '';
+      const bodyLines = content.slice(frontmatter![0].length).split('\n').length;
+
+      expect(name).toBe(dir);
+      expect(name).toMatch(/^[a-z0-9-]{1,64}$/);
+      expect(name).not.toMatch(/anthropic|claude/);
+      expect(description.length).toBeGreaterThan(0);
+      expect(description.length).toBeLessThanOrEqual(1024);
+      expect(description).not.toMatch(/<[^>]+>/);
+      expect(bodyLines).toBeLessThan(500);
+    }
+  });
+
+  it('describes what each canonical skill does before when to use it', async () => {
+    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
+
+    for (const dir of canonical) {
+      const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');
+      const frontmatter = parseYaml(content.match(/^---\n([\s\S]*?)\n---\n/)![1]!) as { description: string };
+
+      expect(frontmatter.description).toMatch(/^[A-Z][a-z]+s /);
+      expect(frontmatter.description).toMatch(/\. Use when /);
+    }
+  });
+
+  it('tells every canonical skill where the goldfish tools come from', async () => {
+    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
+
+    for (const dir of canonical) {
+      const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');
+
+      expect(content).toContain('The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools.');
+      expect(content).toContain('search for them before you conclude they are unavailable');
+    }
+  });
+
+  it('describes the current search and storage model in skills', async () => {
+    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
+
+    for (const dir of canonical) {
+      const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');
+
+      expect(content).not.toContain('fuzzy');
+      expect(content).not.toContain('daily markdown file');
     }
   });
 
