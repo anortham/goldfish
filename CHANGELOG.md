@@ -4,6 +4,19 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.7] - 2026-10-02
+
+### Changed
+
+- Skill descriptions follow the Anthropic skill authoring guide: each one says what the skill does, then "Use when …". All earlier trigger phrases are kept.
+- The checkpoint skill described search as "fuzzy" and used a "daily markdown file" example. It now says BM25 search and a checkpoint file. The concept tag range is 3-6, to match its own examples.
+- The handoff skill no longer has its "Why This Skill Exists" rationale or a duplicate time-scoping section.
+
+### Added
+
+- `evals/`: a `claude plugin eval` suite with three cases per skill (18 in all). Each case checks that the skill fired, that the goldfish tool got the right input, and the quality of the result. One case checks that a routine commit gets no checkpoint. The goldfish MCP server is mocked with output from the real handlers.
+- Tests guard the published skill limits (name format, description length, body under 500 lines), the description shape, eval coverage, grader and mock shape, and the mock tool schemas.
+
 ## [8.0.6] - 2026-09-24
 
 ### Changed
