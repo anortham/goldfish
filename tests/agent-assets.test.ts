@@ -137,17 +137,6 @@ describe('mirrored agent assets stay fresh', () => {
     }
   });
 
-  it('tells every canonical skill where the goldfish tools come from', async () => {
-    const canonical = await listSkillDirs(join(repoRoot, 'skills'));
-
-    for (const dir of canonical) {
-      const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');
-
-      expect(content).toContain('The goldfish MCP server provides the `checkpoint`, `recall`, and `brief` tools.');
-      expect(content).toContain('search for them before you conclude they are unavailable');
-    }
-  });
-
   it('describes the current search and storage model in skills', async () => {
     const canonical = await listSkillDirs(join(repoRoot, 'skills'));
 
