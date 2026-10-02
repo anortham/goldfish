@@ -4,6 +4,13 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `/report-issue` skill: files a GitHub issue against Goldfish. It collects the Goldfish version, OS, Bun, client, and the last 10 server errors from `~/.goldfish/logs`, masks home directories, and shows the full text to the user. It files nothing until the user approves the text. Without `gh` it gives the user the approved file and the new-issue link. Three plugin eval cases cover it.
+- `.github/ISSUE_TEMPLATE/bug_report.md` with the same sections as the skill's report.
+
 ## [8.0.7] - 2026-10-02
 
 ### Changed

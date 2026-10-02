@@ -55,14 +55,14 @@ Goldfish ships plugin packaging for Claude Code, Codex, and Cursor:
 
 - **`.claude-plugin/plugin.json`** - Claude Code manifest (MCP server registration + skills + hooks)
 - **`.codex-plugin/plugin.json`** - Codex manifest (skills + hooks + root `.mcp.json` server map)
-- **`skills/`** - 6 skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
+- **`skills/`** - 7 skills: `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `report-issue`, `standup`
 - **`hooks/`** - SessionStart hook shared by both manifests: `goldfish-hooks.json` (one event, one command, matcher `startup|clear|compact`) runs `session-start.ts`, which emits Codex's SessionStart JSON envelope containing `getHookContext()` (`src/hook-context.ts`). Static content only, always exit 0, never any other event — the 7.0 hook-spam lesson is enforced by `tests/hooks.test.ts`
 
 ### Cursor Native Plugin
 
-Cursor uses `.cursor-plugin/plugin.json`, `mcp.json`, and `hooks/cursor-hooks.json` as a native plugin bundle. The manifest exposes the same six skills, the stdio Bun server through `${CURSOR_PLUGIN_ROOT}/src/server.ts`, and one version-1 lowercase `sessionStart` hook with a 5-second timeout. `hooks/cursor-session-start.ts` returns JSON `{ additional_context: getHookContext() }` and reports failures without blocking startup.
+Cursor uses `.cursor-plugin/plugin.json`, `mcp.json`, and `hooks/cursor-hooks.json` as a native plugin bundle. The manifest exposes the same seven skills, the stdio Bun server through `${CURSOR_PLUGIN_ROOT}/src/server.ts`, and one version-1 lowercase `sessionStart` hook with a 5-second timeout. `hooks/cursor-session-start.ts` returns JSON `{ additional_context: getHookContext() }` and reports failures without blocking startup.
 
-Cursor discovers repo-local skills from `.agents/skills/` as well as plugin skills, so slash invocation can use `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, and `/standup`. Its native hook injects static context on new conversations. User-level calls must pass the conversation's host-native absolute project root as `workspace` on every checkpoint, brief, and current-project recall call. A project `.cursor/mcp.json` entry with `type: "stdio"`, Bun plus an absolute `src/server.ts`, and `GOLDFISH_WORKSPACE=${workspaceFolder}` can provide the fixed project-level binding; registry and parent-walk candidates never authorize access.
+Cursor discovers repo-local skills from `.agents/skills/` as well as plugin skills, so slash invocation can use `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/report-issue`, and `/standup`. Its native hook injects static context on new conversations. User-level calls must pass the conversation's host-native absolute project root as `workspace` on every checkpoint, brief, and current-project recall call. A project `.cursor/mcp.json` entry with `type: "stdio"`, Bun plus an absolute `src/server.ts`, and `GOLDFISH_WORKSPACE=${workspaceFolder}` can provide the fixed project-level binding; registry and parent-walk candidates never authorize access.
 
 ### Core Modules
 
@@ -406,7 +406,7 @@ Push the branch and the tag in **separate** `git push` commands: pushing both in
 - **`README.md`** - User-facing documentation (humans using Goldfish)
 - **`CONTRIBUTING.md`** - Detailed development guide (comprehensive patterns)
 - **`docs/IMPLEMENTATION.md`** - Technical specification
-- **`skills/`** - Canonical plugin skills for Claude Code, Codex, and Cursor (slash commands): `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `standup`
+- **`skills/`** - Canonical plugin skills for Claude Code, Codex, and Cursor (slash commands): `brief`, `brief-status`, `checkpoint`, `handoff`, `recall`, `report-issue`, `standup`
 
 ---
 

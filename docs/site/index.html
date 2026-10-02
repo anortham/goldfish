@@ -339,7 +339,7 @@ Expired sessions logged users out mid-task.
     </section>
 
     <section id="skills" class="section">
-      <h2>Six skills for the common jobs</h2>
+      <h2>Seven skills for the common jobs</h2>
       <p class="intro">
         The plugins add slash commands that wrap the three tools in good habits. Clients that read <code>.agents/skills/</code> get them too.
       </p>
@@ -353,6 +353,7 @@ Expired sessions logged users out mid-task.
             <tr><td><code>/brief-status</code></td><td>Check progress against the active brief, with evidence</td></tr>
             <tr><td><code>/handoff</code></td><td>Write a resume summary for a returning or different agent</td></tr>
             <tr><td><code>/standup</code></td><td>Report recent work across all your projects</td></tr>
+            <tr><td><code>/report-issue</code></td><td>File a bug against Goldfish, after you approve the exact text</td></tr>
           </tbody>
         </table>
       </div>
@@ -384,7 +385,7 @@ Expired sessions logged users out mid-task.
       </div>
 
       <div class="tab-panel" id="p-claude" role="tabpanel" aria-labelledby="t-claude">
-        <p>Install the plugin from inside Claude Code. You get the tools, the six skills, and a start-of-session note that reminds the agent how to use them.</p>
+        <p>Install the plugin from inside Claude Code. You get the tools, the seven skills, and a start-of-session note that reminds the agent how to use them.</p>
         <div class="code-wrap"><pre class="code-block">/plugin marketplace add anortham/goldfish
 /plugin install goldfish@goldfish</pre><button class="copy-btn" type="button">Copy</button></div>
         <p>Start a new session after the install. Run <code>/hooks</code> to see the Goldfish session-start entry.</p>
@@ -427,7 +428,7 @@ ln -s "$PWD" ~/.cursor/plugins/local/goldfish</pre><button class="copy-btn" type
       <div class="tab-panel" id="p-agy" role="tabpanel" aria-labelledby="t-agy" hidden>
         <p>Clone the repo and run <code>bun install</code>. Then register the server with the Antigravity CLI:</p>
         <div class="code-wrap"><pre class="code-block">agy mcp add goldfish bun run /absolute/path/to/goldfish/src/server.ts</pre><button class="copy-btn" type="button">Copy</button></div>
-        <p>To use the six skills in every project, add the skills folder to <code>~/.gemini/config/skills.json</code>:</p>
+        <p>To use the seven skills in every project, add the skills folder to <code>~/.gemini/config/skills.json</code>:</p>
         <div class="code-wrap"><pre class="code-block">{ "entries": [ { "path": "/absolute/path/to/goldfish/skills" } ] }</pre><button class="copy-btn" type="button">Copy</button></div>
       </div>
 

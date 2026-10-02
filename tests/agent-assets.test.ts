@@ -90,7 +90,7 @@ describe('mirrored agent assets stay fresh', () => {
   it('documents absolute workspace binding in every canonical skill', async () => {
     const canonical = await listSkillDirs(join(repoRoot, 'skills'));
 
-    expect(canonical).toEqual(['brief', 'brief-status', 'checkpoint', 'handoff', 'recall', 'standup']);
+    expect(canonical).toEqual(['brief', 'brief-status', 'checkpoint', 'handoff', 'recall', 'report-issue', 'standup']);
 
     for (const dir of canonical) {
       const content = await readFile(join(repoRoot, 'skills', dir, 'SKILL.md'), 'utf-8');

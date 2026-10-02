@@ -14,7 +14,7 @@ Goldfish is a cross-client MCP memory system. Claude Code, Codex, and Cursor can
 
 Coding harnesses already plan, summarize, and recover from compaction. What they don't do is keep a durable record of *why* a project moved the way it did, in a place the next session (or the next harness) can read.
 
-Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and six skills, with markdown as the source of truth.
+Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and seven skills, with markdown as the source of truth.
 
 ---
 
@@ -32,7 +32,7 @@ bun install
 
 ### Claude Code
 
-Claude Code is the fullest adapter today. You get MCP tools, slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/handoff`, `/standup`), and a session-start hook that loads Goldfish's memory guidance into each new session.
+Claude Code is the fullest adapter today. You get MCP tools, slash-command skills (`/checkpoint`, `/recall`, `/brief`, `/brief-status`, `/handoff`, `/report-issue`, `/standup`), and a session-start hook that loads Goldfish's memory guidance into each new session.
 
 Install from the marketplace:
 
@@ -70,7 +70,7 @@ Once the plugin is loaded, Goldfish works through manual invocation and agent-dr
 
 ### Cursor
 
-Cursor runs Goldfish as a native Cursor Plugin. The bundle includes the MCP server, all 6 skills, and a native hook (`sessionStart`). Cursor discovers the repo-local `.agents/skills/` mirror too, so the skills can be invoked with `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, and `/standup` when the client is using repo-local skill discovery.
+Cursor runs Goldfish as a native Cursor Plugin. The bundle includes the MCP server, all 7 skills, and a native hook (`sessionStart`). Cursor discovers the repo-local `.agents/skills/` mirror too, so the skills can be invoked with `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/report-issue`, and `/standup` when the client is using repo-local skill discovery.
 
 To test the local plugin, place the repository at `~/.cursor/plugins/local/goldfish` with a symlink on macOS/Linux, a junction on Windows, or a full copy on either platform.
 
@@ -115,7 +115,7 @@ Add that to the project `.cursor/mcp.json` (or user config scoped to the project
 
 ### Codex CLI / Desktop
 
-**Recommended: install the plugin.** Goldfish ships a Codex plugin manifest (`.codex-plugin/plugin.json`) that delivers everything in one install — the MCP server (tools), the 6 skills, and a SessionStart hook that loads Goldfish's memory guidance into each new session.
+**Recommended: install the plugin.** Goldfish ships a Codex plugin manifest (`.codex-plugin/plugin.json`) that delivers everything in one install — the MCP server (tools), the 7 skills, and a SessionStart hook that loads Goldfish's memory guidance into each new session.
 
 ```bash
 codex plugin marketplace add anortham/goldfish
@@ -200,7 +200,7 @@ Or add it using the Antigravity CLI:
 agy mcp add goldfish bun run /absolute/path/to/goldfish/src/server.ts
 ```
 
-Antigravity walks up from your current working directory to the repository root and discovers `.agents/skills/*/SKILL.md` when working inside this repository. To use the six Goldfish skills (`/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/standup`) across all your projects, register them in `~/.gemini/config/skills.json`:
+Antigravity walks up from your current working directory to the repository root and discovers `.agents/skills/*/SKILL.md` when working inside this repository. To use the seven Goldfish skills (`/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/report-issue`, `/standup`) across all your projects, register them in `~/.gemini/config/skills.json`:
 
 ```json
 {
@@ -373,7 +373,7 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 6 skills. Claude Code, Codex, and Cursor plugin installs expose them directly; OpenCode and Antigravity (and Codex or Cursor without the plugin) discover the same skill content from `.agents/skills/`.
+Goldfish ships 7 skills. Claude Code, Codex, and Cursor plugin installs expose them directly; OpenCode and Antigravity (and Codex or Cursor without the plugin) discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
@@ -382,6 +382,7 @@ Goldfish ships 6 skills. Claude Code, Codex, and Cursor plugin installs expose t
 | `/checkpoint` | Save a checkpoint with rich description and tags |
 | `/handoff` | Produce a structured session-resumption summary for a returning or different agent |
 | `/recall` | Restore context from recent checkpoints and the active brief |
+| `/report-issue` | File a GitHub issue against Goldfish with versions and recent server errors, after you approve the text |
 | `/standup` | Generate a cross-project standup report |
 
 `skills/` is the canonical source. `.agents/skills/` is a checked-in mirror for clients that scan repo-local skills.
@@ -545,6 +546,7 @@ goldfish/
     checkpoint/SKILL.md   # Canonical checkpoint skill
     handoff/SKILL.md      # Canonical handoff skill
     recall/SKILL.md       # Canonical recall skill
+    report-issue/SKILL.md # Canonical report-issue skill
     standup/SKILL.md      # Canonical standup skill
   src/
     server.ts             # MCP server entry point

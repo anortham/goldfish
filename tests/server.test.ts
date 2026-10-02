@@ -638,6 +638,7 @@ describe('Server exports', () => {
       'checkpoint',
       'handoff',
       'recall',
+      'report-issue',
       'standup'
     ]);
   });
