@@ -4,6 +4,12 @@ All notable changes to Goldfish are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Claude Code hid the `checkpoint`, `recall`, and `brief` tools behind ToolSearch, and agents rarely searched for them. Each tool now sets `_meta["anthropic/alwaysLoad"]: true`, so Claude Code loads it at session start. A headless `claude -p` check showed all three tools deferred before the change and loaded after it.
+
 ## [8.0.8] - 2026-10-02
 
 ### Added

@@ -141,6 +141,9 @@ describe('MCP 2026-07-28 stdio compatibility', () => {
         'checkpoint',
         'recall'
       ]);
+      for (const tool of tools.tools) {
+        expect(tool._meta?.['anthropic/alwaysLoad']).toBe(true);
+      }
 
       const fromEnv = await client.callTool({
         name: 'checkpoint',

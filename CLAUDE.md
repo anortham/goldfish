@@ -275,6 +275,7 @@ Claude Code enforces a **2,000 character cap** on both server instructions (`get
 - **Tool descriptions** carry usage details, parameter tips, and examples for their specific tool.
 - Don't duplicate content between instructions and tool descriptions. If instructions reference a tool's quality guidance, point to the tool description ("see the checkpoint tool description") rather than repeating it.
 - Deliberate exception: the checkpoint trigger list (including the write-before-commit rule) appears in both surfaces because non-Claude MCP clients may never show server instructions — the tool description is the only behavioral surface they see.
+- `getTools()` marks every tool with `_meta["anthropic/alwaysLoad"]: true` so Claude Code loads it at session start instead of deferring it behind ToolSearch. code-kb measured the same fix: a hook line telling agents to search for deferred tools changed nothing (0/12 runs), the flag did (22/24). The hook's deferred-tools paragraph stays for hosts that ignore the flag.
 - The SessionStart hook uses a Goldfish safety budget of **10,000 characters** (enforced by `tests/hooks.test.ts`). The hook payload embeds `getInstructions()` verbatim plus what the 2k cap and deferred tool loading hide (tool advertisement, quick reference, checkpoint quality format) — extend it in `src/hook-context.ts`, never by forking the instruction text.
 
 ---
