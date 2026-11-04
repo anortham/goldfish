@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Use `razorback:subagent-driven-development` for independent owned tasks when delegation is available; otherwise use `razorback:executing-plans`.
 
-**Status:** Implementation approved on 2026-11-04 UTC: "we can start on goldfish here". Worktree `.worktrees/toolkit-hardening`, branch `feat/toolkit-hardening`, base `9504fa8`.
+**Status:** Goldfish implementation complete and locally verified. User approval: 2026-11-04 UTC, "we can start on goldfish here". Worktree `.worktrees/toolkit-hardening`, branch `feat/toolkit-hardening`, base `9504fa8`; tested implementation commit `d93420d`. Cross-repository acceptance remains owned by Razorback.
 
 **Goal:** Prevent accidental outside-workspace checkpoint imports and make Goldfish's storage and integration contracts accurate without expanding the memory engine.
 
@@ -145,10 +145,10 @@ Commit mode: `parallel-lead-commit` for G1 and G2; lead stages exact owned files
 **Approach:** Review the complete diff, run the declared gate, record any platform-specific limits, and checkpoint before the implementation commit so the context travels with it. Follow the current repository's worktree inventory and commit rules.
 
 **Acceptance criteria:**
-- [ ] Full local branch gate and `check_edit` are accounted for, including skipped platform checks.
-- [ ] No runtime code in Razorback/code-kb and no global client registrations were changed by this repository's workers.
-- [ ] The handoff names the Goldfish revision, tool schema source, report-pointer contract, and Razorback-owned combined acceptance dependency.
-- [ ] Current path, branch, HEAD, dirty state, and related worktrees are reconciled; local implementation and required memory artifacts are committed together. No push or release occurs without separate authorization.
+- [x] Full local branch gate and `check_edit` are accounted for, including skipped platform checks.
+- [x] No runtime code in Razorback/code-kb and no global client registrations were changed by this repository's workers.
+- [x] The handoff names the Goldfish revision, tool schema source, report-pointer contract, and Razorback-owned combined acceptance dependency.
+- [x] Current path, branch, HEAD, dirty state, and related worktrees are reconciled; local implementation and required memory artifacts are committed together. No push or release occurs without separate authorization.
 
 ## Starting a separate implementation session
 
@@ -162,4 +162,7 @@ Read this plan and current project instructions, verify source drift and all exi
 - Adjacent eval setup repair: current Claude plugin evaluator rejected grouping/alternation in recall mock workspace guards before model exposure. Current-project mocks now require an absolute path; cross-project mocks require exact `all`. This narrows each fixture to its scenario rather than accepting arbitrary strings. Six mock files changed; all graders retained.
 - Linux gate: `bun run typecheck` passed; final `bun test` passed 702 tests with one expected platform skip and 2,012 expectations. An earlier full run found the README count omission; its single failing test passed after correction, then the full suite passed.
 - Checkpoint eval: Haiku, one run per case, mocks enabled, no publishing. All checkpoint calls/quality/skip behavior passed; decision and unfinished-work cases each scored 0.75 because the agent used MCP directly without a Skill call. Routine-commit case scored 1.0. The old skill at `9504fa8` with only the same mock-parser repair reproduced decision score 0.75 for the same reason. No adoption policy or grader was changed to conceal that limitation.
-- Required native Windows verification and final source-state handoff remain in G3. Raw worker/gate/eval logs are in the ignored `.razorback/sdd/2026-11-03-toolkit-hardening-plan-31cacc3bed0c/` workspace on this host.
+- Native Windows/NTFS at exact source `d93420d3e93d414be051550eacb151ba4bdec38e`: `win-test sync /home/murphy/source/goldfish/.worktrees/toolkit-hardening` succeeded after one boot-time SSH reset; the guest lacked Bun, so used isolated `npm exec --yes --package=bun@1.4.0 -- bun` to match Linux. Frozen dependency install succeeded. `bun test tests/handlers.test.ts -t description_file` passed all 14 tests, no skips, including outside and inside directory junctions and aliased workspace root. Native log: `/home/murphy/.local/share/win-test/logs/20261104T010916Z-toolkit-hardening-2424606.log`. Guest shut off after completion; `win-test status` confirmed shutdown.
+- Raw worker/gate/eval logs are in the ignored `.razorback/sdd/2026-11-03-toolkit-hardening-plan-31cacc3bed0c/` workspace on this host. Verification above identifies the tested source so another session need not rely on those local logs alone.
+- Razorback integration input: repository/worktree `/home/murphy/source/goldfish/.worktrees/toolkit-hardening`, branch `feat/toolkit-hardening`, tested source `d93420d`; launch from its `.claude-plugin/plugin.json`/`.mcp.json` and discover the current schema (`src/tools.ts`). Pass the integration fixture root as `workspace` and isolate `GOLDFISH_HOME`. The final handoff commit changes only this plan and dated checkpoint metadata.
+- All G1/G2 files were reviewed and committed in `d93420d`; final G3 plan/checkpoint metadata commits preserve that source. No Goldfish runtime files in other repos or global client registrations were changed. No push, merge, release, or publication occurred. Retain this worktree for cross-repository integration; prior clean worktrees and main remain separate.
