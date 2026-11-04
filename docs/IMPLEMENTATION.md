@@ -36,7 +36,7 @@ Legacy `.memories/plans/` and `.active-plan` paths are still read so older repos
 3. **Project-local storage** (git-committable)
 4. **Cross-project via registry** (~/.goldfish/registry.json)
 5. **Atomic writes** (write-then-rename with locking)
-6. **No derived caches** -- search runs over the markdown corpus on demand
+6. **No derived disk state** -- parsed-checkpoint and search-index caches stay in memory and are reused only while source fingerprints match
 
 ### Workspace binding
 
@@ -78,6 +78,20 @@ Fixed JWT validation bug where expired tokens were accepted. Root cause was inve
 Git context is always read from the workspace path the call passed, never from the server's launch directory. A save from a git worktree passes the worktree path, so the file lands in that worktree's `.memories/` and `git.branch` is the worktree branch. `git.worktree` is a legacy field: older checkpoints may carry it, and parsing keeps it, but new saves never write it.
 
 `actor` is server-observed identity: `GOLDFISH_HARNESS`/`GOLDFISH_MODEL`/`GOLDFISH_SESSION` env vars beat MCP-observed values, `user` is the OS username, and `git_user`/`git_email` come from `git config` in the workspace. It is never taken from tool arguments. Empty fields are omitted and the whole block disappears when nothing is observable.
+
+### Handoff to an external report
+
+Goldfish recall searches checkpoint files in date-named directories and the active brief. A report stored as an ordinary root-level file such as `.memories/razorback-review.md` is not indexed by recall. A report-producing tool can leave its full report there and create a normal checkpoint pointer:
+
+```js
+checkpoint({
+  workspace: "/absolute/path/to/project",
+  description: "## What\nRazorback review completed; full report: `.memories/razorback-review.md`.\n\n## Why\nThe findings need follow-up.\n\n## How\nThe report contains the supporting evidence.\n\n## Impact\nThe pointer makes the handoff searchable.",
+  next: "Read `.memories/razorback-review.md` and address its findings."
+})
+```
+
+The explicit `workspace` is the project root. The checkpoint's description and `next` field make the handoff searchable through normal recall; Goldfish does not ingest the report itself.
 
 ### Brief Format
 
@@ -150,6 +164,8 @@ That's it. Just the brief ID. Simple.
 
 Used for cross-project recall and standup aggregation. Stale entries are filtered automatically.
 
+Each registered worktree is a separate workspace, so a checkpoint committed in shared worktree history can appear once for every registered worktree that contains it. Duplicates can consume slots in a bounded result window. Recall does not deduplicate these matches; use workspace-specific recall when duplicates crowd out unique project history. Reconsider deduplication only if repeated real standups lose unique project history to duplicate slots.
+
 ---
 
 ## Modules
@@ -199,6 +215,7 @@ goldfish/
 │   ├── checkpoint/SKILL.md
 │   ├── handoff/SKILL.md
 │   ├── recall/SKILL.md
+│   ├── report-issue/SKILL.md
 │   └── standup/SKILL.md
 ├── src/
 ├── tests/
@@ -250,9 +267,9 @@ Based on lessons from previous iterations:
 
 - **Don't mix local dates with UTC ISO strings** (caused timeline bug in original)
 - **Don't use direct file writes** (use atomic write-then-rename pattern)
-- **Don't scan directories repeatedly** (cache workspace list, invalidate on write)
+- **Don't persist derived indexes** (reuse parsed checkpoints and search indexes in memory only while source fingerprints match)
 - **Don't add database** (we're going simpler this time)
-- **Don't try to be smart about deduplication** (let Claude handle that)
+- **Don't deduplicate cross-workspace recall** (shared worktree history can repeat; use workspace-specific recall when it crowds out unique project history)
 - **Don't add redundant scoring fields without evidence** (confidence is already part of the checkpoint schema; avoid piling on more metadata)
 
 ---
@@ -267,7 +284,7 @@ Based on lessons from previous iterations:
 
 We achieve this through:
 - Individual file writes (no append locking needed)
-- Smart caching of workspace list
+- Fingerprint-validated per-day checkpoint caching
 - Efficient YAML frontmatter parsing
 - Orama BM25 index reused across calls until the corpus fingerprint changes; filtered subsets build a fresh index
 
@@ -288,7 +305,7 @@ We achieve this through:
 9. **Auto-summary** - Summary generation for long descriptions
 10. **File locking** - Concurrent write safety
 11. **Hooks tier (7.5+)** - SessionStart guidance injection for Claude Code + Codex plugin installs; Codex manifest bundles the MCP server
-12. **Cursor Plugin** - Native Cursor manifest, stdio MCP map, 6 bundled skills, and version-1 `sessionStart` hook with explicit workspace binding guidance
+12. **Cursor Plugin** - Native Cursor manifest, stdio MCP map, bundled skills, and version-1 `sessionStart` hook with explicit workspace binding guidance
 
 **Current architecture:** markdown source of truth in `.memories/`, registry under `~/.goldfish/`, runtime dependencies `@modelcontextprotocol/server`, `@orama/orama`, and `yaml`. The stdio entry serves legacy 2025-era and modern 2026-07-28 clients; legacy Roots remain supported, while modern user-level calls pass a host-native absolute workspace or use a fixed absolute `GOLDFISH_WORKSPACE`. Candidate paths never authorize access.
 

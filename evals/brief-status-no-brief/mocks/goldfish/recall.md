@@ -1,6 +1,6 @@
 ---
 expect:
-  workspace: /^(\/|all$)/
+  workspace: /^\//
 ---
 
 🐋 Recalled 4 checkpoints

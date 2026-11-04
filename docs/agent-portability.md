@@ -6,11 +6,11 @@ How Goldfish reaches each harness, what was deliberately not done, and where the
 
 | Harness | Tier | Mechanism | Key files |
 |---|---|---|---|
-| Claude Code | Full (tools + skills + instructions + hooks) | Plugin manifest registering the MCP server, 6 skills, and the SessionStart hook | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `skills/`, `hooks/goldfish-hooks.json` |
-| Codex CLI / Desktop | Full (tools + skills + hooks) | Recommended marketplace plugin bundles the MCP server, 6 skills, and the same SessionStart hook; approve the hook in `/hooks`; project-local `.codex/config.toml` plus `.agents/skills` remains the manual alternative | `.codex-plugin/plugin.json`, `.mcp.json`, `hooks/goldfish-hooks.json`, `README.md` Codex section |
+| Claude Code | Full (tools + skills + instructions + hooks) | Plugin manifest registers the MCP server, the skills under `skills/`, and the SessionStart hook | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `skills/`, `hooks/goldfish-hooks.json` |
+| Codex CLI / Desktop | Full (tools + skills + hooks) | Recommended marketplace plugin bundles the MCP server, skills, and the same SessionStart hook; approve the hook in `/hooks`; project-local `.codex/config.toml` plus `.agents/skills` remains the manual alternative | `.codex-plugin/plugin.json`, `.mcp.json`, `hooks/goldfish-hooks.json`, `README.md` Codex section |
 | OpenCode | Tools + skills | `opencode.json` MCP entry + `.agents/skills` auto-discovery | `opencode.json` (committed, works in this repo as-is) |
 | VS Code + Copilot | Tools + instructions file | `.vscode/mcp.json` + optional repo instructions | `.vscode/mcp.json` (committed), `docs/goldfish-checkpoint.instructions-vs-code.md` |
-| Cursor | Full (tools + skills + native hook) | Native Cursor Plugin from `.cursor-plugin/plugin.json`; bundles `mcp.json`, 6 skills, and lowercase `sessionStart`; repo-local `.agents/skills` is also discoverable; user-level calls pass `workspace`, while project `.cursor/mcp.json` can fix `GOLDFISH_WORKSPACE` | `.cursor-plugin/plugin.json`, `mcp.json`, `hooks/cursor-hooks.json`, `hooks/cursor-session-start.ts`, `README.md` Cursor section |
+| Cursor | Full (tools + skills + native hook) | Native Cursor Plugin from `.cursor-plugin/plugin.json`; bundles `mcp.json`, the plugin skills, and lowercase `sessionStart`; repo-local `.agents/skills` is also discoverable; user-level calls pass `workspace`, while project `.cursor/mcp.json` can fix `GOLDFISH_WORKSPACE` | `.cursor-plugin/plugin.json`, `mcp.json`, `hooks/cursor-hooks.json`, `hooks/cursor-session-start.ts`, `README.md` Cursor section |
 | Antigravity | Tools + skills | `~/.gemini/config/mcp_config.json` (or `agy mcp add`) + `~/.gemini/config/skills.json` for global skills | `README.md` Antigravity section, `~/.gemini/config/mcp_config.json`, `~/.gemini/config/skills.json` |
 | Instruction tier (Zed, Amp, Jules, Junie, Windsurf, Cline, Kiro, Cursor rules) | Guidance only | User copies the generated usage ruleset into their repo's instruction surface | `docs/agent-instructions/goldfish-usage.md` (generated from `src/instructions.ts`) |
 | Any MCP client | Baseline tools | Standard stdio server: 3 tools + server instructions | `src/server.ts` |
@@ -44,7 +44,7 @@ Recorded so these decisions stop being re-litigated. Revisit any of them when re
 ## Drift guards
 
 - `tests/agent-assets.test.ts` — `.agents/skills` mirror byte-equality, AGENTS.md contributor mirror, generated usage-doc freshness, and version-vs-git-tag agreement on release commits.
-- `tests/server.test.ts` — seven version surfaces agree with `SERVER_VERSION`; instruction/description caps and the six-skill inventory stay aligned.
+- `tests/server.test.ts` — seven version surfaces agree with `SERVER_VERSION`; instruction/description caps and the skill inventory stay aligned.
 - `tests/hooks.test.ts` — shared hook content contains `getInstructions()` verbatim and stays within Goldfish's 10,000-character safety budget; shared and Cursor hook scripts return their expected payloads at exit 0 and contain setup failures; shared hooks keep one event/one command with no `resume`; the Cursor map keeps one versioned `sessionStart` command with a 5-second timeout; both plugin families and both MCP maps register their assets.
 - `scripts/version-tag-check.ts` — standalone release guard (`bun scripts/version-tag-check.ts`); catches the all-surfaces-stale-together failure that mutual-agreement tests cannot.
 - `scripts/sync-agent-skills.ts` — regenerates every mirrored/generated asset; run after editing `skills/`, `CLAUDE.md`, or `src/instructions.ts`.

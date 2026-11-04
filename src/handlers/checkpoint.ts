@@ -2,8 +2,8 @@
  * Checkpoint tool handler
  */
 
-import { readFile } from 'fs/promises';
-import { isAbsolute, join } from 'path';
+import { readFile, realpath } from 'fs/promises';
+import { isAbsolute, join, relative, sep } from 'path';
 import { getBrief } from '../briefs.js';
 import { formatActorLine, saveCheckpoint } from '../checkpoints.js';
 import { getFishEmoji } from '../emoji.js';
@@ -44,9 +44,29 @@ async function readDescriptionFile(path: string, workspace: string): Promise<str
     ? path
     : join(workspace, path.split('\\').join('/'));
 
+  let workspaceRealPath: string;
+  let descriptionRealPath: string;
+  try {
+    [workspaceRealPath, descriptionRealPath] = await Promise.all([
+      realpath(workspace),
+      realpath(resolved)
+    ]);
+  } catch {
+    throw new Error(`Could not read description_file: ${resolved}`);
+  }
+
+  const pathFromWorkspace = relative(workspaceRealPath, descriptionRealPath);
+  if (
+    pathFromWorkspace === '..' ||
+    pathFromWorkspace.startsWith(`..${sep}`) ||
+    isAbsolute(pathFromWorkspace)
+  ) {
+    throw new Error('description_file must resolve inside workspace');
+  }
+
   let content: string;
   try {
-    content = await readFile(resolved, 'utf-8');
+    content = await readFile(descriptionRealPath, 'utf-8');
   } catch {
     throw new Error(`Could not read description_file: ${resolved}`);
   }

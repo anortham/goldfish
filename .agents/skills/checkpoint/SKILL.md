@@ -57,7 +57,8 @@ Concurrent saves could corrupt a checkpoint file.
 Large inline descriptions can break the tool call before Goldfish runs. Unescaped `\` from Windows paths and real newlines corrupt the tool-call JSON, and the host rejects it.
 
 - Keep the inline `description` under ~2KB.
-- For a longer writeup, write the markdown to a file and pass `description_file` (a workspace-relative path) instead of `description`. Pass exactly one of the two.
+- For a longer writeup, write the markdown to a file inside the selected workspace and pass `description_file` instead of `description`. Pass exactly one of the two. Absolute paths work only when the resolved file is inside the workspace; traversal and symlink targets outside it are rejected.
+- If the source writeup is outside the workspace, copy the intended content into a workspace draft first. Goldfish does not copy external files for you.
 - Draft under `.memories/` (for example `.memories/draft.md`) — that directory is excluded from the captured changed-files list.
 - Delete the draft after the checkpoint saves. Goldfish does not delete it.
 - Use `/` path separators, even on Windows. Do not draft in `/tmp` on Windows — Git Bash `/tmp` is invisible to native Windows tools.

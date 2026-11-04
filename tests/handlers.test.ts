@@ -5,9 +5,9 @@ import { handleBrief } from '../src/handlers/brief';
 import { getCheckpointsForDay, saveCheckpoint, __setCheckpointDependenciesForTests } from '../src/checkpoints';
 import { getBrief, saveBrief } from '../src/briefs';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
-import { rm, mkdtemp, mkdir, writeFile, stat } from 'fs/promises';
+import { rm, mkdtemp, mkdir, writeFile, stat, symlink } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, relative } from 'path';
 
 const WORKSPACE_UNBOUND_RETRY = 'Workspace is not bound. User-level MCP registrations must pass the absolute project root on every workspace-scoped call. Retry with {"workspace":"<absolute-project-root>"}.';
 
@@ -423,6 +423,141 @@ describe('Readable markdown responses', () => {
 
       await handleCheckpoint({
         description_file: absolute,
+        workspace: TEST_DIR
+      });
+
+      const today = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+      expect(checkpoints.find(c => c.description === body)).toBeDefined();
+    });
+
+    it('rejects an absolute description_file outside the workspace without saving or exposing its content', async () => {
+      const outsideDir = await mkdtemp(join(tmpdir(), 'test-handlers-outside-'));
+      const marker = 'outside marker that must not enter Goldfish';
+      const outsideFile = join(outsideDir, 'draft.md');
+      await writeFile(outsideFile, marker, 'utf-8');
+
+      let error: Error | undefined;
+      try {
+        await handleCheckpoint({
+          description_file: outsideFile,
+          workspace: TEST_DIR
+        });
+      } catch (caught) {
+        error = caught as Error;
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+
+      expect(error?.message).toMatch(/inside.*workspace/i);
+      expect(error?.message).not.toContain(marker);
+      const today = new Date().toISOString().split('T')[0]!;
+      expect(await getCheckpointsForDay(TEST_DIR, today)).toHaveLength(0);
+    });
+
+    it('rejects a description_file reached through parent traversal without saving', async () => {
+      const outsideDir = `${TEST_DIR}-outside`;
+      const outsideFile = join(outsideDir, 'draft.md');
+      await mkdir(outsideDir, { recursive: true });
+      await writeFile(outsideFile, 'traversal marker', 'utf-8');
+
+      try {
+        await expect(handleCheckpoint({
+          description_file: relative(TEST_DIR, outsideFile),
+          workspace: TEST_DIR
+        })).rejects.toThrow(/inside.*workspace/i);
+
+        const today = new Date().toISOString().split('T')[0]!;
+        expect(await getCheckpointsForDay(TEST_DIR, today)).toHaveLength(0);
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+
+    it('rejects a description_file in a sibling whose path shares the workspace prefix', async () => {
+      const siblingDir = `${TEST_DIR}-sibling`;
+      const siblingFile = join(siblingDir, 'draft.md');
+      await mkdir(siblingDir, { recursive: true });
+      await writeFile(siblingFile, 'sibling marker', 'utf-8');
+
+      try {
+        await expect(handleCheckpoint({
+          description_file: siblingFile,
+          workspace: TEST_DIR
+        })).rejects.toThrow(/inside.*workspace/i);
+
+        const today = new Date().toISOString().split('T')[0]!;
+        expect(await getCheckpointsForDay(TEST_DIR, today)).toHaveLength(0);
+      } finally {
+        await rm(siblingDir, { recursive: true, force: true });
+      }
+    });
+
+    it('rejects an external symlink description_file without saving', async () => {
+      const outsideDir = await mkdtemp(join(tmpdir(), 'test-handlers-outside-'));
+      const outsideFile = join(outsideDir, 'draft.md');
+      const linkPath = join(TEST_DIR, 'external-drafts');
+      await writeFile(outsideFile, 'external symlink marker', 'utf-8');
+      await symlink(outsideDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+
+      try {
+        await expect(handleCheckpoint({
+          description_file: 'external-drafts/draft.md',
+          workspace: TEST_DIR
+        })).rejects.toThrow(/inside.*workspace/i);
+
+        const today = new Date().toISOString().split('T')[0]!;
+        expect(await getCheckpointsForDay(TEST_DIR, today)).toHaveLength(0);
+        expect(await Bun.file(outsideFile).text()).toBe('external symlink marker');
+      } finally {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
+    });
+
+    it('saves a checkpoint from an in-workspace symlink description_file', async () => {
+      const draftsDir = join(TEST_DIR, 'drafts');
+      const body = '## In workspace symlink draft';
+      await mkdir(draftsDir);
+      await writeFile(join(draftsDir, 'draft.md'), body, 'utf-8');
+      await symlink(draftsDir, join(TEST_DIR, 'drafts-link'), process.platform === 'win32' ? 'junction' : 'dir');
+
+      await handleCheckpoint({
+        description_file: 'drafts-link/draft.md',
+        workspace: TEST_DIR
+      });
+
+      const today = new Date().toISOString().split('T')[0]!;
+      const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+      expect(checkpoints.find(c => c.description === body)).toBeDefined();
+    });
+
+    it('saves a description_file with a symlinked workspace root', async () => {
+      const aliasParent = await mkdtemp(join(tmpdir(), 'test-handlers-alias-'));
+      const alias = join(aliasParent, 'workspace-link');
+      const body = '## Symlinked workspace root draft';
+      await writeFile(join(TEST_DIR, 'draft.md'), body, 'utf-8');
+      await symlink(TEST_DIR, alias, process.platform === 'win32' ? 'junction' : 'dir');
+
+      try {
+        await handleCheckpoint({
+          description_file: 'draft.md',
+          workspace: alias
+        });
+
+        const today = new Date().toISOString().split('T')[0]!;
+        const checkpoints = await getCheckpointsForDay(TEST_DIR, today);
+        expect(checkpoints.find(c => c.description === body)).toBeDefined();
+      } finally {
+        await rm(aliasParent, { recursive: true, force: true });
+      }
+    });
+
+    it('saves a checkpoint from a description_file path containing spaces', async () => {
+      const body = '## Draft with spaces';
+      await writeFile(join(TEST_DIR, 'draft with spaces.md'), body, 'utf-8');
+
+      await handleCheckpoint({
+        description_file: 'draft with spaces.md',
         workspace: TEST_DIR
       });
 

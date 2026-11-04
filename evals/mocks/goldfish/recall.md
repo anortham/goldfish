@@ -1,6 +1,6 @@
 ---
 expect:
-  workspace: /^(\/|all$)/
+  workspace: /^\//
 ---
 
 {{file:fixtures/recall-project.md}}

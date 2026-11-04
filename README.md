@@ -14,7 +14,7 @@ Goldfish is a cross-client MCP memory system. Claude Code, Codex, and Cursor can
 
 Coding harnesses already plan, summarize, and recover from compaction. What they don't do is keep a durable record of *why* a project moved the way it did, in a place the next session (or the next harness) can read.
 
-Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and seven skills, with markdown as the source of truth.
+Goldfish is git for intent: a source-controlled, harness-agnostic ledger of decisions, milestones, and direction. Three MCP tools (`checkpoint`, `recall`, `brief`) and skills for common workflows, with markdown as the source of truth.
 
 ---
 
@@ -70,7 +70,7 @@ Once the plugin is loaded, Goldfish works through manual invocation and agent-dr
 
 ### Cursor
 
-Cursor runs Goldfish as a native Cursor Plugin. The bundle includes the MCP server, all 7 skills, and a native hook (`sessionStart`). Cursor discovers the repo-local `.agents/skills/` mirror too, so the skills can be invoked with `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/report-issue`, and `/standup` when the client is using repo-local skill discovery.
+Cursor runs Goldfish as a native Cursor Plugin. The bundle includes the MCP server, the skills listed below, and a native hook (`sessionStart`). Cursor discovers the repo-local `.agents/skills/` mirror too, so the skills can be invoked with `/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/report-issue`, and `/standup` when the client is using repo-local skill discovery.
 
 To test the local plugin, place the repository at `~/.cursor/plugins/local/goldfish` with a symlink on macOS/Linux, a junction on Windows, or a full copy on either platform.
 
@@ -115,7 +115,7 @@ Add that to the project `.cursor/mcp.json` (or user config scoped to the project
 
 ### Codex CLI / Desktop
 
-**Recommended: install the plugin.** Goldfish ships a Codex plugin manifest (`.codex-plugin/plugin.json`) that delivers everything in one install — the MCP server (tools), the 7 skills, and a SessionStart hook that loads Goldfish's memory guidance into each new session.
+**Recommended: install the plugin.** Goldfish ships a Codex plugin manifest (`.codex-plugin/plugin.json`) that delivers everything in one install — the MCP server (tools), the skills listed below, and a SessionStart hook that loads Goldfish's memory guidance into each new session.
 
 ```bash
 codex plugin marketplace add anortham/goldfish
@@ -152,7 +152,7 @@ env = { GOLDFISH_WORKSPACE = "/absolute/path/to/your/project" }
 
 You can put Goldfish in `~/.codex/config.toml` too, but that pins `GOLDFISH_WORKSPACE` to one repo. For Codex Desktop across multiple repos, keep the server entry in each project's `.codex/config.toml`.
 
-Goldfish skills in `.agents/skills` are discovered automatically when you launch Codex inside the repository; use the six skill names directly when your Codex client exposes slash commands.
+Goldfish skills in `.agents/skills` are discovered automatically when you launch Codex inside the repository; use their discovered names directly when your Codex client exposes slash commands.
 
 ### OpenCode
 
@@ -200,7 +200,7 @@ Or add it using the Antigravity CLI:
 agy mcp add goldfish bun run /absolute/path/to/goldfish/src/server.ts
 ```
 
-Antigravity walks up from your current working directory to the repository root and discovers `.agents/skills/*/SKILL.md` when working inside this repository. To use the seven Goldfish skills (`/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/report-issue`, `/standup`) across all your projects, register them in `~/.gemini/config/skills.json`:
+Antigravity walks up from your current working directory to the repository root and discovers `.agents/skills/*/SKILL.md` when working inside this repository. To use the skills listed below (`/brief`, `/brief-status`, `/checkpoint`, `/handoff`, `/recall`, `/report-issue`, `/standup`) across all your projects, register them in `~/.gemini/config/skills.json`:
 
 ```json
 {
@@ -373,7 +373,7 @@ Timeout bugs and session drift keep burning time across sessions.
 
 ## Skills
 
-Goldfish ships 7 skills. Claude Code, Codex, and Cursor plugin installs expose them directly; OpenCode and Antigravity (and Codex or Cursor without the plugin) discover the same skill content from `.agents/skills/`.
+Goldfish ships 7 skills, listed below. Claude Code, Codex, and Cursor plugin installs expose them directly; OpenCode and Antigravity (and Codex or Cursor without the plugin) discover the same skill content from `.agents/skills/`.
 
 | Skill | What It Does |
 |-------|-------------|
@@ -391,7 +391,7 @@ Goldfish ships 7 skills. Claude Code, Codex, and Cursor plugin installs expose t
 
 ## Storage Format
 
-Markdown in `.memories/` is the source of truth. Goldfish writes no derived state to disk. Small in-memory caches reuse parsed checkpoints and search indexes only while directory fingerprints match.
+Markdown in `.memories/` is the source of truth. Goldfish writes no derived state to disk. Small in-memory caches reuse parsed checkpoints and search indexes only while source directory fingerprints match; no cache or index is persisted.
 
 Because every checkpoint and brief is plain markdown with YAML frontmatter, `.memories/` also works with generic markdown-database tools. For example, open your project in [Obsidian](https://obsidian.md) and point a [Base](https://help.obsidian.md/bases) at `.memories/` to browse checkpoints as a sortable, filterable table — no Goldfish code involved.
 
@@ -405,6 +405,7 @@ your-project/
       143022_c3d4.md
     2026-02-14/
       101530_e5f6.md
+    razorback-review.md       # Ordinary report; Goldfish recall does not index this root-level file
     briefs/
       auth-system-redesign.md  # Brief (YAML frontmatter + markdown body)
       api-v2-migration.md
@@ -412,6 +413,18 @@ your-project/
 ```
 
 Legacy `.memories/plans/` and `.active-plan` paths are still read so older repos keep working, but new writes land in the brief paths above.
+
+Goldfish recall searches checkpoints in date-named directories and the active brief; it does not index arbitrary Markdown files at the `.memories/` root. Another tool can keep a detailed report at `.memories/razorback-review.md` and save a normal checkpoint that points to it:
+
+```js
+checkpoint({
+  workspace: "/absolute/path/to/project",
+  description: "## What\nRazorback review completed; full report: `.memories/razorback-review.md`.\n\n## Why\nThe findings need follow-up.\n\n## How\nThe report contains the supporting evidence.\n\n## Impact\nThe pointer makes the handoff searchable.",
+  next: "Read `.memories/razorback-review.md` and address its findings."
+})
+```
+
+The explicit `workspace` is the project root. The checkpoint's description and `next` field make the report discoverable through normal recall while the detailed report remains an ordinary file.
 
 ### Checkpoint File Format
 
@@ -482,6 +495,8 @@ The `/standup` skill aggregates work across all registered projects:
 ```
 
 Cross-project recall uses `~/.goldfish/registry.json` to discover projects, then reads each project's `.memories/` directory.
+
+Each registered worktree is a separate workspace. A committed checkpoint shared by several worktrees can therefore appear more than once, and duplicates can use slots in a bounded result window. Recall does not deduplicate those matches. Use a specific workspace when duplicates crowd unique project history out of the results. Reconsider deduplication only if repeated real standups lose unique project history to duplicate slots.
 
 ---
 

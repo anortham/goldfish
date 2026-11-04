@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Use `razorback:subagent-driven-development` for independent owned tasks when delegation is available; otherwise use `razorback:executing-plans`.
 
-**Status:** Proposed; planning requested on 2026-11-03. Implementation waits for the user's go-ahead after the model/session switch.
+**Status:** Implementation approved on 2026-11-04 UTC: "we can start on goldfish here". Worktree `.worktrees/toolkit-hardening`, branch `feat/toolkit-hardening`, base `9504fa8`.
 
 **Goal:** Prevent accidental outside-workspace checkpoint imports and make Goldfish's storage and integration contracts accurate without expanding the memory engine.
 
@@ -10,7 +10,7 @@
 
 **Tech Stack:** Bun, TypeScript, Node-compatible filesystem/path APIs, existing MCP SDK and Bun test runner.
 
-**Spec:** [Design contract](#design-contract) below; coordinated context is [AI toolkit plan](2026-11-03-ai-toolkit-coordination-plan.md).
+**Spec:** [Design contract](#evidence-and-design-contract) below; coordinated context is [AI toolkit plan](2026-11-03-ai-toolkit-coordination-plan.md).
 
 **Architecture Quality:** Small boundary tightening, no new service, index, parameter, or storage format. Risks are Windows/path semantics and rejecting a previously accepted external-file input; acceptance of this plan explicitly approves that contract change.
 
@@ -36,7 +36,7 @@
 - No new hooks, generalized report ingestion, database, semantic search, deduplication engine, or automatic installation changes.
 - Do not remove repo-local skill mirrors to fix this workstation's duplicate installation; they are required for other clients. Razorback's diagnostic handles detection, and actual uninstall needs separate authority.
 - No version bump or release is part of this implementation plan. Record the behavior change in an unreleased changelog entry following the current file convention; release uses the existing seven-surface process later.
-- Planning/local plan commits are authorized. Implementation is deferred; pushes and releases are not authorized. Default external reviewer is `none`.
+- Implementation and local commits are authorized by the user's go-ahead. Pushes and releases are not authorized. Default external reviewer is `none`.
 
 ## Verification strategy
 
@@ -91,14 +91,14 @@ Commit mode: `parallel-lead-commit` for G1 and G2; lead stages exact owned files
 **Approach:** Read current path helpers and filesystem conventions first with code-kb context and native source. Keep a small local implementation unless a genuinely reusable containment helper already exists. Use path-aware ancestry checks rather than a string-prefix test. Follow repository error style; diagnostics should identify the boundary without quoting file contents. Re-read generated output and stage only intentional changes.
 
 **Acceptance criteria:**
-- [ ] Failing tests first demonstrate that external absolute paths and `..` traversal cannot create a checkpoint.
-- [ ] A sibling root sharing the workspace's name prefix cannot pass the containment check.
-- [ ] External symlink targets are rejected; a symlink to an in-root file and a symlinked workspace root remain usable where supported.
-- [ ] Relative, absolute in-root, spaced, and normalized relative backslash paths retain their expected behavior.
-- [ ] Missing/unreadable/empty sources and mutually exclusive description arguments retain meaningful errors; successful saves leave the source file unchanged.
-- [ ] Rejection creates no checkpoint and does not disclose outside content in errors. Tests use fake marker content only.
-- [ ] Tool/skill wording states the boundary and the deliberate copy-to-workspace migration; schemas, generated mirrors, and description caps remain valid.
-- [ ] Focused verification passes and the verified diff is handed to the lead under `parallel-lead-commit`.
+- [x] Failing tests first demonstrate that external absolute paths and `..` traversal cannot create a checkpoint.
+- [x] A sibling root sharing the workspace's name prefix cannot pass the containment check.
+- [x] External symlink targets are rejected; a symlink to an in-root file and a symlinked workspace root remain usable where supported.
+- [x] Relative, absolute in-root, spaced, and normalized relative backslash paths retain their expected behavior.
+- [x] Missing/unreadable/empty sources and mutually exclusive description arguments retain meaningful errors; successful saves leave the source file unchanged.
+- [x] Rejection creates no checkpoint and does not disclose outside content in errors. Tests use fake marker content only.
+- [x] Tool/skill wording states the boundary and the deliberate copy-to-workspace migration; schemas, generated mirrors, and description caps remain valid.
+- [x] Focused verification passes and the verified diff is handed to the lead under `parallel-lead-commit`.
 
 ### G2: Make storage and integration documentation accurate
 
@@ -119,12 +119,12 @@ Commit mode: `parallel-lead-commit` for G1 and G2; lead stages exact owned files
 **Approach:** Prefer describing the canonical inventory over repeating an easily stale count. Distinguish no derived disk state from fingerprint-validated in-memory caches. Put a short report-pointer example in the relevant integration/storage section using real existing checkpoint fields and explicit workspace. Explain workspace-specific recall as the mitigation when duplicates crowd cross-project results.
 
 **Acceptance criteria:**
-- [ ] Active portability descriptions match the canonical skill inventory; remove stale six-skill assertions, including drift-guard descriptions.
-- [ ] The storage spec consistently permits validated in-memory caches and prohibits derived disk persistence.
-- [ ] Docs explicitly distinguish dated searchable checkpoints from ordinary root-level `.memories/` reports and show the checkpoint-pointer handoff.
-- [ ] Docs disclose copied worktree checkpoint duplication and its limit cost, while preserving existing search identity/ranking and the recorded no-deduplication choice.
-- [ ] Record a narrowly scoped future reconsideration trigger: repeated real standups losing unique project history to duplicate slots. No deduplication implementation is included.
-- [ ] Source/link review and `bun test agent-assets` pass; any optional recheck of duplicate behavior uses isolated temporary projects/homes. Hand the reviewed docs to the lead under `parallel-lead-commit`.
+- [x] Active portability descriptions match the canonical skill inventory; remove stale six-skill assertions, including drift-guard descriptions.
+- [x] The storage spec consistently permits validated in-memory caches and prohibits derived disk persistence.
+- [x] Docs explicitly distinguish dated searchable checkpoints from ordinary root-level `.memories/` reports and show the checkpoint-pointer handoff.
+- [x] Docs disclose copied worktree checkpoint duplication and its limit cost, while preserving existing search identity/ranking and the recorded no-deduplication choice.
+- [x] Record a narrowly scoped future reconsideration trigger: repeated real standups losing unique project history to duplicate slots. No deduplication implementation is included.
+- [x] Source/link review and `bun test agent-assets` pass; any optional recheck of duplicate behavior uses isolated temporary projects/homes. Hand the reviewed docs to the lead under `parallel-lead-commit`.
 
 ### G3: Verify and hand the supported contract to Razorback
 
@@ -153,3 +153,13 @@ Commit mode: `parallel-lead-commit` for G1 and G2; lead stages exact owned files
 ## Starting a separate implementation session
 
 Read this plan and current project instructions, verify source drift and all existing worktrees, and obtain the user's implementation go-ahead. Use the chosen task worktree's absolute path for both tool families. G1 and G2 can run in parallel; execute G3 afterward. Leave Razorback's report generation, installation diagnostics, and combined harness to its own plan.
+
+## Execution evidence
+
+- User approved implementation: "we can start on goldfish here"; active branch `feat/toolkit-hardening`, worktree `.worktrees/toolkit-hardening`, base `9504fa8`.
+- G1 lead review: canonical path ancestry check stays in `readDescriptionFile`; no schema/signature/storage change. Before implementation, four new escape cases failed; afterward all 14 file-import cases passed. Directory-link fixtures use NTFS junctions on Windows.
+- G2 lead review: cache/storage/skill inventory docs and report-pointer examples match existing APIs. Kept one verified central README skill count to satisfy the existing dynamic inventory guard; no guard was weakened.
+- Adjacent eval setup repair: current Claude plugin evaluator rejected grouping/alternation in recall mock workspace guards before model exposure. Current-project mocks now require an absolute path; cross-project mocks require exact `all`. This narrows each fixture to its scenario rather than accepting arbitrary strings. Six mock files changed; all graders retained.
+- Linux gate: `bun run typecheck` passed; final `bun test` passed 702 tests with one expected platform skip and 2,012 expectations. An earlier full run found the README count omission; its single failing test passed after correction, then the full suite passed.
+- Checkpoint eval: Haiku, one run per case, mocks enabled, no publishing. All checkpoint calls/quality/skip behavior passed; decision and unfinished-work cases each scored 0.75 because the agent used MCP directly without a Skill call. Routine-commit case scored 1.0. The old skill at `9504fa8` with only the same mock-parser repair reproduced decision score 0.75 for the same reason. No adoption policy or grader was changed to conceal that limitation.
+- Required native Windows verification and final source-state handoff remain in G3. Raw worker/gate/eval logs are in the ignored `.razorback/sdd/2026-11-03-toolkit-hardening-plan-31cacc3bed0c/` workspace on this host.

@@ -73,7 +73,7 @@ For long bodies use description_file instead. Use / path separators inside the t
             type: 'string',
             description: `Path to a UTF-8 markdown file whose content becomes the checkpoint description. Use INSTEAD of description (exactly one of the two) for long writeups — the file content skips tool-call JSON, so escaping cannot break it.
 
-Relative paths resolve against the workspace; use / separators. The file is not deleted — delete your draft after the save succeeds.`
+The resolved file, including symlink targets, must be inside the workspace. Relative paths resolve against the workspace; use / separators. To use an external writeup, copy the intended content into a draft inside the workspace first. Goldfish does not copy external files, and it does not delete the source file.`
           },
           type: {
             type: 'string',
