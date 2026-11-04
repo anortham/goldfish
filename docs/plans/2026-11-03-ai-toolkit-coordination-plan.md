@@ -1,6 +1,6 @@
 # AI coding toolkit: coordinated implementation plan
 
-**Status:** Proposed implementation handoff. The user requested these plans on 2026-11-03 and intends to switch models or execute each repository in a separate session. Writing and locally saving the plans is authorized; do not begin implementation until the user gives the implementation go-ahead.
+**Status:** Original implementation and evaluation scope complete locally on 2026-11-04. Final selected-revision combined acceptance passed. Branch integration, installation cleanup, and publication remain separately authorized work. See the [current assessment](../reviews/2026-11-04-toolkit-plan-evaluation.md) and [integration evidence](../reviews/2026-11-04-toolkit-integration.json).
 
 **Goal:** Make Goldfish, Razorback, and code-kb work reliably together without adding another orchestration service or increasing routine agent ceremony.
 
@@ -21,6 +21,16 @@
 On the reviewed workstation the repository roots are `/home/murphy/source/goldfish`, `/home/murphy/source/razorback`, and `/home/murphy/source/code-kb`. These are navigation hints, not runtime defaults. Substitute the actual absolute checkout or worktree root on another machine.
 
 At planning time the retained Goldfish `codex/fail-closed-workspace-identity` and `mcp-sdk-v2-stateless-migration` worktrees and Razorback `codex/linear-hardening` worktree were clean, and each branch had no commits ahead of its repository's `main`. They are prior-task worktrees, not this implementation's selected worktrees. Leave them in place and recheck before choosing an implementation location.
+
+## Completed local selection
+
+| Component | Selected branch tip | Disposition |
+|---|---|---|
+| Goldfish | `feat/toolkit-hardening` / `431f40c` | G1–G3 complete; tested runtime source `d93420d`. |
+| Razorback | `feat/toolkit-reliability` / `1b3575f` | R1–R4 complete. Tested runner `78c1a07`; the metadata closure records final acceptance and supersedes its earlier pending handoff. |
+| code-kb | `toolkit-efficiency` / `571e7fa` | K1–K4 complete; candidate rejected and baseline restored. Selected runtime source `f290fdc`, hash recorded in integration evidence. |
+
+The separate Julie 3.12 branch at `0e365d7` is not part of this frozen comparison or selected-baseline combined run. No implementation branch has been merged into main or installed by this evaluation.
 
 ## Review scorecard
 
@@ -61,14 +71,14 @@ Evidence: code-kb `evals/edit-2026-10-27/results/report.md`, `evals/edit-2026-10
 2. **Handoff shape:** Before stopping with unfinished work, use the existing Goldfish checkpoint with structured WHAT/WHY/HOW/IMPACT, `next`, and evidence pointers. Include the report's workspace-relative path, task/plan identity, actual branch/worktree, tested source commit, and granted/missing publication authority. Use existing checkpoint fields; no new schema is needed. Metadata commits may follow the tested source commit: preserve that distinction.
 3. **Recovery:** Recall yields the pointer; read the report and verify live git/authority state before acting. Never infer push permission from a checkpoint or implementation approval. If memory is unavailable, the report and git state remain the fallback and memory failure must not erase recovery information.
 4. **Memory remains selective:** A pause awaiting approval is unfinished work. Routine edits and unchanged-state resumes still need no new checkpoint. Do not add recurring hooks or a background memory service.
-5. **File imports:** Proposed Goldfish default is canonical workspace containment for `description_file`, including symlinks. Absolute paths inside that root remain supported. Deliberate outside material must first be copied to an in-workspace draft by the agent/user; no new external-import flag is included in this plan.
+5. **File imports:** Goldfish now enforces canonical workspace containment for `description_file`, including symlinks. Absolute paths inside that root remain supported. Deliberate outside material must first be copied to an in-workspace draft by the agent/user; no new external-import flag is included in this plan.
 6. **Testing policy:** Recover safe, relevant baseline failures before classifying a blocker. TDD remains the default. A no-test-surface exception must explain why automation is unsuitable, capture an observable before/after check, and yield to stricter repository rules; it cannot mean simply that no test exists yet.
 7. **Evidence versus enforcement:** Preserve code-kb coverage warnings, uncertain references, seven tools, explicit roots, and fail-open one-shot Stop behavior. `check_edit` is advisory evidence, not a substitute for tests or proof that a change is safe.
 8. **Diagnostic scope:** Read-only, bounded inspection of explicitly selected projects/installations. Report capability/version/registration uncertainty honestly. Never print credentials, dump client configs, auto-download tools, or silently uninstall a duplicate.
 9. **Efficiency:** Historical studies are immutable. Correct accepted edits and truthful coverage take priority over speed. Measure an optimization against current code-kb separately from a claim of savings against native tools; use fresh matched controls as specified in the code-kb plan. Do not call smaller responses or fewer calls a demonstrated reduction in whole-task cost.
 10. **Optional dependencies:** Ordinary product tests remain independently runnable. The explicit combined acceptance command names all three inputs and fails clearly when a required input is absent; ordinary test suites can mark that external integration scope skipped, not passed.
 
-Approval of implementation accepts these proposed choices. Until then they are design recommendations, not changes to current product contracts.
+The user authorized repository implementation after the model/session switch. The local branches implement these choices; the main checkouts and installed releases have not yet received them.
 
 ## Execution order and ownership
 
@@ -101,15 +111,15 @@ Use one lead per repository and separate workers only for independent file owner
 
 ## Definition of done
 
-- [ ] A pre-publication approval pause can be recovered from Goldfish recall and its linked report in a fresh session, with no invented authority or lost next action.
-- [ ] The same recoverable baseline or no-test-surface case gets consistent Razorback guidance across entry paths.
-- [ ] Goldfish rejects outside-root file imports while preserving supported in-root forms and existing checkpoint behavior.
-- [ ] A read-only diagnostic identifies the observed duplicate-install condition and distinguishes unknown runtime state from a confirmed working setup.
-- [ ] Duplicate-install cleanup has an explicit disposition: selected registrations removed and a fresh-host inventory verified after authorization, or exact proposed changes recorded as awaiting that authority. A successful diagnostic alone is not described as a cleaned installation.
-- [ ] Isolated real-tool checks cover workspace switching, handoff recovery, unavailable tools, duplicate installations, and unsupported structural coverage; fresh-agent scenarios test the decisions that subprocess tests cannot prove.
-- [ ] code-kb has a measured outcome: either a correctness-preserving improvement that meets its predeclared criteria, or a recorded negative result with no unsupported savings claim and no ineffective change shipped.
-- [ ] Current documentation describes cache behavior, skill inventory, recall layout, and coverage accurately; the worktree duplicate-result tradeoff has an explicit disposition.
-- [ ] Every repository's verification evidence and final branch/worktree/dirty state are recorded. Required memories are committed with the work they describe.
+- [x] A pre-publication approval pause can be recovered from Goldfish recall and its linked report in a fresh session, with no invented authority or lost next action.
+- [x] The same recoverable baseline or no-test-surface case gets consistent Razorback guidance across entry paths.
+- [x] Goldfish rejects outside-root file imports while preserving supported in-root forms and existing checkpoint behavior.
+- [x] A read-only diagnostic identifies the observed duplicate-install condition and distinguishes unknown runtime state from a confirmed working setup.
+- [x] Duplicate-install cleanup has an explicit disposition: selected registrations removed and a fresh-host inventory verified after authorization, or exact proposed changes recorded as awaiting that authority. A successful diagnostic alone is not described as a cleaned installation.
+- [x] Isolated real-tool checks cover workspace switching, handoff recovery, unavailable tools, duplicate installations, and unsupported structural coverage; fresh-agent scenarios test the decisions that subprocess tests cannot prove.
+- [x] code-kb has a measured outcome: either a correctness-preserving improvement that meets its predeclared criteria, or a recorded negative result with no unsupported savings claim and no ineffective change shipped.
+- [x] Current documentation describes cache behavior, skill inventory, recall layout, and coverage accurately; the worktree duplicate-result tradeoff has an explicit disposition.
+- [x] Every repository's verification evidence and final branch/worktree/dirty state are recorded. Required memories are committed with the work they describe.
 
 ## Handoff and authority
 
@@ -118,10 +128,14 @@ For a single coordinating session, read this document, then dispatch repository 
 Before implementation, inspect current roots, branches, dirty state, worktree inventory, and drift from the reviewed commits. Reuse an appropriate existing task worktree or create an intentional one according to that repository's rules. Carry these plan commits into it; do not abandon uncommitted planning artifacts. Do not switch to an existing unrelated branch merely because it is available.
 
 - Planning and local plan/handoff commits: authorized by the user's documentation request and project artifact rules.
-- Implementation: deferred until the user switches model/session and gives the go-ahead.
-- Local implementation commits: authorized once implementation scope is approved, subject to project instructions.
+- Implementation: authorized and completed on the local task branches. Final combined evaluation is recorded above.
+- Local implementation and evaluation-document commits: authorized within the approved scope, subject to project instructions.
 - Push, publish, release, destructive installation cleanup: not authorized by this request.
 - External pre-merge reviewer: `none` unless the user selects one. Native subagents remain available for owned implementation tasks and inline review.
 - Necessary code-kb evaluation spending follows its repository's existing authority after implementation begins; do not add a redundant spending-approval gate.
 
 Implementation should leave evidence of a negative result when appropriate, not invent an optimization to make every task look like a feature delivery.
+
+## Completion limits
+
+The cleanup checkbox records exact proposed changes awaiting installation authority, not an already deduplicated host. The efficiency checkbox records a completed negative experiment, not a faster runtime. Fresh-agent acceptance covers five toolkit scenarios with two passing observations each; no full 15-case model pass is claimed. Goldfish's explicit skill-loading grader limitation remains documented. See the assessment for current scores and separate Julie work.
