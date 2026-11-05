@@ -6,9 +6,17 @@ All notable changes to Goldfish are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [8.0.10] - 2026-11-04
+
 ### Fixed
 
 - Checkpoint descriptions imported from files are limited to canonical paths inside the selected workspace. External files and symlinks resolving outside it are rejected; copy the intended content into a workspace draft before importing it.
+- Evaluation mocks now enforce explicit workspace binding and describe the current `description_file` behavior.
+
+### Changed
+
+- Checkpoint guidance and workspace documentation explain how to hand off to ordinary Markdown reports, along with current cache and cross-worktree recall behavior.
+- Client setup documentation refers to the current skill inventory instead of duplicating skill counts across client sections.
 
 ## [8.0.9] - 2026-10-11
 

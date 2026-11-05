@@ -1,6 +1,6 @@
 {
   "name": "goldfish",
-  "version": "8.0.9",
+  "version": "8.0.10",
   "description": "Cross-client MCP memory with checkpoints, recall, briefs, and standups",
   "type": "module",
   "main": "src/server.ts",
