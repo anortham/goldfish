@@ -162,6 +162,12 @@ function toSearchDocument(checkpoint: Checkpoint, documentId: string): SearchDoc
 export interface SearchCacheKey {
   scope: string
   fingerprint: string
+  /**
+   * Drop the cached index after this many idle milliseconds. For a corpus too
+   * large to hold for the life of the server: a cross-project index over
+   * thousands of checkpoints keeps hundreds of megabytes on the heap.
+   */
+  idleReleaseMs?: number
 }
 
 const VERSION_PATTERN = /-?\bv?(\d+(?:\.\d+)+)\b/gi
@@ -225,6 +231,18 @@ interface SearchIndex {
 
 interface IndexCacheEntry extends SearchIndex {
   fingerprint: string
+  idleRelease?: ReturnType<typeof setTimeout>
+}
+
+function scheduleIdleRelease(scope: string, entry: IndexCacheEntry, idleReleaseMs?: number): void {
+  if (entry.idleRelease) clearTimeout(entry.idleRelease)
+  if (idleReleaseMs === undefined) return
+
+  entry.idleRelease = setTimeout(() => {
+    if (indexCache.get(scope) === entry) indexCache.delete(scope)
+  }, idleReleaseMs)
+  // The timer must never keep the server process alive.
+  entry.idleRelease.unref?.()
 }
 
 const indexCache = new Map<string, IndexCacheEntry>()
@@ -249,8 +267,10 @@ async function getIndex(checkpoints: Checkpoint[], cacheKey?: SearchCacheKey): P
   const cached = indexCache.get(cacheKey.scope)
   if (cached && cached.fingerprint === cacheKey.fingerprint) {
     indexCacheHits += 1
+    scheduleIdleRelease(cacheKey.scope, cached, cacheKey.idleReleaseMs)
     return cached
   }
+  if (cached?.idleRelease) clearTimeout(cached.idleRelease)
 
   indexCacheMisses += 1
   const index = {
@@ -261,10 +281,14 @@ async function getIndex(checkpoints: Checkpoint[], cacheKey?: SearchCacheKey): P
   if (!indexCache.has(cacheKey.scope) && indexCache.size >= INDEX_CACHE_MAX_SCOPES) {
     const oldestScope = indexCache.keys().next().value
     if (oldestScope !== undefined) {
+      const oldest = indexCache.get(oldestScope)
+      if (oldest?.idleRelease) clearTimeout(oldest.idleRelease)
       indexCache.delete(oldestScope)
     }
   }
-  indexCache.set(cacheKey.scope, { fingerprint: cacheKey.fingerprint, ...index })
+  const entry: IndexCacheEntry = { fingerprint: cacheKey.fingerprint, ...index }
+  indexCache.set(cacheKey.scope, entry)
+  scheduleIdleRelease(cacheKey.scope, entry, cacheKey.idleReleaseMs)
 
   return index
 }

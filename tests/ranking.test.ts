@@ -384,6 +384,36 @@ describe('Search index cache', () => {
     expect(afterRebuild.misses - start.misses).toBe(2);
   });
 
+  it('releases an index after its idle time and rebuilds it on the next search', async () => {
+    const { __getSearchIndexCacheStatsForTests } = await import('../src/ranking');
+    const key = { scope: '/tmp/ws-cache-idle', fingerprint: 'fp-1', idleReleaseMs: 10 };
+
+    await searchCheckpoints('alpha payment', corpus, key);
+    const afterBuild = __getSearchIndexCacheStatsForTests();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    await searchCheckpoints('alpha payment', corpus, key);
+    const afterIdle = __getSearchIndexCacheStatsForTests();
+
+    expect(afterIdle.misses - afterBuild.misses).toBe(1);
+    expect(afterIdle.hits - afterBuild.hits).toBe(0);
+  });
+
+  it('keeps an index that is used again before its idle time ends', async () => {
+    const { __getSearchIndexCacheStatsForTests } = await import('../src/ranking');
+    const key = { scope: '/tmp/ws-cache-busy', fingerprint: 'fp-1', idleReleaseMs: 400 };
+
+    await searchCheckpoints('alpha payment', corpus, key);
+    const afterBuild = __getSearchIndexCacheStatsForTests();
+    for (let use = 0; use < 4; use++) {
+      await new Promise(resolve => setTimeout(resolve, 150));
+      await searchCheckpoints('alpha payment', corpus, key);
+    }
+    const afterUse = __getSearchIndexCacheStatsForTests();
+
+    expect(afterUse.misses - afterBuild.misses).toBe(0);
+    expect(afterUse.hits - afterBuild.hits).toBe(4);
+  });
+
   it('never returns checkpoints outside the passed set even on a cache hit', async () => {
     const key = { scope: '/tmp/ws-cache-subset', fingerprint: 'fp-x' };
     await searchCheckpoints('payment', corpus, key);

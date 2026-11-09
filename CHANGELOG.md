@@ -6,6 +6,12 @@ All notable changes to Goldfish are documented in this file. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Cross-project recall returned the same checkpoint once for each registered worktree or clone that held it, and the copies used result slots. Each shared checkpoint now appears once, labeled with the project that registered first. The match uses id plus timestamp. Workspace summaries count each checkpoint for one project only.
+- Cross-project search built a new index over every copy of every checkpoint on each call (about 15 seconds on a registry with 16,097 checkpoint files). The index now covers unique checkpoints only and is reused until a checkpoint file changes (about 6 seconds cold, about 0.2 seconds after). It is dropped after five idle minutes to release memory.
+- The project registry kept entries for deleted worktrees forever. A new registration now removes entries whose project folder no longer exists.
+
 ## [8.0.10] - 2026-11-04
 
 ### Fixed

@@ -496,7 +496,9 @@ The `/standup` skill aggregates work across all registered projects:
 
 Cross-project recall uses `~/.goldfish/registry.json` to discover projects, then reads each project's `.memories/` directory.
 
-Each registered worktree is a separate workspace. A committed checkpoint shared by several worktrees can therefore appear more than once, and duplicates can use slots in a bounded result window. Recall does not deduplicate those matches. Use a specific workspace when duplicates crowd unique project history out of the results. Reconsider deduplication only if repeated real standups lose unique project history to duplicate slots.
+Each registered worktree is a separate workspace. A committed checkpoint that several worktrees or clones share appears once in cross-project recall. The project that registered first keeps it, and the other copies do not count in the workspace summaries. Two checkpoints are the same when both the id and the timestamp match.
+
+A whole-corpus cross-project search keeps its index in memory and drops it after five idle minutes. When a new project registers, Goldfish removes registry entries whose project folder no longer exists.
 
 ---
 

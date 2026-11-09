@@ -110,8 +110,27 @@ async function loadRegistryForWrite(filePath: string): Promise<Registry> {
 }
 
 /**
+ * Drop entries whose project folder no longer exists (a removed worktree, a
+ * deleted clone). Only a missing path counts: an entry that cannot be checked
+ * for any other reason stays, so a permission problem never loses a project.
+ */
+async function dropDeadEntries(projects: RegisteredProject[]): Promise<RegisteredProject[]> {
+  const checks = await Promise.all(projects.map(async (project) => {
+    try {
+      await stat(project.path);
+      return true;
+    } catch (error: any) {
+      return error?.code !== 'ENOENT';
+    }
+  }));
+  return projects.filter((_, index) => checks[index]);
+}
+
+/**
  * Register a project in the cross-project registry.
  * Idempotent - if the project path already exists, this is a no-op.
+ * A new registration also removes entries whose project folder is gone, so
+ * the registry does not grow with every removed worktree.
  *
  * @param projectPath - Path to the project root
  * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
@@ -152,7 +171,12 @@ export async function registerProject(projectPath: string, registryDir?: string)
       name: normalizeWorkspace(absolutePath),
       registered: new Date().toISOString(),
     };
-    registry.projects.push(entry);
+    const liveProjects = await dropDeadEntries(registry.projects);
+    const removedCount = registry.projects.length - liveProjects.length;
+    if (removedCount > 0) {
+      getLogger().info(`registry.prune removed=${removedCount} reason=project-folder-missing`);
+    }
+    registry.projects = [...liveProjects, entry];
 
     await atomicWriteFile(filePath, JSON.stringify(registry, null, 2));
   });
@@ -192,7 +216,8 @@ export async function unregisterProject(projectPath: string, registryDir?: strin
 /**
  * List registered projects that have an active .memories/ directory.
  * Stale entries (where .memories/ doesn't exist) are filtered from the result
- * but NOT removed from the registry file.
+ * but NOT removed from the registry file; reads never write. registerProject
+ * removes entries whose project folder is gone.
  *
  * @param registryDir - Directory containing registry.json (defaults to ~/.goldfish)
  * @returns Projects sorted by name, filtered to only those with .memories/

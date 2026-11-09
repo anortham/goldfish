@@ -5,7 +5,7 @@
  * search delegated to ranking.ts.
  */
 
-import type { Brief, BriefRefreshNotice, Checkpoint, RecallInput, RecallOptions, RecallResult, StaleBriefNotice, WorkspaceSummary } from './types';
+import type { Brief, BriefRefreshNotice, Checkpoint, RecallInput, RecallOptions, RecallResult, RegisteredProject, StaleBriefNotice, WorkspaceSummary } from './types';
 import {
   getCheckpointsForDateRange,
   getAllCheckpoints,
@@ -36,6 +36,13 @@ const BRIEF_REFRESH_DAYS = 14;
  * displayed age falls back to the brief's own updated timestamp.
  */
 const STALE_SCAN_MAX_DAYS = 28;
+
+/**
+ * How long an unused cross-project search index stays in memory. Long enough
+ * for the several searches of one standup or investigation; short enough that
+ * a server which searched once does not hold the index for the whole session.
+ */
+const CROSS_PROJECT_INDEX_IDLE_RELEASE_MS = 5 * 60_000;
 
 /** Default-mode cap for the free-text `next` field — full mode is uncapped. */
 const MAX_DEFAULT_NEXT_LENGTH = 140;
@@ -562,6 +569,48 @@ async function recallFromWorkspace(
   };
 }
 
+interface ProjectCheckpoints {
+  project: RegisteredProject;
+  checkpoints: Checkpoint[];
+}
+
+function compareRegistrationOrder(a: RegisteredProject, b: RegisteredProject): number {
+  const registeredA = a.registered || '9999';
+  const registeredB = b.registered || '9999';
+  if (registeredA !== registeredB) return registeredA < registeredB ? -1 : 1;
+  return a.path.localeCompare(b.path);
+}
+
+/**
+ * Keep one copy of each checkpoint that several registered projects share.
+ *
+ * Worktrees and clones carry the same committed checkpoint files, so the same
+ * checkpoint would otherwise fill several result slots and be indexed several
+ * times. The project that registered first keeps the checkpoint. The match
+ * uses id plus timestamp: the 8-hex id alone can collide between unrelated
+ * checkpoints, and a false match would hide one of them.
+ */
+function dropSharedCheckpoints(projectResults: ProjectCheckpoints[]): ProjectCheckpoints[] {
+  const seen = new Set<string>();
+  const keptByPath = new Map<string, Checkpoint[]>();
+  const firstRegisteredFirst = [...projectResults]
+    .sort((a, b) => compareRegistrationOrder(a.project, b.project));
+
+  for (const { project, checkpoints } of firstRegisteredFirst) {
+    keptByPath.set(project.path, checkpoints.filter(checkpoint => {
+      const key = `${checkpoint.id}\n${checkpoint.timestamp}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }));
+  }
+
+  return projectResults.map(({ project }) => ({
+    project,
+    checkpoints: keptByPath.get(project.path) ?? []
+  }));
+}
+
 /**
  * Recall checkpoints (main entry point)
  *
@@ -597,12 +646,31 @@ export async function recall(options: RecallInput = {}): Promise<RecallResult> {
   }
 
   if (normalizedOptions.search) {
-    const projectResults = await Promise.all(
+    // The index is reusable only when it covers every checkpoint of every
+    // project; a date window or structured filter makes the corpus a subset.
+    const wholeCorpus = !hasDateParams(normalizedOptions) && !hasStructuredFilter(normalizedOptions);
+    const loadedProjects = await Promise.all(
       projects.map(async (project) => {
+        if (wholeCorpus) {
+          const { checkpoints, fingerprint } = await getAllCheckpointsWithFingerprint(project.path);
+          return { project, checkpoints, fingerprint };
+        }
         const checkpoints = await loadWorkspaceCheckpoints(project.path, normalizedOptions);
-        return { project, checkpoints };
+        return { project, checkpoints, fingerprint: '' };
       })
     );
+    const projectResults = dropSharedCheckpoints(loadedProjects);
+    const searchCacheKey = wholeCorpus
+      ? {
+          scope: `all::${normalizedOptions._registryDir ?? ''}`,
+          fingerprint: Bun.hash(
+            loadedProjects
+              .map(({ project, fingerprint }) => `${project.path}#${project.registered}#${fingerprint}`)
+              .join('\n')
+          ).toString(36),
+          idleReleaseMs: CROSS_PROJECT_INDEX_IDLE_RELEASE_MS
+        }
+      : undefined;
 
     const syntheticToCheckpoint = new Map<string, {
       checkpoint: Checkpoint;
@@ -630,7 +698,7 @@ export async function recall(options: RecallInput = {}): Promise<RecallResult> {
       }
     }
 
-    const ranked = await searchCheckpoints(normalizedOptions.search, rankedCandidates);
+    const ranked = await searchCheckpoints(normalizedOptions.search, rankedCandidates, searchCacheKey);
     const workspaceSummaryMap = new Map<string, WorkspaceSummary>();
 
     for (const checkpoint of ranked) {
@@ -679,16 +747,19 @@ export async function recall(options: RecallInput = {}): Promise<RecallResult> {
 
   // Fetch from all registered projects in parallel.
   // Load everything so checkpointCount in summaries reflects total matches.
-  const projectResults = await Promise.all(
-    projects.map(async (project) => {
-      const allCheckpoints = await loadWorkspaceCheckpoints(project.path, normalizedOptions, true);
-      allCheckpoints.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      const presented = allCheckpoints
-        .slice(0, globalLimit)
-        .map(checkpoint => presentCheckpoint(checkpoint, normalizedOptions));
-      return { project, checkpoints: presented, totalCount: allCheckpoints.length };
-    })
+  const loadedProjects = await Promise.all(
+    projects.map(async (project) => ({
+      project,
+      checkpoints: await loadWorkspaceCheckpoints(project.path, normalizedOptions, true)
+    }))
   );
+  const projectResults = dropSharedCheckpoints(loadedProjects).map(({ project, checkpoints: allCheckpoints }) => {
+    allCheckpoints.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const presented = allCheckpoints
+      .slice(0, globalLimit)
+      .map(checkpoint => presentCheckpoint(checkpoint, normalizedOptions));
+    return { project, checkpoints: presented, totalCount: allCheckpoints.length };
+  });
 
   // Build combined results
   const allCheckpoints: Checkpoint[] = [];

@@ -4,7 +4,7 @@ import { formatCheckpoint, saveCheckpoint, __setCheckpointDependenciesForTests }
 import { buildCompactSearchDescription } from '../src/digests';
 import { saveBrief, getBrief, updateBrief } from '../src/briefs';
 import { ensureMemoriesDir, getMemoriesDir } from '../src/workspace';
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Checkpoint } from '../src/types';
@@ -574,6 +574,157 @@ describe('Cross-workspace functionality', () => {
     expect(result.checkpoints).toEqual([]);
 
     await rm(emptyRegistryDir, { recursive: true, force: true });
+  });
+});
+
+describe('Cross-workspace duplicate checkpoints', () => {
+  let original: string;
+  let worktreeCopy: string;
+  let registryDir: string;
+
+  const registryPath = (path: string) => path.replace(/\\/g, '/');
+
+  async function seedRegistry(entries: Array<{ path: string; name: string; registered: string }>) {
+    await writeFile(
+      join(registryDir, 'registry.json'),
+      JSON.stringify({ projects: entries.map(entry => ({ ...entry, path: registryPath(entry.path) })) }),
+      'utf-8'
+    );
+  }
+
+  async function copyMemories() {
+    await cp(getMemoriesDir(original), getMemoriesDir(worktreeCopy), { recursive: true });
+  }
+
+  beforeEach(async () => {
+    registryDir = await mkdtemp(join(tmpdir(), 'test-registry-dup-'));
+    original = await mkdtemp(join(tmpdir(), 'test-dup-original-'));
+    worktreeCopy = await mkdtemp(join(tmpdir(), 'test-dup-worktree-'));
+    await ensureMemoriesDir(original);
+    await seedRegistry([
+      { path: original, name: 'zz-original', registered: '2026-01-01T00:00:00.000Z' },
+      { path: worktreeCopy, name: 'aa-worktree', registered: '2026-02-01T00:00:00.000Z' }
+    ]);
+  });
+
+  afterEach(async () => {
+    await rm(original, { recursive: true, force: true });
+    await rm(worktreeCopy, { recursive: true, force: true });
+    await rm(registryDir, { recursive: true, force: true });
+  });
+
+  it('returns a checkpoint shared by two registered projects once', async () => {
+    const shared = await saveCheckpoint({ description: 'Shared history checkpoint', workspace: original });
+    await copyMemories();
+
+    const result = await recall({ workspace: 'all', days: 1, _registryDir: registryDir });
+
+    expect(result.checkpoints.map(c => c.id)).toEqual([shared.id]);
+  });
+
+  it('labels a shared checkpoint with the project that registered first', async () => {
+    await saveCheckpoint({ description: 'Shared history checkpoint', workspace: original });
+    await copyMemories();
+
+    const result = await recall({ workspace: 'all', days: 1, _registryDir: registryDir });
+
+    expect(result.checkpoints[0]!.workspace).toBe('zz-original');
+  });
+
+  it('does not let shared checkpoints use result slots', async () => {
+    const unique = await saveCheckpoint({ description: 'Older work done only in the worktree', workspace: worktreeCopy });
+    const shared = await saveCheckpoint({ description: 'Shared history checkpoint', workspace: original });
+    await copyMemories();
+
+    const result = await recall({ workspace: 'all', limit: 2, _registryDir: registryDir });
+
+    expect(result.checkpoints.map(c => c.id).sort()).toEqual([shared.id, unique.id].sort());
+  });
+
+  it('counts each shared checkpoint for one workspace only', async () => {
+    await saveCheckpoint({ description: 'Shared history checkpoint', workspace: original });
+    await copyMemories();
+    await saveCheckpoint({ description: 'Work done only in the worktree', workspace: worktreeCopy });
+
+    const result = await recall({ workspace: 'all', days: 1, _registryDir: registryDir });
+
+    expect(result.workspaces).toEqual([
+      expect.objectContaining({ path: registryPath(worktreeCopy), checkpointCount: 1 }),
+      expect.objectContaining({ path: registryPath(original), checkpointCount: 1 })
+    ]);
+  });
+
+  it('omits a workspace that holds only shared checkpoints from the summaries', async () => {
+    await saveCheckpoint({ description: 'Shared history checkpoint', workspace: original });
+    await copyMemories();
+
+    const result = await recall({ workspace: 'all', days: 1, _registryDir: registryDir });
+
+    expect(result.workspaces!.map(ws => ws.path)).toEqual([registryPath(original)]);
+  });
+
+  it('returns a shared checkpoint once from cross-workspace search', async () => {
+    const shared = await saveCheckpoint({
+      description: 'Authentication timeout regression in the login flow',
+      workspace: original
+    });
+    await copyMemories();
+
+    const result = await recall({
+      workspace: 'all',
+      search: 'authentication timeout',
+      limit: 5,
+      _registryDir: registryDir
+    });
+
+    expect(result.checkpoints.map(c => c.id)).toEqual([shared.id]);
+    expect(result.checkpoints[0]!.workspace).toBe('zz-original');
+    expect(result.workspaces!.map(ws => ws.path)).toEqual([registryPath(original)]);
+  });
+
+  it('keeps unrelated checkpoints whose ids collide', async () => {
+    await ensureMemoriesDir(worktreeCopy);
+    const date = new Date().toISOString().slice(0, 10);
+    const collidingId = 'checkpoint_deadbeef';
+    for (const [project, time, description] of [
+      [original, '01:00:00', 'First unrelated checkpoint'],
+      [worktreeCopy, '02:00:00', 'Second unrelated checkpoint']
+    ] as const) {
+      const dateDir = join(getMemoriesDir(project), date);
+      await mkdir(dateDir, { recursive: true });
+      await writeFile(
+        join(dateDir, `${time.replace(/:/g, '')}_dead.md`),
+        formatCheckpoint({ id: collidingId, timestamp: `${date}T${time}.000Z`, description }),
+        'utf-8'
+      );
+    }
+
+    const result = await recall({ workspace: 'all', from: date, to: date, _registryDir: registryDir });
+
+    expect(result.checkpoints.map(c => c.description).sort()).toEqual([
+      'First unrelated checkpoint',
+      'Second unrelated checkpoint'
+    ]);
+  });
+
+  it('reuses the cross-workspace search index until a checkpoint file changes', async () => {
+    const { __getSearchIndexCacheStatsForTests } = await import('../src/ranking');
+    await saveCheckpoint({ description: 'Authentication timeout regression', workspace: original });
+    await copyMemories();
+    const search = () => recall({ workspace: 'all', search: 'authentication', _registryDir: registryDir });
+
+    const start = __getSearchIndexCacheStatsForTests();
+    await search();
+    await search();
+    const afterReuse = __getSearchIndexCacheStatsForTests();
+    await saveCheckpoint({ description: 'Authentication retry added', workspace: worktreeCopy });
+    const afterChange = await search();
+    const end = __getSearchIndexCacheStatsForTests();
+
+    expect(afterReuse.misses - start.misses).toBe(1);
+    expect(afterReuse.hits - start.hits).toBe(1);
+    expect(end.misses - afterReuse.misses).toBe(1);
+    expect(afterChange.checkpoints).toHaveLength(2);
   });
 });
 

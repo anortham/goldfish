@@ -290,6 +290,67 @@ describe('Register project', () => {
   });
 });
 
+describe('Dead entry pruning', () => {
+  it('removes entries whose project folder is gone when a new project registers', async () => {
+    const removedProject = join(TEST_DIR, 'removed-worktree');
+    const newProject = join(TEST_DIR, 'new-project');
+    await mkdir(removedProject, { recursive: true });
+    await mkdir(newProject, { recursive: true });
+    await registerProject(removedProject, GOLDFISH_DIR);
+    await rm(removedProject, { recursive: true, force: true });
+
+    await registerProject(newProject, GOLDFISH_DIR);
+
+    const registry = await getRegistry(GOLDFISH_DIR);
+    expect(registry.projects.map(p => p.path)).toEqual([newProject.replace(/\\/g, '/')]);
+  });
+
+  it('keeps entries whose folder exists without .memories/', async () => {
+    const idleProject = join(TEST_DIR, 'idle-project');
+    const newProject = join(TEST_DIR, 'new-project');
+    await mkdir(idleProject, { recursive: true });
+    await mkdir(newProject, { recursive: true });
+    await registerProject(idleProject, GOLDFISH_DIR);
+
+    await registerProject(newProject, GOLDFISH_DIR);
+
+    const registry = await getRegistry(GOLDFISH_DIR);
+    expect(registry.projects).toHaveLength(2);
+  });
+
+  it('keeps entries whose path is a file, because only a missing path is dead', async () => {
+    const filePath = join(TEST_DIR, 'not-a-folder');
+    const newProject = join(TEST_DIR, 'new-project');
+    await writeFile(filePath, 'x', 'utf-8');
+    await mkdir(newProject, { recursive: true });
+    await writeFile(
+      join(GOLDFISH_DIR, 'registry.json'),
+      JSON.stringify({ projects: [{ path: filePath.replace(/\\/g, '/'), name: 'not-a-folder', registered: '2026-01-01T00:00:00.000Z' }] }),
+      'utf-8'
+    );
+
+    await registerProject(newProject, GOLDFISH_DIR);
+
+    const registry = await getRegistry(GOLDFISH_DIR);
+    expect(registry.projects).toHaveLength(2);
+  });
+
+  it('does not rewrite the registry when the project is already registered', async () => {
+    const removedProject = join(TEST_DIR, 'removed-worktree');
+    const liveProject = join(TEST_DIR, 'live-project');
+    await mkdir(removedProject, { recursive: true });
+    await mkdir(liveProject, { recursive: true });
+    await registerProject(removedProject, GOLDFISH_DIR);
+    await registerProject(liveProject, GOLDFISH_DIR);
+    await rm(removedProject, { recursive: true, force: true });
+    const before = await readFile(join(GOLDFISH_DIR, 'registry.json'), 'utf-8');
+
+    await registerProject(liveProject, GOLDFISH_DIR);
+
+    expect(await readFile(join(GOLDFISH_DIR, 'registry.json'), 'utf-8')).toBe(before);
+  });
+});
+
 describe('Unregister project', () => {
   it('removes a registered project', async () => {
     const projectPath = join(TEST_DIR, 'my-project');

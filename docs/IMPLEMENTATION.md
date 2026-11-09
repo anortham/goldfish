@@ -162,9 +162,11 @@ That's it. Just the brief ID. Simple.
 }
 ```
 
-Used for cross-project recall and standup aggregation. Stale entries are filtered automatically.
+Used for cross-project recall and standup aggregation. Reads filter out entries without `.memories/` and never write. `registerProject` removes entries whose project folder no longer exists (`ENOENT` only) when it adds a new project, so removed worktrees do not accumulate.
 
-Each registered worktree is a separate workspace, so a checkpoint committed in shared worktree history can appear once for every registered worktree that contains it. Duplicates can consume slots in a bounded result window. Recall does not deduplicate these matches; use workspace-specific recall when duplicates crowd out unique project history. Reconsider deduplication only if repeated real standups lose unique project history to duplicate slots.
+Each registered worktree is a separate workspace, so a checkpoint committed in shared history exists once in every registered worktree or clone that contains it. Cross-project recall keeps one copy: the project with the earliest `registered` time keeps the checkpoint (path order breaks a tie). The match key is `id` plus `timestamp`, because the 8-hex id alone can collide between unrelated checkpoints. Removed copies do not count in workspace summaries.
+
+Measured on 2026-11-09 against a real registry: 34 live projects held 16,097 checkpoint files with 6,452 unique ids, and a cross-project search rebuilt an index over all of them on each call (about 15 s). After duplicate removal the cold search took about 6 s. A whole-corpus cross-project search now reuses its index while the combined project fingerprints match (about 0.2 s). That index held about 400 MB of heap, so it is dropped after five idle minutes (`CROSS_PROJECT_INDEX_IDLE_RELEASE_MS`). Date-window and filtered cross-project searches build a per-call index over the subset.
 
 ---
 
@@ -269,7 +271,7 @@ Based on lessons from previous iterations:
 - **Don't use direct file writes** (use atomic write-then-rename pattern)
 - **Don't persist derived indexes** (reuse parsed checkpoints and search indexes in memory only while source fingerprints match)
 - **Don't add database** (we're going simpler this time)
-- **Don't deduplicate cross-workspace recall** (shared worktree history can repeat; use workspace-specific recall when it crowds out unique project history)
+- **Don't deduplicate cross-workspace recall by id alone** (unrelated checkpoints can share an 8-hex id; match on id plus timestamp)
 - **Don't add redundant scoring fields without evidence** (confidence is already part of the checkpoint schema; avoid piling on more metadata)
 
 ---
