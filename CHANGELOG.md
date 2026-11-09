@@ -6,6 +6,8 @@ All notable changes to Goldfish are documented in this file. The format follows
 
 ## [Unreleased]
 
+## [8.0.11] - 2026-11-09
+
 ### Fixed
 
 - Cross-project recall returned the same checkpoint once for each registered worktree or clone that held it, and the copies used result slots. Each shared checkpoint now appears once, labeled with the project that registered first. The match uses id plus timestamp. Workspace summaries count each checkpoint for one project only.
